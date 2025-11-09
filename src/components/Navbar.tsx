@@ -13,7 +13,7 @@ interface NavbarProps {
 
 export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => {
   return (
-    <nav className={`glass-nav rounded-md px-6 py-4 ${className}`}>
+    <nav className={`glass-nav rounded-full px-6 py-4 ${className}`}>
       <div className="flex items-center justify-between">
         {/* Mobile: Hamburger Menu */}
         <Sheet>
@@ -24,16 +24,16 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px]">
             <div className="flex flex-col gap-4 mt-8">
-              <Link to="#product" className="text-md font-medium hover:text-primary transition-colors">
+              <Link to="#product" className="text-lg font-medium hover:text-primary transition-colors">
                 Product
               </Link>
-              <Link to="#features" className="text-md font-medium hover:text-primary transition-colors">
+              <Link to="#features" className="text-lg font-medium hover:text-primary transition-colors">
                 Features
               </Link>
-              <Link to="#pricing" className="text-md font-medium hover:text-primary transition-colors">
+              <Link to="#pricing" className="text-lg font-medium hover:text-primary transition-colors">
                 Pricing
               </Link>
-              <Link to="#faq" className="text-md font-medium hover:text-primary transition-colors">
+              <Link to="#faq" className="text-lg font-medium hover:text-primary transition-colors">
                 FAQs
               </Link>
               <div className="pt-4 border-t">
@@ -81,9 +81,9 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
           <Link to="/login">
             <Button 
               variant="ghost" 
-              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-2 font-medium"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-2.5 text-base font-semibold"
             >
-              <LogIn className="h-5 w-5 mr-2 scale-x-[-1]" />
+              <LogIn className="h-5 w-5 mr-1" />
               Login/Register
             </Button>
           </Link>
@@ -93,7 +93,7 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
         <div className="md:hidden">
           <Link to="/login">
             <Button size="icon" className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md">
-              <LogIn className="h-5 w-5 scale-x-[-1]" />
+              <LogIn className="h-5 w-5" />
             </Button>
           </Link>
         </div>
