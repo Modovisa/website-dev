@@ -1,4 +1,4 @@
-// src/components/Logo/tsx
+// src/components/Logo.tsx
 
 import logoSvg from "@/assets/logo.svg";
 import { Badge } from "@/components/ui/badge";

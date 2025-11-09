@@ -1,3 +1,5 @@
+// src/components/Navbar.tsx
+
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
@@ -11,7 +13,7 @@ interface NavbarProps {
 
 export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => {
   return (
-    <nav className={`glass-nav rounded-full px-6 py-4 ${className}`}>
+    <nav className={`glass-nav rounded-md px-6 py-4 ${className}`}>
       <div className="flex items-center justify-between">
         {/* Mobile: Hamburger Menu */}
         <Sheet>
@@ -22,16 +24,16 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px]">
             <div className="flex flex-col gap-4 mt-8">
-              <Link to="#product" className="text-lg font-medium hover:text-primary transition-colors">
+              <Link to="#product" className="text-md font-medium hover:text-primary transition-colors">
                 Product
               </Link>
-              <Link to="#features" className="text-lg font-medium hover:text-primary transition-colors">
+              <Link to="#features" className="text-md font-medium hover:text-primary transition-colors">
                 Features
               </Link>
-              <Link to="#pricing" className="text-lg font-medium hover:text-primary transition-colors">
+              <Link to="#pricing" className="text-md font-medium hover:text-primary transition-colors">
                 Pricing
               </Link>
-              <Link to="#faq" className="text-lg font-medium hover:text-primary transition-colors">
+              <Link to="#faq" className="text-md font-medium hover:text-primary transition-colors">
                 FAQs
               </Link>
               <div className="pt-4 border-t">
@@ -60,24 +62,28 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
 
         {/* Desktop: Nav Links (centered) */}
         <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2">
-          <Link to="#product" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+          <Link to="#product" className="text-base font-medium text-foreground hover:text-primary transition-colors">
             Product
           </Link>
-          <Link to="#features" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+          <Link to="#features" className="text-base font-medium text-foreground hover:text-primary transition-colors">
             Features
           </Link>
-          <Link to="#pricing" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+          <Link to="#pricing" className="text-base font-medium text-foreground hover:text-primary transition-colors">
             Pricing
           </Link>
-          <Link to="#faq" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+          <Link to="#faq" className="text-base font-medium text-foreground hover:text-primary transition-colors">
             FAQs
           </Link>
         </div>
 
-        {/* Desktop: Login/Register Buttons */}
+        {/* Desktop: Login/Register Button */}
         <div className="hidden md:flex items-center gap-4">
           <Link to="/login">
-            <Button variant="ghost" className="text-foreground hover:bg-primary/10">
+            <Button 
+              variant="ghost" 
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-2 font-medium"
+            >
+              <LogIn className="h-5 w-5 mr-2 scale-x-[-1]" />
               Login/Register
             </Button>
           </Link>
@@ -86,8 +92,8 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
         {/* Mobile: Login Icon Button */}
         <div className="md:hidden">
           <Link to="/login">
-            <Button size="icon" className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <LogIn className="h-5 w-5" />
+            <Button size="icon" className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md">
+              <LogIn className="h-5 w-5 scale-x-[-1]" />
             </Button>
           </Link>
         </div>

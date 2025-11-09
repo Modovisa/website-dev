@@ -196,7 +196,7 @@ All colors MUST be HSL.
   }
   
   .glass-nav {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.38);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.3);
@@ -204,7 +204,7 @@ All colors MUST be HSL.
   }
   
   .dark .glass-nav {
-    background: rgba(30, 30, 40, 0.9);
+    background: rgba(30, 30, 40, 0.38);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 }
