@@ -26,7 +26,7 @@ const TrackingSetup = () => {
               <Link to="/">
                 <Logo showBeta={false} />
               </Link>
-              <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
+              <p className="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
               <h1 className="text-2xl font-semibold mt-6">Track your website</h1>
             </div>
             <p className="text-center text-muted-foreground text-sm">
@@ -101,7 +101,7 @@ const TrackingSetup = () => {
               Setup Tracking
             </Button>
 
-            <Link to="/">
+            <Link to="/app/live-tracking">
               <Button variant="ghost" className="w-full mt-4" type="button">
                 Set up later
               </Button>

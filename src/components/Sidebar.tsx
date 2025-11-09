@@ -1,3 +1,5 @@
+// src/components/Sidebar.tsx
+
 import { Link, useLocation } from "react-router-dom";
 import { Eye, BarChart3, Plug, UserPlus, HelpCircle, MessageSquare } from "lucide-react";
 import { Logo } from "./Logo";
