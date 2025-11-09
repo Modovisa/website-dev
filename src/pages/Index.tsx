@@ -1,3 +1,5 @@
+// src/pages/Index.tsx
+
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
@@ -7,6 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowRight, Eye, BarChart2, Zap, Shield, Globe, Clock, Package, Briefcase, Check } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
+import { AnimatedGradient } from "@/components/AnimatedGradient";
 import { useState } from "react";
 
 const Index = () => {
@@ -60,9 +63,15 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="gradient-primary relative overflow-hidden">
-        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px]" />
-        <div className="container relative mx-auto px-4 py-20">
+      <section className="relative overflow-hidden min-h-screen flex items-center">
+        {/* Animated gradient canvas background */}
+        <AnimatedGradient />
+        
+        {/* Optional grid overlay for texture */}
+        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
+        
+        {/* Content container - positioned above the canvas */}
+        <div className="container relative mx-auto px-4 py-20 z-10">
           <nav className="flex items-center justify-between mb-20">
             <Logo className="text-white" />
             <div className="flex items-center gap-4">
@@ -294,9 +303,15 @@ const Index = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 gradient-primary relative overflow-hidden">
-        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px]" />
-        <div className="container relative mx-auto px-4 text-center">
+      <section className="py-24 relative overflow-hidden">
+        {/* Animated gradient canvas background */}
+        <AnimatedGradient />
+        
+        {/* Optional grid overlay for texture */}
+        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
+        
+        {/* Content - positioned above the canvas */}
+        <div className="container relative mx-auto px-4 text-center z-10">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to get started?
           </h2>
