@@ -13,7 +13,7 @@ interface NavbarProps {
 
 export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => {
   return (
-    <nav className={`glass-nav rounded-full px-6 py-4 ${className}`}>
+    <nav className={`glass-nav rounded-md px-6 py-4 ${className}`}>
       <div className="flex items-center justify-between">
         {/* Mobile: Hamburger Menu */}
         <Sheet>
