@@ -20,7 +20,7 @@ const Login = () => {
           <Link to="/">
             <Logo showBeta={false} />
           </Link>
-          <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
+          <p className="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
           <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
         </div>
 

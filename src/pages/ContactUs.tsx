@@ -1,6 +1,10 @@
 // src/pages/ContactUs.tsx
 
+// src/pages/ContactUs.tsx
+
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Logo } from "@/components/Logo";
 import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import logoSvg from "@/assets/logo.svg";
 
 const ContactUs = () => {
   const { toast } = useToast();
@@ -57,10 +60,12 @@ const ContactUs = () => {
         <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 space-y-8">
           {/* Logo and Tagline */}
           <div className="text-center space-y-3">
-            <div className="flex justify-center mb-4">
-              <img src={logoSvg} alt="Modovisa" className="h-12" />
+            <div className="flex flex-col items-center space-y-2 py-4">
+              <Link to="/">
+                <Logo showBeta={false} />
+              </Link>
+              <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
             </div>
-            <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
           </div>
 
           {/* Heading */}
