@@ -104,8 +104,8 @@ const Index = () => {
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
         
         {/* Content container - positioned above the canvas */}
-        <div className="container relative mx-auto px-4 py-20 z-10">
-          <nav className="flex items-center justify-between mb-20">
+        <div className="container relative mx-auto px-4 pt-6 pb-20 z-10">
+          <nav className="flex items-center justify-between mb-16">
             <Logo className="text-white" />
             <div className="flex items-center gap-4">
               <Link to="/login">

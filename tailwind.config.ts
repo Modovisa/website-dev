@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Lexend', 'sans-serif'],
+        custom: ['CustomFont', 'Lexend', 'sans-serif'], // For local custom font
       },
       colors: {
         border: "hsl(var(--border))",
