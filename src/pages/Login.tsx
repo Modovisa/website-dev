@@ -22,7 +22,7 @@ const Login = () => {
           <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
         </div>
 
-        <form className="space-y-5 space-x-5">
+        <form className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email">Email or Username</Label>
             <Input
