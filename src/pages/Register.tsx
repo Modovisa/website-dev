@@ -20,8 +20,6 @@ const Register = () => {
         <div className="grid md:grid-cols-2">
           {/* Left side - Benefits */}
           <div className="bg-primary/5 p-12 flex flex-col justify-center space-y-8">
-            <Logo showBeta={false} />
-            
             <div className="space-y-6">
               <div className="flex gap-4">
                 <div className="flex-shrink-0">
@@ -69,6 +67,8 @@ const Register = () => {
 
           {/* Right side - Form */}
           <div className="p-12">
+            <Logo showBeta={false} />
+            <p class="text-md  font-semibold mb-0">Intuitive Analytics.</p>
             <h1 className="text-2xl font-semibold mb-6">Create your Modovisa account</h1>
 
             <form className="space-y-5">
