@@ -1,3 +1,5 @@
+// src/pages/Index.tsx
+
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
@@ -7,12 +9,36 @@ import { Slider } from "@/components/ui/slider";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowRight, Eye, BarChart2, Zap, Shield, Globe, Clock, Package, Briefcase, Check } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import { AnimatedGradient } from "@/components/AnimatedGradient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const Index = () => {
   const [isYearly, setIsYearly] = useState(false);
   const [eventTier, setEventTier] = useState(0);
+  
+  // Initialize gradient when component mounts
+  useEffect(() => {
+    console.log('Checking for Gradient...');
+    console.log('window.Gradient:', typeof window.Gradient);
+    console.log('window:', window);
+    
+    // Give script a moment to load if needed
+    const timer = setTimeout(() => {
+      if (typeof window.Gradient !== 'undefined') {
+        try {
+          const gradient = new window.Gradient();
+          gradient.initGradient('.gradient-canvas');
+          console.log('✅ Gradient initialized successfully!');
+        } catch (error) {
+          console.error('❌ Error initializing gradient:', error);
+        }
+      } else {
+        console.error('❌ window.Gradient is undefined!');
+        console.error('Check: 1) animated-gradient.js in public folder, 2) script tag in index.html');
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Pricing tiers based on events
   const pricingTiers = [
@@ -63,7 +89,7 @@ const Index = () => {
       {/* Hero Section */}
       <section className="relative overflow-hidden min-h-screen flex items-center">
         {/* Animated gradient canvas background */}
-        <AnimatedGradient />
+        <canvas className="gradient-canvas" style={{ height: '100%', width: '100%' }} />
         
         {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
@@ -301,15 +327,12 @@ const Index = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 relative overflow-hidden">
-        {/* Animated gradient canvas background */}
-        <AnimatedGradient />
-        
+      <section className="py-24 gradient-primary relative overflow-hidden">
         {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
         
         {/* Content - positioned above the canvas */}
-        <div className="container relative mx-auto px-4 text-center z-10">
+        <div className="container relative mx-auto px-4 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to get started?
           </h2>
