@@ -60,7 +60,7 @@ const ContactUs = () => {
             <div className="flex justify-center mb-4">
               <img src={logoSvg} alt="Modovisa" className="h-12" />
             </div>
-            <p className="text-muted-foreground text-sm">Intuitive Analytics.</p>
+            <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
           </div>
 
           {/* Heading */}

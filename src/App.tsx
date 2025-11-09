@@ -38,6 +38,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/2fa" element={<TwoFactorAuth />} />
+          <Route path="/contact-us" element={<ContactUs />} />
           
           {/* App Routes */}
           <Route path="/app/dashboard" element={<Dashboard />} />
@@ -45,9 +46,6 @@ const App = () => (
           <Route path="/app/installation" element={<Installation />} />
           <Route path="/app/tracking-setup" element={<TrackingSetup />} />
           <Route path="/app/profile" element={<Profile />} />
-          <Route path="/app/contact-us" element={<ContactUs />} />
-          <Route path="/app/help" element={<NotFound />} />
-          <Route path="/app/feedback" element={<NotFound />} />
           
           {/* Admin Routes */}
           <Route path="/mv-admin/dashboard" element={<AdminDashboard />} />
