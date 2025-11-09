@@ -27,9 +27,8 @@ const TrackingSetup = () => {
                 <Logo showBeta={false} />
               </Link>
               <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
-              <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
+              <h1 className="text-2xl font-semibold mt-6">Track your website</h1>
             </div>
-            <h1 className="text-2xl font-semibold mt-6">Track your website</h1>
             <p className="text-center text-muted-foreground text-sm">
               Provide some details about the website you'd like to track.<br />
               We'll use this to generate your personalized tracking script.
