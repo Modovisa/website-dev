@@ -15,7 +15,7 @@ const Login = () => {
 
   return (
     <AnimatedGradientBackground layout="full">
-      <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-8 space-y-6">
+      <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
         <div className="flex flex-col items-center space-y-2">
           <Logo showBeta={false} />
           <p class="text-md  font-semibold mb-0">Intuitive Analytics.</p>
