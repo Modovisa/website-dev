@@ -45,6 +45,65 @@
         console.error('❌ Gradient class NOT loaded. Check if animated-gradient.js exists in public folder.');
       }
     </script>
+
+    <!-- Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://modovisa.com/#org",
+          "name": "Modovisa",
+          "url": "https://modovisa.com",
+          "logo": {
+            "@type": "ImageObject",
+            "@id": "https://modovisa.com/#logo",
+            "url": "https://modovisa.com/assets/img/branding/logo.svg"
+          },
+          "sameAs": [
+            "https://www.linkedin.com/company/modovisa/"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://modovisa.com/#website",
+          "url": "https://modovisa.com",
+          "name": "Modovisa",
+          "inLanguage": "en",
+          "publisher": { "@id": "https://modovisa.com/#org" }
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://modovisa.com/#webpage",
+          "url": "https://modovisa.com",
+          "name": "Real-Time Visitor Tracking and Website Analytics | Modovisa",
+          "description": "Real-time visitor tracking and analytics platform for website owners. Track visitors, journeys, conversions, and engagement as they happen — fast, privacy-friendly, and easy to use.",
+          "inLanguage": "en",
+          "isPartOf": { "@id": "https://modovisa.com/#website" },
+          "about": { "@id": "https://modovisa.com/#org" },
+          "primaryImageOfPage": { "@id": "https://modovisa.com/#logo" }
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://modovisa.com/#app",
+          "name": "Modovisa Real-Time Visitor Tracking",
+          "url": "https://modovisa.com",
+          "description": "A real-time visitor tracking and analytics platform for monitoring visitors, journeys, and engagement as they happen.",
+          "operatingSystem": "Web",
+          "applicationCategory": "BusinessApplication",
+          "applicationSubCategory": "Analytics",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+          },
+          "publisher": { "@id": "https://modovisa.com/#org" }
+        }
+      ]
+    }
+    </script>
   </head>
 
   <body>
