@@ -154,3 +154,14 @@ All colors MUST be HSL.
     background: rgba(20, 20, 30, 0.8);
   }
 }
+
+/* Animated Gradient Canvas Styles */
+.gradient-canvas {
+  --gradient-color-1: #a960ee;
+  --gradient-color-2: #ff333d;
+  --gradient-color-3: #90e0ff;
+  --gradient-color-4: #ffcb57;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
