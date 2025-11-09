@@ -102,9 +102,7 @@ const TrackingSetup = () => {
             </Button>
 
             <Link to="/">
-              <Button variant="ghost" className="w-full mt-4" type="button">
-                Set up later
-              </Button>
+              Set up later
             </Link>
           </form>
         </div>
