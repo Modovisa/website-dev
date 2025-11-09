@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Link } from "react-router-dom";
 import { Bell } from "lucide-react";
-import { AdminSidebarComponent } from "./AdminSidebarComponent";
+import { AdminSidebar } from "./AdminSidebar";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -11,7 +11,7 @@ interface AdminLayoutProps {
 export const AdminLayout = ({ children }: AdminLayoutProps) => {
   return (
     <div className="flex h-screen bg-muted/30">
-      <AdminSidebarComponent />
+      <AdminSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 border-b bg-card flex items-center justify-end px-4 lg:px-6">
