@@ -1,3 +1,5 @@
+// src/pages/Index.tsx
+
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -108,7 +110,7 @@ const Index = () => {
           {/* Navbar Component */}
           <Navbar className="mb-16" />
 
-          <div className="max-w-4xl mx-auto text-center text-white space-y-8">
+          <div className="max-w-4xl mx-auto text-center text-white space-y-8 py-20">
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
               Intuitive Analytics
               <br />
