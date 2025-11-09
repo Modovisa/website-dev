@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Lexend', 'sans-serif'],
-        custom: ['CustomFont', 'Lexend', 'sans-serif'], // For local custom font
+        sans: ['Modovisa', 'sans-serif'], // Modovisa custom font as default
+        lexend: ['Lexend', 'sans-serif'], // Lexend as fallback option if needed
       },
       colors: {
         border: "hsl(var(--border))",
