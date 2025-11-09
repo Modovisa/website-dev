@@ -17,7 +17,9 @@ const Login = () => {
     <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
         <div className="flex flex-col items-center space-y-2 py-4">
-          <Logo showBeta={false} />
+          <Link to="/">
+            <Logo showBeta={false} />
+          </Link>
           <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
           <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
         </div>
