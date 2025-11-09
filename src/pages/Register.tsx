@@ -70,7 +70,7 @@ const Register = () => {
             <div className="flex flex-col items-center space-y-2 py-4">
               <Link to="/">
                 <Logo showBeta={false} />
-              </link>
+              </Link>
               <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
               <h1 className="text-2xl font-semibold mb-6 pb-6">Create your Modovisa account</h1>
             </div>
