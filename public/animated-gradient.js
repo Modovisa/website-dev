@@ -518,8 +518,8 @@ function normalizeColor(hexCode) {
   */
   
   
-  
-  
-  
-  
-  
+  // Expose Gradient to global scope
+if (typeof window !== 'undefined') {
+  window.Gradient = Gradient;
+}
+
