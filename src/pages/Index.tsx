@@ -7,11 +7,43 @@ import { Slider } from "@/components/ui/slider";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowRight, Eye, BarChart2, Zap, Shield, Globe, Clock, Package, Briefcase, Check } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
+// TypeScript declaration for Gradient
+declare global {
+  interface Window {
+    Gradient: any;
+  }
+}
 
 const Index = () => {
   const [isYearly, setIsYearly] = useState(false);
   const [eventTier, setEventTier] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gradientInitialized = useRef(false);
+  
+  // Initialize gradient - exactly like Bootstrap version
+  useEffect(() => {
+    if (gradientInitialized.current) return;
+    
+    const initGradient = () => {
+      if (typeof window.Gradient !== 'undefined' && canvasRef.current) {
+        try {
+          const gradient = new window.Gradient();
+          gradient.initGradient('.gradient-canvas');
+          gradientInitialized.current = true;
+          console.log('✅ Gradient initialized');
+        } catch (error) {
+          console.error('❌ Gradient init error:', error);
+        }
+      } else {
+        console.log('Waiting for Gradient...');
+        setTimeout(initGradient, 100);
+      }
+    };
+    
+    initGradient();
+  }, []);
   
   // Pricing tiers based on events
   const pricingTiers = [
@@ -61,17 +93,11 @@ const Index = () => {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden min-h-screen flex items-center">
-        {/* Canvas and initialization script */}
-        <div 
-          dangerouslySetInnerHTML={{
-            __html: `
-              <canvas class="gradient-canvas" style="height:100%; width: 100%;"></canvas>
-              <script>
-                  var gradient = new Gradient();
-                  gradient.initGradient('.gradient-canvas');
-              </script>
-            `
-          }}
+        {/* Canvas directly in section - just like Bootstrap */}
+        <canvas 
+          ref={canvasRef}
+          className="gradient-canvas" 
+          style={{ height: '100%', width: '100%' }}
         />
         
         {/* Optional grid overlay for texture */}
