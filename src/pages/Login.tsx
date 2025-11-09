@@ -1,7 +1,10 @@
+// src/pages/Login.tsx
+
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +14,10 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="min-h-screen gradient-primary flex items-center justify-center p-4">
+    <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-md glass-card rounded-3xl shadow-2xl p-8 space-y-6">
         <div className="flex flex-col items-center space-y-2">
-          <Logo />
+          <Logo showBeta={false} />
           <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
         </div>
 
@@ -106,7 +109,7 @@ const Login = () => {
           </Button>
         </form>
       </div>
-    </div>
+    </AnimatedGradientBackground>
   );
 };
 

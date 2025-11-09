@@ -1,4 +1,7 @@
+// src/pages/ContactUs.tsx
+
 import { useState } from "react";
+import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,7 +51,7 @@ const ContactUs = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-300 to-yellow-300 flex items-center justify-center p-4">
+    <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-2xl">
         {/* Main Card */}
         <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 space-y-8">
@@ -165,7 +168,7 @@ const ContactUs = () => {
           </p>
         </div>
       </div>
-    </div>
+    </AnimatedGradientBackground>
   );
 };
 

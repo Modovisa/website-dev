@@ -1,7 +1,10 @@
+// src/pages/Register.tsx
+
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, Zap, Code, Users } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +15,12 @@ const Register = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   return (
-    <div className="min-h-screen gradient-primary flex items-center justify-center p-4">
+    <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-6xl glass-card rounded-3xl shadow-2xl overflow-hidden">
         <div className="grid md:grid-cols-2">
           {/* Left side - Benefits */}
           <div className="bg-primary/5 p-12 flex flex-col justify-center space-y-8">
-            <Logo />
+            <Logo showBeta={false} />
             
             <div className="space-y-6">
               <div className="flex gap-4">
@@ -172,7 +175,7 @@ const Register = () => {
           </div>
         </div>
       </div>
-    </div>
+    </AnimatedGradientBackground>
   );
 };
 
