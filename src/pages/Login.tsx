@@ -19,7 +19,7 @@ const Login = () => {
         <div className="flex flex-col items-center space-y-2 py-4">
           <Logo showBeta={false} />
           <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
-          <h1 className="text-2xl font-semibold mt-6 pb-6">Sign in to your account</h1>
+          <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
         </div>
 
         <form className="space-y-5 space-x-5">
