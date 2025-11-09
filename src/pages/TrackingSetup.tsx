@@ -1,9 +1,12 @@
 // src/pages/TrackingSetup.tsx
 
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Label } from "@/components/ui/label";
 import {
   Select,
