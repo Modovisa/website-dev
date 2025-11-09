@@ -18,8 +18,10 @@ const Register = () => {
     <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-6xl glass-card rounded-3xl shadow-2xl overflow-hidden">
         <div className="grid md:grid-cols-2">
-          {/* Left side - Benefits */}
-          <div className="bg-primary/5 p-12 flex flex-col justify-center space-y-8">
+          {/* Left side - Benefits (Hidden on mobile, shown on desktop) */}
+          <div className="hidden md:flex bg-primary/5 p-12 flex-col justify-center space-y-8">
+            <Logo showBeta={false} />
+            
             <div className="space-y-6">
               <div className="flex gap-4">
                 <div className="flex-shrink-0">
@@ -67,13 +69,7 @@ const Register = () => {
 
           {/* Right side - Form */}
           <div className="p-12">
-            <div className="flex flex-col items-center space-y-2 py-4">
-              <Link to="/">
-                <Logo showBeta={false} />
-              </Link>
-              <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
-              <h1 className="text-2xl font-semibold mb-6 pb-6">Create your Modovisa account</h1>
-            </div>
+            <h1 className="text-2xl font-semibold mb-6">Create your Modovisa account</h1>
 
             <form className="space-y-5">
               <div className="space-y-2">
