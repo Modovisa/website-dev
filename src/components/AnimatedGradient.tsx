@@ -2,69 +2,44 @@
 
 import { useEffect, useRef } from 'react';
 
-// Extend Window interface to include Gradient
-declare global {
-  interface Window {
-    Gradient?: any;
-  }
-}
-
-interface AnimatedGradientProps {
-  className?: string;
-}
-
-export const AnimatedGradient: React.FC<AnimatedGradientProps> = ({ className = '' }) => {
+export const AnimatedGradient = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const gradientRef = useRef<any>(null);
-  const hasInitialized = useRef(false);
+  const initialized = useRef(false);
 
   useEffect(() => {
-    // Function to check if Gradient is available and initialize
-    const initGradient = () => {
-      // Prevent multiple initializations
-      if (hasInitialized.current) return;
-      
-      // Check if Gradient class is available
-      if (typeof window.Gradient !== 'undefined' && canvasRef.current) {
+    // Only run once
+    if (initialized.current) return;
+    
+    // Wait a tick for canvas to be in DOM, then initialize
+    // This mirrors the Bootstrap approach where script runs right after canvas
+    setTimeout(() => {
+      if (window.Gradient && canvasRef.current) {
         try {
-          // Create and initialize gradient
-          gradientRef.current = new window.Gradient();
-          gradientRef.current.initGradient('#gradient-canvas');
-          hasInitialized.current = true;
+          const gradient = new window.Gradient();
+          gradient.initGradient('.gradient-canvas');
+          initialized.current = true;
+          console.log('Gradient initialized successfully');
         } catch (error) {
-          console.error('Error initializing gradient:', error);
+          console.error('Failed to initialize gradient:', error);
         }
       } else {
-        // If Gradient not available yet, try again shortly
-        setTimeout(initGradient, 100);
+        console.error('Gradient not available. Check if animated-gradient.js loaded.');
       }
-    };
-
-    // Start initialization
-    initGradient();
-
-    // Cleanup function
-    return () => {
-      if (gradientRef.current && typeof gradientRef.current.pause === 'function') {
-        try {
-          gradientRef.current.pause();
-        } catch (error) {
-          console.error('Error pausing gradient:', error);
-        }
-      }
-      hasInitialized.current = false;
-    };
+    }, 0);
   }, []);
 
   return (
-    <canvas
+    <canvas 
       ref={canvasRef}
-      id="gradient-canvas"
-      className={`gradient-canvas ${className}`}
-      style={{
-        width: '100%',
-        height: '100%',
-      }}
+      className="gradient-canvas" 
+      style={{ height: '100%', width: '100%' }}
     />
   );
 };
+
+// Extend window type
+declare global {
+  interface Window {
+    Gradient: any;
+  }
+}
