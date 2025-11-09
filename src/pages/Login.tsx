@@ -16,13 +16,13 @@ const Login = () => {
   return (
     <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
-        <div className="flex flex-col items-center space-y-2">
+        <div className="flex flex-col items-center space-y-2 py-4">
           <Logo showBeta={false} />
-          <p class="text-md  font-semibold mb-0">Intuitive Analytics.</p>
-          <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
+          <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
+          <h1 className="text-2xl font-semibold mt-6 pb-6">Sign in to your account</h1>
         </div>
 
-        <form className="space-y-5">
+        <form className="space-y-5 space-x-5">
           <div className="space-y-2">
             <Label htmlFor="email">Email or Username</Label>
             <Input
