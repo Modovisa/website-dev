@@ -12,8 +12,8 @@ interface LogoProps {
 export const Logo = ({ className = "", showText = true, showBeta = true }: LogoProps) => {
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      {/* Logo SVG */}
-      <img src={logoSvg} alt="MODOVISA Logo" className="h-12 w-12" />
+      {/* Logo SVG - 200px wide */}
+      <img src={logoSvg} alt="MODOVISA Logo" className="h-auto w-[200px]" />
       
       {/* BETA Badge - matches screenshot style */}
       {showBeta && (
