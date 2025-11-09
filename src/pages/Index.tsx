@@ -67,13 +67,8 @@ const Index = () => {
             __html: `
               <canvas class="gradient-canvas" style="height:100%; width: 100%;"></canvas>
               <script>
-                if (typeof Gradient !== 'undefined') {
                   var gradient = new Gradient();
                   gradient.initGradient('.gradient-canvas');
-                  console.log('✅ Gradient initialized from inline script');
-                } else {
-                  console.error('❌ Gradient class not available');
-                }
               </script>
             `
           }}
