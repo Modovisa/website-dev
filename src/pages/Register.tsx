@@ -67,9 +67,11 @@ const Register = () => {
 
           {/* Right side - Form */}
           <div className="p-12">
-            <Logo showBeta={false} />
-            <p class="text-md  font-semibold mb-0">Intuitive Analytics.</p>
-            <h1 className="text-2xl font-semibold mb-6">Create your Modovisa account</h1>
+            <div className="flex flex-col items-center space-y-2">
+              <Logo showBeta={false} />
+              <p class="text-md  font-semibold mb-0">Intuitive Analytics.</p>
+              <h1 className="text-2xl font-semibold mb-6">Create your Modovisa account</h1>
+            </div>
 
             <form className="space-y-5">
               <div className="space-y-2">
