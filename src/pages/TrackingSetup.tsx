@@ -1,3 +1,5 @@
+// src/pages/TrackingSetup.tsx
+
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +17,13 @@ const TrackingSetup = () => {
     <div className="min-h-screen gradient-primary flex items-center justify-center p-4">
       <div className="w-full max-w-md glass-card rounded-3xl shadow-2xl p-8 space-y-6">
         <div className="flex flex-col items-center space-y-2">
-          <Logo />
+          <div className="flex flex-col items-center space-y-2 py-4">
+            <Link to="/">
+              <Logo showBeta={false} />
+            </Link>
+            <p class="text-lg  font-semibold mb-0">Intuitive Analytics.</p>
+            <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
+          </div>
           <h1 className="text-2xl font-semibold mt-6">Track your website</h1>
           <p className="text-center text-muted-foreground text-sm">
             Provide some details about the website you'd like to track.<br />
@@ -89,9 +97,11 @@ const TrackingSetup = () => {
             Setup Tracking
           </Button>
 
-          <Button variant="ghost" className="w-full" type="button">
-            Set up later
-          </Button>
+          <Link to="/">
+            <Button variant="ghost" className="w-full" type="button">
+              Set up later
+            </Button>
+          </Link>
         </form>
       </div>
     </div>
