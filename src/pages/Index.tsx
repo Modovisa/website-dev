@@ -1,5 +1,3 @@
-// src/pages/Index.tsx
-
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
@@ -9,36 +7,11 @@ import { Slider } from "@/components/ui/slider";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowRight, Eye, BarChart2, Zap, Shield, Globe, Clock, Package, Briefcase, Check } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const Index = () => {
   const [isYearly, setIsYearly] = useState(false);
   const [eventTier, setEventTier] = useState(0);
-  
-  // Initialize gradient when component mounts
-  useEffect(() => {
-    console.log('Checking for Gradient...');
-    console.log('window.Gradient:', typeof window.Gradient);
-    console.log('window:', window);
-    
-    // Give script a moment to load if needed
-    const timer = setTimeout(() => {
-      if (typeof window.Gradient !== 'undefined') {
-        try {
-          const gradient = new window.Gradient();
-          gradient.initGradient('.gradient-canvas');
-          console.log('✅ Gradient initialized successfully!');
-        } catch (error) {
-          console.error('❌ Error initializing gradient:', error);
-        }
-      } else {
-        console.error('❌ window.Gradient is undefined!');
-        console.error('Check: 1) animated-gradient.js in public folder, 2) script tag in index.html');
-      }
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, []);
   
   // Pricing tiers based on events
   const pricingTiers = [
@@ -88,8 +61,23 @@ const Index = () => {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden min-h-screen flex items-center">
-        {/* Animated gradient canvas background */}
-        <canvas className="gradient-canvas" style={{ height: '100%', width: '100%' }} />
+        {/* Canvas and initialization script */}
+        <div 
+          dangerouslySetInnerHTML={{
+            __html: `
+              <canvas class="gradient-canvas" style="height:100%; width: 100%;"></canvas>
+              <script>
+                if (typeof Gradient !== 'undefined') {
+                  var gradient = new Gradient();
+                  gradient.initGradient('.gradient-canvas');
+                  console.log('✅ Gradient initialized from inline script');
+                } else {
+                  console.error('❌ Gradient class not available');
+                }
+              </script>
+            `
+          }}
+        />
         
         {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
