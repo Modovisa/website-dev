@@ -42,7 +42,7 @@ export const Logo = ({
       {showBeta && variant === "full" && (
         <Badge 
           variant="secondary" 
-          className="bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold"
+          className="bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold rounded-sm"
         >
           BETA
         </Badge>

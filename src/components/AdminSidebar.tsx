@@ -1,10 +1,12 @@
+// src/components/AdminSidebar.tsx
+
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home, Users, Shield, Database, CreditCard, FileText, Lock, Settings, ChevronRight, ChevronLeft, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
-import logoSvg from "@/assets/logo.svg";
+import { Logo } from "./Logo";
 
 const adminNavigation = [
   { name: "Dashboard", href: "/mv-admin/dashboard", icon: Home },
@@ -17,7 +19,7 @@ const adminNavigation = [
   { name: "Logs", href: "/mv-admin/logs", icon: FileText },
 ];
 
-export const AdminSidebarComponent = () => {
+export const AdminSidebar = () => {
   const location = useLocation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -49,7 +51,12 @@ export const AdminSidebarComponent = () => {
       >
         <div className="p-4 border-b flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoSvg} alt="Modovisa" className="h-10 w-10" />
+            {/* Updated: Using Logo component with square variant */}
+            <Logo 
+              variant="square" 
+              size="md" 
+              showBeta={false}
+            />
             <span className={cn("text-xl font-bold", !isExpanded && "lg:hidden")}>Modovisa</span>
           </div>
           {isExpanded && (
@@ -98,7 +105,12 @@ export const AdminSidebarComponent = () => {
         <SheetContent side="left" className="w-72 p-0">
           <div className="p-6 border-b">
             <div className="flex items-center gap-3">
-              <img src={logoSvg} alt="Modovisa" className="h-10 w-10" />
+              {/* Updated: Using Logo component with square variant */}
+              <Logo 
+                variant="square" 
+                size="md" 
+                showBeta={false}
+              />
               <span className="text-xl font-bold">Modovisa</span>
             </div>
           </div>

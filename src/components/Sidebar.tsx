@@ -20,7 +20,12 @@ export const Sidebar = () => {
   return (
     <div className="flex h-screen w-20 flex-col items-center border-r bg-card py-6 space-y-8">
       <Link to="/" className="flex-shrink-0">
-        <Logo showText={false} />
+        {/* Changed: Added variant="square" and size="md" for square logo */}
+        <Logo 
+          variant="square" 
+          size="md" 
+          showBeta={false}
+        />
       </Link>
 
       <nav className="flex flex-1 flex-col items-center space-y-2">
