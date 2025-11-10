@@ -223,7 +223,7 @@ All colors MUST be HSL.
 /* Pulse Animation for Live Indicators */
 .pulse {
   animation: pulse-animation 2s infinite;
-  border-radius: 10px;
+  border-radius: 6px;
 }
 
 @keyframes pulse-animation {
