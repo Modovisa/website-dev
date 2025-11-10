@@ -1,3 +1,5 @@
+// src/pages/auth/TwoFactorAuth.tsx
+
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
