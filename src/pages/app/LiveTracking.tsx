@@ -273,12 +273,10 @@ const LiveTracking = () => {
                         </span>
                         <div className="flex-1 min-w-0 me-2">
                           <span className="font-medium text-base text-foreground">{step.title}</span>
-                          <br />
                           <small className="text-sm text-muted-foreground block mt-2">
                             View this page by clicking on the following link:
                           </small>
-                          <br />
-                          <small className="block">
+                          <small className="block mt-2">
                             <a
                               href={step.url}
                               className="text-sm text-[#ff3e1d] hover:underline break-all"
