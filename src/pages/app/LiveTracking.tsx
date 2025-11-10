@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor } from "lucide-react";
+import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor, Square } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -33,11 +33,31 @@ const LiveTracking = () => {
   const journeySteps = [
     {
       id: 1,
-      title: "Contact us | Kosh mArt Hong Kong",
-      url: "https://koshmart.com/hk/contact-us",
-      status: "Active now",
-      time: "42s",
+      title: "Henri Rousseau Oil Painting Reproductions | Kosh mArt USA",
+      url: "https://koshmart.com/reproductions/henri-rousseau",
+      time: "4s",
       isActive: true,
+    },
+    {
+      id: 2,
+      title: "Surprised by Henri Rousseau - Oil Painting Reproduction | Kosh mArt USA",
+      url: "https://koshmart.com/surprised-henri-rousseau-painting-reproduction-hr0001",
+      time: "18m",
+      isActive: false,
+    },
+    {
+      id: 3,
+      title: "Oil Painting Reproductions | Art Reproductions | Kosh mArt USA",
+      url: "https://koshmart.com/",
+      time: "8s",
+      isActive: false,
+    },
+    {
+      id: 4,
+      title: "Oil Painting Reproductions | Art Reproductions | Kosh mArt USA",
+      url: "https://koshmart.com/",
+      time: "22m",
+      isActive: false,
     },
   ];
 
@@ -242,58 +262,58 @@ const LiveTracking = () => {
                   {journeySteps.map((step, index) => (
                     <div
                       key={step.id}
-                      className="relative pl-24 pb-8 last:pb-0"
+                      className="relative pb-8 last:pb-0"
                     >
                       {/* Timeline line */}
                       {index < journeySteps.length - 1 && (
-                        <div className="absolute left-[9px] top-12 bottom-0 w-0.5 bg-border" />
+                        <div className="absolute left-[29px] top-12 bottom-0 w-0.5 bg-border" />
                       )}
                       
-                      {/* Timeline elements */}
-                      <div className="absolute left-0 top-0 flex items-start gap-3">
-                        {/* Status dot */}
-                        <div
-                          className={`mt-1 h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            step.isActive ? 'bg-[#71dd37]' : 'bg-muted'
-                          }`}
-                        >
-                          <div className={`h-2 w-2 rounded-full ${
-                            step.isActive ? 'bg-white' : 'bg-muted-foreground'
-                          }`} />
+                      {/* Main flex container */}
+                      <div className="flex items-start gap-4">
+                        {/* Left side: Timeline dot and icon */}
+                        <div className="flex items-start gap-3 flex-shrink-0">
+                          {/* Status dot */}
+                          <div
+                            className={`mt-1 h-3 w-3 rounded-full flex-shrink-0 ${
+                              step.isActive ? 'bg-[#71dd37]' : 'bg-[#ff6b6b]'
+                            }`}
+                          />
+                          
+                          {/* Page icon - using Square icon with warning colors */}
+                          <div className="h-16 w-16 rounded flex items-center justify-center flex-shrink-0 bg-warning">
+                            <Square className="h-10 w-10 text-warning-foreground fill-current" />
+                          </div>
                         </div>
-                        
-                        {/* Page icon */}
-                        <div className="h-16 w-16 rounded border-4 border-orange-400 bg-white flex items-center justify-center flex-shrink-0">
-                          <div className="h-8 w-8 bg-orange-400 rounded" />
-                        </div>
-                      </div>
 
-                      {/* Content */}
-                      <div className="space-y-2 pt-0">
-                        <h4 className="font-medium text-base leading-tight pr-4">{step.title}</h4>
-                        
-                        <div className="flex items-center gap-2 flex-wrap">
+                        {/* Middle: Content */}
+                        <div className="flex-1 min-w-0 space-y-2 pt-0">
+                          <h4 className="font-medium text-base leading-tight text-foreground">{step.title}</h4>
+                          
+                          <p className="text-sm text-muted-foreground">
+                            View this page by clicking on the following link:
+                          </p>
+                          <a
+                            href={step.url}
+                            className="text-sm text-[#ff3e1d] hover:underline break-all inline-block"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {step.url}
+                          </a>
+                        </div>
+
+                        {/* Right side: Badges */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           {step.isActive && (
-                            <Badge className="text-xs bg-[#71dd37] text-white hover:bg-[#71dd37] font-medium border-0">
+                            <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0">
                               Active now
                             </Badge>
                           )}
-                          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground font-medium border-0">
+                          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3">
                             {step.time}
                           </Badge>
                         </div>
-                        
-                        <p className="text-sm text-muted-foreground pt-1">
-                          View this page by clicking on the following link:
-                        </p>
-                        <a
-                          href={step.url}
-                          className="text-sm text-[#ff3e1d] hover:underline break-all inline-block"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {step.url}
-                        </a>
                       </div>
                     </div>
                   ))}
