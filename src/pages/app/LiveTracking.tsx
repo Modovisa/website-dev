@@ -436,7 +436,7 @@ const LiveTracking = () => {
       <ScrollArea className="flex-1">
         <Collapsible open={liveVisitorsOpen} onOpenChange={setLiveVisitorsOpen}>
           <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
-            <div className="p-4 border-b bg-background">
+            <div className="p-4 border-b bg-[#f9f9f9]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-[#71dd37] shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
@@ -500,7 +500,7 @@ const LiveTracking = () => {
 
         <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
           <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
-            <div className="p-4 border-b bg-background">
+            <div className="p-4 border-b bg-[#f3f3f3]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-[#ffab00] shadow-[0_0_0_4px_rgba(245,158,11,0.12)]" />
