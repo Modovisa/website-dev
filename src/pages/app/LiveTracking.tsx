@@ -97,6 +97,46 @@ const InlineNoVisitors = () => (
   </div>
 );
 
+/* ------------------------------ SVG icons ---------------------------- */
+
+const IconWindow = ({ className = "h-5 w-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
+  </svg>
+);
+
+const IconAddToCart = ({ className = "h-5 w-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor"/>
+    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor"/>
+    <path fill="currentColor" d="M13 13h2v-2.99h2.99v-2H15V5.03h-2v2.98h-2.99v2H13z"/>
+    <path fill="currentColor" d="M10 17h8a1 1 0 0 0 .93-.64L21.76 9h-2.14l-2.31 6h-6.64L6.18 4.23A2 2 0 0 0 4.33 3H2v2h2.33l4.75 11.38A1 1 0 0 0 10 17"/>
+  </svg>
+);
+
+const IconCheckout = ({ className = "h-5 w-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <path fill="currentColor" d="M21.822 7.431A1 1 0 0 0 21 7H7.333L6.179 4.23A1.99 1.99 0 0 0 4.333 3H2v2h2.333l4.744 11.385A1 1 0 0 0 10 17h8c.417 0 .79-.259.937-.648l3-8a1 1 0 0 0-.115-.921M17.307 15h-6.64l-2.5-6h11.39z"/>
+    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor"/>
+    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor"/>
+  </svg>
+);
+
+const IconThankYou = ({ className = "h-5 w-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <path fill="currentColor" d="M12 15c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1"/>
+    <path fill="currentColor" d="M5 2H2v2h2v17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4h2V2zm13 18H6V4h12z"/>
+  </svg>
+);
+
+/* Helpers for stage ➜ icon + label */
+const stageMeta = (stage?: string | null) => {
+  if (stage === "cart")       return { Icon: IconAddToCart, label: "Product added to cart", className: "text-[#56ca00]" };
+  if (stage === "checkout")   return { Icon: IconCheckout,  label: "Visitor started checkout", className: "text-[#56ca00]" };
+  if (stage === "thank_you")  return { Icon: IconThankYou,  label: "Order completed", className: "text-[#56ca00]" };
+  return { Icon: IconWindow,   label: null, className: "text-[#ffab00]" }; // page view = orange
+};
+
 /* -------------------------------- page -------------------------------- */
 
 const LiveTracking = () => {
@@ -201,7 +241,7 @@ const LiveTracking = () => {
               return updated;
             });
 
-            // ✅ Auto-select the first active visitor as soon as one appears via WS
+            // Auto-select the first active visitor as soon as one appears via WS
             if (!selectedVisitorId && isActiveNow) {
               setSelectedVisitorId(visitor.id);
             }
@@ -220,7 +260,11 @@ const LiveTracking = () => {
         setTimeout(() => setupWebSocket(), 5000);
       });
 
-      ws.addEventListener("error", (err) => console.error("❌ WebSocket error", err));
+      ws.addEventListener("error", (err) => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("WS error (benign)", err);
+        }
+      });
     } catch (err) {
       console.error("❌ Failed to setup WebSocket", err);
     }
@@ -283,7 +327,7 @@ const LiveTracking = () => {
       setVisitorDataMap(normalized);
       setIsLoading(false);
 
-      // ✅ Auto-select first visitor after initial/refresh load (active preferred)
+      // Auto-select first visitor after initial/refresh load (active preferred)
       if (!selectedVisitorId && Object.keys(normalized).length > 0) {
         const firstActive = Object.values(normalized).find((v) => v.status === "active");
         setSelectedVisitorId(firstActive ? firstActive.id : Object.keys(normalized)[0]);
@@ -391,7 +435,7 @@ const LiveTracking = () => {
     }
   }, [isLoading, haveAnyVisitors]);
 
-  // Extra guard: if a live visitor appears and nothing is selected, select it immediately.
+  // If a live visitor appears and nothing is selected, select it immediately.
   useEffect(() => {
     if (!isLoading && activeVisitors.length > 0 && !selectedVisitorId) {
       setSelectedVisitorId(activeVisitors[0].id);
@@ -404,6 +448,15 @@ const LiveTracking = () => {
       setSelectedVisitorId(null);
     }
   }, [selectedVisitorId, visitorDataMap]);
+
+  // Auto-open groups when data arrives (open Live, collapse Recent)
+  useEffect(() => {
+    if (isLoading) return;
+    if (activeVisitors.length > 0) {
+      if (!liveVisitorsOpen) setLiveVisitorsOpen(true);
+      if (recentlyLeftOpen) setRecentlyLeftOpen(false);
+    }
+  }, [isLoading, activeVisitors.length, liveVisitorsOpen, recentlyLeftOpen]);
 
   /* ------------------------- auth loading gate ------------------------ */
   if (authLoading) {
@@ -509,45 +562,58 @@ const LiveTracking = () => {
                     {activeVisitors.length === 0 ? (
                       <div className="p-4 text-center text-muted-foreground">No active visitors</div>
                     ) : (
-                      activeVisitors.map((visitor) => (
-                        <div
-                          key={visitor.id}
-                          className={`p-1 cursor-pointer transition-colors ${
-                            selectedVisitorId === visitor.id ? "bg-muted/30" : "hover:bg-muted/20"
-                          }`}
-                          onClick={() => setSelectedVisitorId(visitor.id)}
-                        >
-                          <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
-                            <Avatar className="h-8 w-8 flex-shrink-0">
-                              <AvatarFallback className="bg-[#71dd37]/10 border border-[#71dd37]">
-                                <User className="h-4 w-4 text-[#71dd37]" />
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0 space-y-2">
-                              <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
-                                {visitor.title || "(No title)"}
-                              </p>
-                              <div className="flex items-center gap-2 flex-wrap justify-between">
-                                <Badge
-                                  className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
-                                    visitor.is_new_visitor
-                                      ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
-                                      : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
-                                  }`}
-                                >
-                                  {visitor.is_new_visitor ? "New Visitor" : "Returning Visitor"}
-                                </Badge>
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
-                                >
-                                  Session: {visitor.session_time}
-                                </Badge>
+                      activeVisitors.map((visitor) => {
+                        const lastPage = visitor.pages?.[visitor.pages.length - 1];
+                        const { Icon, label, className } = stageMeta(lastPage?.stage);
+
+                        return (
+                          <div
+                            key={visitor.id}
+                            className={`p-1 cursor-pointer transition-colors ${
+                              selectedVisitorId === visitor.id ? "bg-muted/30" : "hover:bg-muted/20"
+                            }`}
+                            onClick={() => setSelectedVisitorId(visitor.id)}
+                          >
+                            <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                <AvatarFallback className="bg-[#71dd37]/10 border border-[#71dd37]">
+                                  <User className="h-4 w-4 text-[#71dd37]" />
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0 space-y-2">
+                                <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
+                                  {visitor.title || "(No title)"}
+                                </p>
+                                <div className="flex items-center gap-2 flex-wrap justify-between">
+                                  <Badge
+                                    className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
+                                      visitor.is_new_visitor
+                                        ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
+                                        : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
+                                    }`}
+                                  >
+                                    {visitor.is_new_visitor ? "New Visitor" : "Returning Visitor"}
+                                  </Badge>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
+                                  >
+                                    Session: {visitor.session_time}
+                                  </Badge>
+                                </div>
+
+                                {/* Stage row (only for known stages) */}
+                                {label && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Icon className={`h-5 w-5 ${className}`} />
+                                    <small className="text-muted-foreground">{label}</small>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </CollapsibleContent>
@@ -596,42 +662,58 @@ const LiveTracking = () => {
               <CollapsibleContent>
                 <div className="bg-background">
                   {recentVisitors.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">No recent visitors</div>
+                    // Hide the placeholder when there are zero visitors overall
+                    haveAnyVisitors ? (
+                      <div className="p-4 text-center text-muted-foreground">No recent visitors</div>
+                    ) : null
                   ) : (
-                    recentVisitors.map((visitor) => (
-                      <div
-                        key={visitor.id}
-                        className="p-1 cursor-pointer transition-colors hover:bg-muted/20"
-                        onClick={() => setSelectedVisitorId(visitor.id)}
-                      >
-                        <div className="flex items-center gap-3 p-3 rounded-sm border">
-                          <Avatar className="h-8 w-8 flex-shrink-0">
-                            <AvatarFallback className="bg-muted border border-border">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0 space-y-2">
-                            <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
-                              {visitor.title || "(No title)"}
-                            </p>
-                            <div className="flex items-center gap-2 flex-wrap justify-between">
-                              <Badge
-                                variant="secondary"
-                                className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap"
-                              >
-                                Left Site
-                              </Badge>
-                              <Badge
-                                variant="secondary"
-                                className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
-                              >
-                                Session: {visitor.session_time}
-                              </Badge>
+                    recentVisitors.map((visitor) => {
+                      const lastPage = visitor.pages?.[visitor.pages.length - 1];
+                      const { Icon, label, className } = stageMeta(lastPage?.stage);
+
+                      return (
+                        <div
+                          key={visitor.id}
+                          className="p-1 cursor-pointer transition-colors hover:bg-muted/20"
+                          onClick={() => setSelectedVisitorId(visitor.id)}
+                        >
+                          <div className="flex items-center gap-3 p-3 rounded-sm border">
+                            <Avatar className="h-8 w-8 flex-shrink-0">
+                              <AvatarFallback className="bg-muted border border-border">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
+                                {visitor.title || "(No title)"}
+                              </p>
+                              <div className="flex items-center gap-2 flex-wrap justify-between">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap"
+                                >
+                                  Left Site
+                                </Badge>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
+                                >
+                                  Session: {visitor.session_time}
+                                </Badge>
+                              </div>
+
+                              {/* Stage row (only for known stages) */}
+                              {label && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Icon className={`h-5 w-5 ${className}`} />
+                                  <small className="text-muted-foreground">{label}</small>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </CollapsibleContent>
@@ -645,7 +727,7 @@ const LiveTracking = () => {
   /* ------------------------------ content ----------------------------- */
   return (
     <DashboardLayout>
-      <div className="flex h-full overflow-hidden gap-6 pl-10">
+      <div className="flex h-full overflow-hidden gap-6 pl-12">
         <div className="hidden lg:block w-96 mt-8">
           <VisitorSidebar />
         </div>
@@ -721,55 +803,55 @@ const LiveTracking = () => {
                   <CardContent>
                     <ul className="journey-timeline list-none p-0 m-0">
                       {selectedVisitor.pages && selectedVisitor.pages.length > 0 ? (
-                        [...selectedVisitor.pages].reverse().map((page, idx) => (
-                          <li
-                            key={idx}
-                            className={`jt-item ${page.is_active ? "is-active" : "is-left"} flex items-center m-2 ${
-                              page.is_active ? "shadow-sm" : ""
-                            } rounded-md border p-3 ${!page.is_active ? "bg-muted/30" : "bg-card"}`}
-                          >
-                            <span className="jt-dot"></span>
-                            <div className="flex items-center w-full">
-                              <span className="ms-3 me-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="55" height="55" viewBox="0 0 24 24">
-                                  <path
-                                    fill="currentColor"
-                                    d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"
-                                  />
-                                </svg>
-                              </span>
-                              <div className="flex-1 min-w-0 me-2">
-                                <span className="font-medium text-base text-foreground">{page.title || "(No title)"}</span>
-                                <small className="text-sm text-muted-foreground block mt-2">
-                                  View this page by clicking on the following link:
-                                </small>
-                                <small className="block mt-2">
-                                  <a
-                                    href={safeURL(page.url)}
-                                    className="text-sm text-[#ff3e1d] hover:underline break-all"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                        [...selectedVisitor.pages].reverse().map((page, idx) => {
+                          const meta = stageMeta(page.stage);
+                          return (
+                            <li
+                              key={idx}
+                              className={`jt-item ${page.is_active ? "is-active" : "is-left"} flex items-center m-2 ${
+                                page.is_active ? "shadow-sm" : ""
+                              } rounded-md border p-3 ${!page.is_active ? "bg-muted/30" : "bg-card"}`}
+                            >
+                              <span className="jt-dot"></span>
+                              <div className="flex items-center w-full">
+                                <span className="ms-3 me-4">
+                                  <meta.Icon className={`h-[22px] w-[22px] ${meta.className}`} />
+                                </span>
+                                <div className="flex-1 min-w-0 me-2">
+                                  <span className="font-medium text-base text-foreground">
+                                    {page.title || "(No title)"}
+                                  </span>
+                                  <small className="text-sm text-muted-foreground block mt-2">
+                                    View this page by clicking on the following link:
+                                  </small>
+                                  <small className="block mt-2">
+                                    <a
+                                      href={safeURL(page.url)}
+                                      className="text-sm text-[#ff3e1d] hover:underline break-all"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      {page.url}
+                                    </a>
+                                  </small>
+                                </div>
+                                <div className="ms-auto flex items-center gap-2">
+                                  {page.is_active && (
+                                    <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
+                                      Active now
+                                    </Badge>
+                                  )}
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"
                                   >
-                                    {page.url}
-                                  </a>
-                                </small>
-                              </div>
-                              <div className="ms-auto flex items-center gap-2">
-                                {page.is_active && (
-                                  <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
-                                    Active now
+                                    {page.time_spent}
                                   </Badge>
-                                )}
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"
-                                >
-                                  {page.time_spent}
-                                </Badge>
+                                </div>
                               </div>
-                            </div>
-                          </li>
-                        ))
+                            </li>
+                          );
+                        })
                       ) : (
                         <div className="text-center py-8 text-muted-foreground">No page views yet</div>
                       )}
@@ -778,7 +860,7 @@ const LiveTracking = () => {
                 </Card>
               </>
             ) : (
-              // ✅ Empty state must be centered INSIDE a Card (matching the journey container)
+              // Empty state centered INSIDE a Card (matching the journey container)
               <Card className="shadow-none border">
                 <CardContent className="flex items-center justify-center h-60">
                   <InlineNoVisitors />
