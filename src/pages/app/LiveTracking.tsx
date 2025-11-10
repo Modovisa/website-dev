@@ -9,7 +9,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { secureFetch } from "@/lib/auth";
 
 // Constants
 const ACTIVE_MAX_AGE_MS = 8 * 60 * 1000;     // 8 minutes
@@ -48,6 +51,11 @@ interface Website {
 }
 
 const LiveTracking = () => {
+  const navigate = useNavigate();
+  
+  // Auth guard - check authentication before rendering
+  const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
+  
   // State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [liveVisitorsOpen, setLiveVisitorsOpen] = useState(true);
@@ -83,20 +91,6 @@ const LiveTracking = () => {
     if (age <= RECENT_MAX_AGE_MS) return 'recent';
     return 'expired';
   };
-
-  // Fetch with authentication
-  const secureFetch = useCallback(async (url: string, options: RequestInit = {}) => {
-    const token = (window as any).__mvAccess?.token;
-    
-    return fetch(url, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        ...options.headers,
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      }
-    });
-  }, []);
 
   // Setup WebSocket
   const setupWebSocket = useCallback(async () => {
@@ -200,7 +194,7 @@ const LiveTracking = () => {
     } catch (err) {
       console.error("❌ Failed to setup WebSocket", err);
     }
-  }, [currentWebsite, isSuspended, secureFetch]);
+  }, [currentWebsite, isSuspended]);
 
   // Refresh visitor list
   const refreshVisitorList = useCallback(async () => {
@@ -217,7 +211,8 @@ const LiveTracking = () => {
       );
 
       if (res.status === 401) {
-        window.location.replace('/login');
+        console.warn('Session expired, redirecting to login');
+        navigate('/login', { replace: true });
         return;
       }
 
@@ -231,7 +226,8 @@ const LiveTracking = () => {
           return;
         }
         if (errorText.includes("blocked")) {
-          window.location.replace('/login');
+          console.warn('Account blocked, redirecting to login');
+          navigate('/login', { replace: true });
           return;
         }
       }
@@ -276,7 +272,7 @@ const LiveTracking = () => {
       console.error("❌ Failed to refresh visitor list", err);
       setIsLoading(false);
     }
-  }, [currentWebsite, isSuspended, selectedVisitorId, secureFetch, setupWebSocket]);
+  }, [currentWebsite, isSuspended, selectedVisitorId, navigate, setupWebSocket]);
 
   // Start rebucket timer
   useEffect(() => {
@@ -316,7 +312,9 @@ const LiveTracking = () => {
         });
 
         if (res.status === 401) {
-          window.location.replace('/login');
+          // Not authenticated - redirect to login
+          console.warn('Not authenticated, redirecting to login');
+          navigate('/login', { replace: true });
           return;
         }
 
@@ -342,7 +340,7 @@ const LiveTracking = () => {
     };
 
     loadWebsites();
-  }, [secureFetch]);
+  }, [navigate]);
 
   // Setup WebSocket and refresh when website changes
   useEffect(() => {
@@ -376,6 +374,25 @@ const LiveTracking = () => {
   recentVisitors.sort((a, b) => getLastTimestamp(b) - getLastTimestamp(a));
 
   const selectedVisitor = selectedVisitorId ? visitorDataMap[selectedVisitorId] : null;
+
+  // Show loading screen while checking authentication
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-lg text-muted-foreground">Verifying authentication...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Don't render if not authenticated (hook will redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const VisitorSidebar = () => (
     <div className="w-full h-full bg-background flex flex-col border rounded-md">
