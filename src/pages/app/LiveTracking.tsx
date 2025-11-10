@@ -443,7 +443,7 @@ const LiveTracking = () => {
                   <span className="text-md font-semibold">Live Visitors</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-primary">{activeVisitors.length}</span>
+                  <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">{activeVisitors.length}</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${liveVisitorsOpen ? '' : '-rotate-90'}`} />
                 </div>
               </div>
@@ -507,7 +507,7 @@ const LiveTracking = () => {
                   <span className="text-md font-semibold">Recently left</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-primary bg-white rounded-full">{recentVisitors.length}</span>
+                  <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">{recentVisitors.length}</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recentlyLeftOpen ? '' : '-rotate-90'}`} />
                 </div>
               </div>
