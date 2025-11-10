@@ -94,7 +94,7 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden flex items-center drop-shadow-xl">
+      <section className="relative overflow-hidden flex items-center">
         {/* Canvas directly in section - just like Bootstrap */}
         <canvas 
           ref={canvasRef}
