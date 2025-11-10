@@ -75,31 +75,29 @@ const LiveTracking = () => {
           </CollapsibleTrigger>
 
           <CollapsibleContent>
-            <div className="bg-background">
+            <div className="divide-y bg-background">
               {visitors.map((visitor) => (
                 <div
                   key={visitor.id}
-                  className={`p-1 cursor-pointer transition-colors ${
+                  className={`p-4 cursor-pointer transition-colors ${
                     visitor.selected ? 'bg-muted/30' : 'hover:bg-muted/20'
                   }`}
                 >
-                  <div className="flex items-start gap-3 p-3 rounded-sm border">
-                    <Avatar className="h-8 w-8 flex-shrink-0 pulse">
-                      <AvatarFallback className="bg-[#71dd37]/10 border-1 border-[#71dd37]">
-                        <User className="h-4 w-4 text-[#71dd37]" />
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 flex-shrink-0">
+                      <AvatarFallback className="bg-[#71dd37]/10 border-2 border-[#71dd37]">
+                        <User className="h-5 w-5 text-[#71dd37]" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm font-medium leading-tight text-foreground">{visitor.page}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className="text-xs font-medium bg-[#71dd37]/20 text-[#71dd37] hover:bg-[#71dd37]/20 border-0 rounded-md px-2 py-1">
-                          New Visitor
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
-                          Session: {visitor.session}
-                        </Badge>
-                      </div>
+                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                      <p className="text-sm font-medium leading-tight text-foreground truncate flex-shrink">{visitor.page}</p>
+                      <Badge className="text-xs font-medium bg-[#71dd37]/20 text-[#71dd37] hover:bg-[#71dd37]/20 border-0 rounded-md px-2 py-1 whitespace-nowrap flex-shrink-0">
+                        New Visitor
+                      </Badge>
                     </div>
+                    <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap flex-shrink-0">
+                      Session: {visitor.session}
+                    </Badge>
                   </div>
                 </div>
               ))}
@@ -125,29 +123,27 @@ const LiveTracking = () => {
           </CollapsibleTrigger>
 
           <CollapsibleContent>
-            <div className="bg-background">
+            <div className="divide-y bg-background">
               {recentlyLeft.map((visitor) => (
                 <div
                   key={visitor.id}
-                  className="p-1 cursor-pointer transition-colors hover:bg-muted/20"
+                  className="p-4 cursor-pointer transition-colors hover:bg-muted/20"
                 >
-                  <div className="flex items-start gap-3 p-3 rounded-sm border">
-                    <Avatar className="h-8 w-8 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 flex-shrink-0">
                       <AvatarFallback className="bg-muted border border-border">
-                        <User className="h-4 w-4 text-muted-foreground" />
+                        <User className="h-5 w-5 text-muted-foreground" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm font-medium leading-tight text-foreground">{visitor.page}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
-                          Left Site
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
-                          Session: {visitor.session}
-                        </Badge>
-                      </div>
+                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                      <p className="text-sm font-medium leading-tight text-foreground truncate flex-shrink">{visitor.page}</p>
+                      <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap flex-shrink-0">
+                        Left Site
+                      </Badge>
                     </div>
+                    <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap flex-shrink-0">
+                      Session: {visitor.session}
+                    </Badge>
                   </div>
                 </div>
               ))}
