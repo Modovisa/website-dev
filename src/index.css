@@ -70,7 +70,7 @@ All colors MUST be HSL.
     --accent: 250 95% 63%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 8 100% 56%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 13% 91%;
@@ -82,10 +82,10 @@ All colors MUST be HSL.
 
     --radius: 0.75rem;
     
-    --success: 152 72% 54%;
+    --success: 110 61% 54%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;
+    --warning: 42 100% 50%;
     --warning-foreground: 0 0% 100%;
     
     --gradient-start: 280 90% 65%;
@@ -131,13 +131,13 @@ All colors MUST be HSL.
     --accent: 250 95% 63%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 63% 31%;
+    --destructive: 8 100% 56%;
     --destructive-foreground: 0 0% 100%;
     
-    --success: 152 72% 54%;
+    --success: 110 61% 54%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;
+    --warning: 42 100% 50%;
     --warning-foreground: 0 0% 100%;
 
     --border: 220 20% 18%;
@@ -228,9 +228,9 @@ All colors MUST be HSL.
 
 @keyframes pulse-animation {
   0% {
-    box-shadow: 0 0 0 0px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0 0 0px rgba(113, 221, 55, 0.4);
   }
   100% {
-    box-shadow: 0 0 0 15px rgba(0, 0, 0, 0);
+    box-shadow: 0 0 0 15px rgba(113, 221, 55, 0);
   }
 }

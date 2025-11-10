@@ -17,15 +17,17 @@ const LiveTracking = () => {
   const [recentlyLeftOpen, setRecentlyLeftOpen] = useState(true);
   
   const visitors = [
-    { id: 1, page: "Contact us | Kosh mArt Hong Kong", session: "2m", type: "new", selected: true },
+    { id: 1, page: "Contact us | Kosh mArt Hong Kong", session: "1m", type: "new", selected: true },
     { id: 2, page: "Contact us | Kosh mArt Hong Kong", session: "3m", type: "new", selected: false },
     { id: 3, page: "Contact us | Kosh mArt Hong Kong", session: "3m", type: "new", selected: false },
     { id: 4, page: "Four Darks In Red (1958) by Mark R...", session: "7m", type: "new", selected: false },
   ];
 
   const recentlyLeft = [
-    { id: 1, page: "Morning in the City by Edward Hop...", session: "9m", type: "left" },
-    { id: 2, page: "Saint-Tropez, Fontaine Des Lices af...", session: "6m", type: "left" },
+    { id: 1, page: "Contact us - Kosh mArt South Korea...", session: "8m", type: "left" },
+    { id: 2, page: "On White II by 박실리 칸딘스키 - 유화...", session: "1m", type: "left" },
+    { id: 3, page: "名画、油絵の複製画（レプリカ）...", session: "6s", type: "left" },
+    { id: 4, page: "ローヌ川の星月夜 フィンセント...", session: "15m", type: "left" },
   ];
 
   const journeySteps = [
@@ -61,7 +63,7 @@ const LiveTracking = () => {
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-success pulse" style={{ boxShadow: '0 0 0 0px hsl(var(--success) / 0.15)' }} />
+                  <div className="h-2 w-2 rounded-full bg-[#71dd37] pulse" />
                   <span className="text-sm font-semibold">Live Visitors</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -73,27 +75,27 @@ const LiveTracking = () => {
           </CollapsibleTrigger>
 
           <CollapsibleContent>
-            <div className="divide-y">
+            <div className="divide-y bg-background">
               {visitors.map((visitor) => (
                 <div
                   key={visitor.id}
                   className={`p-4 cursor-pointer transition-colors ${
-                    visitor.selected ? 'bg-muted/50' : 'hover:bg-muted/30'
+                    visitor.selected ? 'bg-muted/30' : 'hover:bg-muted/20'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className="h-10 w-10 flex-shrink-0">
-                      <AvatarFallback className="bg-success/10">
-                        <User className="h-5 w-5 text-success" />
+                      <AvatarFallback className="bg-[#71dd37]/10 border-2 border-[#71dd37]">
+                        <User className="h-5 w-5 text-[#71dd37]" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm font-medium leading-tight text-muted-foreground">{visitor.page}</p>
+                      <p className="text-sm font-medium leading-tight text-foreground">{visitor.page}</p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className="text-xs font-normal bg-success/20 text-success hover:bg-success/20">
+                        <Badge className="text-xs font-medium bg-[#71dd37]/20 text-[#71dd37] hover:bg-[#71dd37]/20 border-0 rounded-md px-2 py-1">
                           New Visitor
                         </Badge>
-                        <Badge variant="secondary" className="text-xs font-normal bg-muted text-foreground">
+                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
                           Session: {visitor.session}
                         </Badge>
                       </div>
@@ -111,7 +113,7 @@ const LiveTracking = () => {
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-orange-500" />
+                  <div className="h-2 w-2 rounded-full bg-[#ffab00]" />
                   <span className="text-sm font-semibold">Recently left</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -123,25 +125,25 @@ const LiveTracking = () => {
           </CollapsibleTrigger>
 
           <CollapsibleContent>
-            <div className="divide-y">
+            <div className="divide-y bg-background">
               {recentlyLeft.map((visitor) => (
                 <div
                   key={visitor.id}
-                  className="p-4 cursor-pointer transition-colors hover:bg-muted/30"
+                  className="p-4 cursor-pointer transition-colors hover:bg-muted/20"
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className="h-10 w-10 flex-shrink-0">
-                      <AvatarFallback className="bg-muted">
+                      <AvatarFallback className="bg-muted border border-border">
                         <User className="h-5 w-5 text-muted-foreground" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 space-y-2">
-                      <p className="text-sm font-medium leading-tight text-muted-foreground">{visitor.page}</p>
+                      <p className="text-sm font-medium leading-tight text-foreground">{visitor.page}</p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="secondary" className="text-xs font-normal bg-muted text-foreground">
+                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
                           Left Site
                         </Badge>
-                        <Badge variant="secondary" className="text-xs font-normal bg-muted text-foreground">
+                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
                           Session: {visitor.session}
                         </Badge>
                       </div>
@@ -196,7 +198,7 @@ const LiveTracking = () => {
                 <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm text-muted-foreground">Location:</p>
-                  <p className="font-semibold text-destructive">China, Nanjing</p>
+                  <p className="font-semibold text-[#ff3e1d]">China, Nanjing</p>
                 </div>
               </div>
 
@@ -204,7 +206,7 @@ const LiveTracking = () => {
                 <ExternalLink className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm text-muted-foreground">Referrer:</p>
-                  <p className="font-semibold text-destructive">Direct</p>
+                  <p className="font-semibold text-[#ff3e1d]">Direct</p>
                 </div>
               </div>
 
@@ -212,7 +214,7 @@ const LiveTracking = () => {
                 <Monitor className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm text-muted-foreground">Device:</p>
-                  <p className="font-semibold text-destructive">Desktop</p>
+                  <p className="font-semibold text-[#ff3e1d]">Desktop</p>
                 </div>
               </div>
 
@@ -220,7 +222,7 @@ const LiveTracking = () => {
                 <Globe className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm text-muted-foreground">Browser:</p>
-                  <p className="font-semibold text-destructive">Chrome</p>
+                  <p className="font-semibold text-[#ff3e1d]">Chrome</p>
                 </div>
               </div>
             </div>
@@ -246,7 +248,7 @@ const LiveTracking = () => {
                         {/* Status dot */}
                         <div
                           className={`mt-1 h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            step.isActive ? 'bg-success' : 'bg-muted'
+                            step.isActive ? 'bg-[#71dd37]' : 'bg-muted'
                           }`}
                         >
                           <div className={`h-2 w-2 rounded-full ${
@@ -266,11 +268,11 @@ const LiveTracking = () => {
                         
                         <div className="flex items-center gap-2 flex-wrap">
                           {step.isActive && (
-                            <Badge className="text-xs bg-success text-white hover:bg-success font-normal">
+                            <Badge className="text-xs bg-[#71dd37] text-white hover:bg-[#71dd37] font-medium border-0">
                               Active now
                             </Badge>
                           )}
-                          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground font-normal">
+                          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground font-medium border-0">
                             {step.time}
                           </Badge>
                         </div>
@@ -280,7 +282,7 @@ const LiveTracking = () => {
                         </p>
                         <a
                           href={step.url}
-                          className="text-sm text-destructive hover:underline break-all inline-block"
+                          className="text-sm text-[#ff3e1d] hover:underline break-all inline-block"
                           target="_blank"
                           rel="noopener noreferrer"
                         >
