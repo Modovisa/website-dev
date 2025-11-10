@@ -873,7 +873,7 @@ const LiveTracking = () => {
                               <span className="jt-dot"></span>
                               <div className="flex items-center w-full">
                                 <span className="me-4">
-                                  <meta.Icon className={`h-[22px] w-[22px] ${meta.className}`} />
+                                  <meta.Icon className={`h-[55px] w-[55px] ${meta.className}`} />
                                 </span>
                                 <div className="flex-1 min-w-0 me-2">
                                   <span className="font-medium text-base text-foreground">
