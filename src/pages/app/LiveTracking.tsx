@@ -499,7 +499,7 @@ const LiveTracking = () => {
         </Collapsible>
 
         <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
-          <CollapsibleTrigger className="w-full">
+          <CollapsibleTrigger className="w-full drop-shadow-md">
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
