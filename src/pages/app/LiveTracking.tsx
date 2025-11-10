@@ -79,14 +79,14 @@ const LiveTracking = () => {
               {visitors.map((visitor) => (
                 <div
                   key={visitor.id}
-                  className={`p-4 cursor-pointer transition-colors ${
+                  className={`p-1 cursor-pointer transition-colors ${
                     visitor.selected ? 'bg-muted/30' : 'hover:bg-muted/20'
                   }`}
                 >
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-10 w-10 flex-shrink-0">
-                      <AvatarFallback className="bg-[#71dd37]/10 border-2 border-[#71dd37]">
-                        <User className="h-5 w-5 text-[#71dd37]" />
+                  <div className="flex items-start gap-3 p-3 rounded-sm border">
+                    <Avatar className="h-8 w-8 flex-shrink-0 pulse">
+                      <AvatarFallback className="bg-[#71dd37]/10 border-1 border-[#71dd37]">
+                        <User className="h-4 w-4 text-[#71dd37]" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 space-y-2">
@@ -132,9 +132,9 @@ const LiveTracking = () => {
                   className="p-4 cursor-pointer transition-colors hover:bg-muted/20"
                 >
                   <div className="flex items-start gap-3">
-                    <Avatar className="h-10 w-10 flex-shrink-0">
+                    <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarFallback className="bg-muted border border-border">
-                        <User className="h-5 w-5 text-muted-foreground" />
+                        <User className="h-4 w-4 text-muted-foreground" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 space-y-2">
