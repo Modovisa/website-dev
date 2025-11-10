@@ -604,7 +604,7 @@ const LiveTracking = () => {
                           }`}
                           onClick={() => setSelectedVisitorId(visitor.id)}
                         >
-                          <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
+                          <div className="flex items-center gap-3 px-3 py-4 rounded-sm border shadow-sm">
                             <Avatar className="h-7 w-7 flex-shrink-0 pulse">
                               <AvatarFallback className="bg-[#71dd37]/10 border border-[#71dd37]">
                                 <User className="h-4 w-4 text-[#71dd37]" />
@@ -723,7 +723,7 @@ const LiveTracking = () => {
                             }`}
                             onClick={() => setSelectedVisitorId(visitor.id)}
                           >
-                            <div className="flex items-center gap-3 p-3 rounded-sm border">
+                            <div className="flex items-center gap-3 px-3 py-4 rounded-sm border">
                               <Avatar className="h-7 w-7 flex-shrink-0">
                                 <AvatarFallback className="bg-muted border border-border">
                                   <User className="h-4 w-4 text-muted-foreground" />
