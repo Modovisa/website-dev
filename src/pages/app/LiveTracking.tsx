@@ -101,7 +101,7 @@ const LiveTracking = () => {
                         >
                           {visitor.type === 'new' ? 'New Visitor' : 'Returning Visitor'}
                         </Badge>
-                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
+                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2">
                           Session: {visitor.session}
                         </Badge>
                       </div>
@@ -145,7 +145,7 @@ const LiveTracking = () => {
                     </Avatar>
                     <div className="flex-1 min-w-0 space-y-2">
                       <p className="text-sm font-medium leading-tight text-foreground">{visitor.page}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap justify-between">
                         <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
                           Left Site
                         </Badge>
