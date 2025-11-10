@@ -267,7 +267,7 @@ const LiveTracking = () => {
                       <span className="jt-dot"></span>
                       <div className="flex items-center w-full">
                         <span className="ms-3 me-4">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" className="text-warning">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="55" height="55" viewBox="0 0 24 24" className="text-warning">
                             <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
                           </svg>
                         </span>
