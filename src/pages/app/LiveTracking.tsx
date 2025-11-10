@@ -103,7 +103,7 @@ const LiveTracking = () => {
                     visitor.selected ? 'bg-muted/30' : 'hover:bg-muted/20'
                   }`}
                 >
-                  <div className="flex items-center gap-3 p-3 rounded-sm border">
+                  <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
                     <Avatar className="h-8 w-8 flex-shrink-0 pulse">
                       <AvatarFallback className="bg-[#71dd37]/10 border-1 border-[#71dd37]">
                         <User className="h-4 w-4 text-[#71dd37]" />
@@ -262,7 +262,7 @@ const LiveTracking = () => {
                   {journeySteps.map((step) => (
                     <li
                       key={step.id}
-                      className={`jt-item ${step.isActive ? 'is-active' : 'is-left'} flex items-center m-2 shadow-sm rounded-[14px] border p-3 ${!step.isActive ? 'bg-muted/30' : 'bg-card'}`}
+                      className={`jt-item ${step.isActive ? 'is-active' : 'is-left'} flex items-center m-2 ${step.isActive ? 'shadow-sm' : ''} rounded-[14px] border p-3 ${!step.isActive ? 'bg-muted/30' : 'bg-card'}`}
                     >
                       <span className="jt-dot"></span>
                       <div className="flex items-center w-full">
