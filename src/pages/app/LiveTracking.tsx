@@ -262,7 +262,7 @@ const LiveTracking = () => {
                   {journeySteps.map((step, index) => (
                     <div
                       key={step.id}
-                      className="relative pb-8 last:pb-0"
+                      className="relative pb-3 last:pb-0"
                     >
                       {/* Timeline line */}
                       {index < journeySteps.length - 1 && (
