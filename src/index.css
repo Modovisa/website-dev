@@ -219,3 +219,18 @@ All colors MUST be HSL.
   top: 0;
   left: 0;
 }
+
+/* Pulse Animation for Live Indicators */
+.pulse {
+  animation: pulse-animation 2s infinite;
+  border-radius: 10px;
+}
+
+@keyframes pulse-animation {
+  0% {
+    box-shadow: 0 0 0 0px rgba(0, 0, 0, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 15px rgba(0, 0, 0, 0);
+  }
+}
