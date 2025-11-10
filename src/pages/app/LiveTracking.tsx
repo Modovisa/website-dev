@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor, Square } from "lucide-react";
+import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -280,9 +280,11 @@ const LiveTracking = () => {
                             }`}
                           />
                           
-                          {/* Page icon - using Square icon with warning colors */}
+                          {/* Page icon - using custom window SVG with warning colors */}
                           <div className="h-16 w-16 rounded flex items-center justify-center flex-shrink-0 bg-warning">
-                            <Square className="h-10 w-10 text-warning-foreground fill-current" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" className="text-warning-foreground">
+                              <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
+                            </svg>
                           </div>
                         </div>
 
