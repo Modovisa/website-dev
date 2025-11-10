@@ -270,9 +270,9 @@ const LiveTracking = () => {
                       )}
                       
                       {/* Main flex container */}
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-center items-start gap-4 p-3 border rounded-sm">
                         {/* Left side: Timeline dot and icon */}
-                        <div className="flex items-start gap-3 flex-shrink-0">
+                        <div className="flex items-center items-start gap-3 flex-shrink-0">
                           {/* Status dot */}
                           <div
                             className={`mt-1 h-3 w-3 rounded-full flex-shrink-0 ${
