@@ -1,6 +1,13 @@
 // src/components/dashboard/Donut.tsx
 
-import { ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip } from 'recharts';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  Tooltip as ChartTooltip,
+} from "@/lib/recharts-safe";
 
 export default function Donut({
   data,
@@ -21,7 +28,7 @@ export default function Donut({
       ) : (
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <RechartsTooltip />
+            <ChartTooltip />
             <Legend />
             <Pie
               data={data}

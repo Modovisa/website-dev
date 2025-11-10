@@ -6,9 +6,9 @@ import {
   Line,
   XAxis,
   YAxis,
-  Tooltip as RechartsTooltip,
+  Tooltip as ChartTooltip,
   Legend,
-} from 'recharts';
+} from "@/lib/recharts-safe";
 import type { LabelCount } from '@/types/dashboard';
 
 export default function PerformanceLine({
@@ -40,7 +40,7 @@ export default function PerformanceLine({
           <LineChart data={data}>
             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <RechartsTooltip />
+            <ChartTooltip />
             <Legend />
             <Line type="monotone" dataKey="current" name={title} stroke={color} dot={false} />
             <Line type="monotone" dataKey="previous" name="Previous" stroke="#9ca3af" dot={false} strokeDasharray="5 5" />

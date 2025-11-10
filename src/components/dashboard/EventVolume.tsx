@@ -7,8 +7,8 @@ import {
   Line,
   XAxis,
   YAxis,
-  Tooltip as RechartsTooltip,
-} from "recharts";
+  Tooltip as ChartTooltip,
+} from "@/lib/recharts-safe";
 import type { LabelCount } from "@/types/dashboard";
 
 export default memo(function EventVolume({ data }: { data: LabelCount[] }) {
@@ -25,7 +25,7 @@ export default memo(function EventVolume({ data }: { data: LabelCount[] }) {
           <LineChart data={data}>
             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <RechartsTooltip />
+            <ChartTooltip />
             <Line
               type="monotone"
               dataKey="count"

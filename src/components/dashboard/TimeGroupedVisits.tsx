@@ -8,8 +8,8 @@ import {
   XAxis,
   YAxis,
   Legend,
-  Tooltip as RechartsTooltip,
-} from "recharts";
+  Tooltip as ChartTooltip,
+} from "@/lib/recharts-safe";
 import type { RangeKey, TimeBucket } from "@/types/dashboard";
 
 type Props = {
@@ -39,7 +39,7 @@ function ChartInner({ data, range }: Props) {
           <BarChart data={data}>
             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <RechartsTooltip />
+            <ChartTooltip />
             <Legend />
             <Bar
               dataKey="visitors"

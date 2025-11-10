@@ -6,9 +6,9 @@ import {
   Area,
   XAxis,
   YAxis,
-  Tooltip as RechartsTooltip,
+  Tooltip as ChartTooltip,
   Legend,
-} from 'recharts';
+} from "@/lib/recharts-safe";
 
 type Row = { label: string; unique: number; returning: number };
 
@@ -23,7 +23,7 @@ export default function UniqueReturning({ data }: { data: Row[] }) {
           <AreaChart data={data}>
             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <RechartsTooltip />
+            <ChartTooltip />
             <Legend />
             <Area type="monotone" dataKey="unique" name="Unique" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.25} />
             <Area type="monotone" dataKey="returning" name="Returning" stroke="#10b981" fill="#10b981" fillOpacity={0.25} />
