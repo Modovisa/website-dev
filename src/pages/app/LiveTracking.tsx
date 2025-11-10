@@ -569,7 +569,7 @@ const LiveTracking = () => {
                   // don't auto-collapse "Recently left" here; let the user control both
                 }}
               >
-                <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
+                <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)] mb-2">
                   <div className="p-4 border-b bg-[#f9f9f9]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -660,7 +660,7 @@ const LiveTracking = () => {
               </Collapsible>
             ) : (
               // No active visitors ➜ red header, collapsed, count 0
-              <div className="shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
+              <div className="shadow-[0_2px_4px_rgba(0,0,0,0.06)] my-2">
                 <div className="p-4 border-b bg-[#f9f9f9]">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
