@@ -439,8 +439,8 @@ const LiveTracking = () => {
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-[#71dd37] pulse" />
-                  <span className="text-sm font-semibold">Live Visitors</span>
+                  <div className="h-3 w-3 rounded-full bg-[#71dd37]" />
+                  <span className="text-md font-semibold">Live Visitors</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-primary">{activeVisitors.length}</span>
@@ -499,12 +499,12 @@ const LiveTracking = () => {
         </Collapsible>
 
         <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
-          <CollapsibleTrigger className="w-full drop-shadow-md">
+          <CollapsibleTrigger className="w-full">
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-[#ffab00]" />
-                  <span className="text-sm font-semibold">Recently left</span>
+                  <div className="h-3 w-3 rounded-full bg-[#ffab00]" />
+                  <span className="text-md font-semibold">Recently left</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-primary">{recentVisitors.length}</span>
