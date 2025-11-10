@@ -823,7 +823,7 @@ const LiveTracking = () => {
                     <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Location:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.location || "Unknown"}</p>
+                      <p className="text-sm font-medium text-[#ff3e1d]">{selectedVisitor.location || "Unknown"}</p>
                     </div>
                   </div>
 
@@ -831,7 +831,7 @@ const LiveTracking = () => {
                     <ExternalLink className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Referrer:</p>
-                      <p className="font-semibold text-[#ff3e1d]">
+                      <p className="text-sm font-medium text-[#ff3e1d]">
                         {selectedVisitor.attribution_source || "Direct"}
                       </p>
                     </div>
@@ -841,7 +841,7 @@ const LiveTracking = () => {
                     <Monitor className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Device:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.device || "Unknown"}</p>
+                      <p className="text-sm font-medium text-[#ff3e1d]">{selectedVisitor.device || "Unknown"}</p>
                     </div>
                   </div>
 
@@ -849,7 +849,7 @@ const LiveTracking = () => {
                     <Globe className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Browser:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.browser || "Unknown"}</p>
+                      <p className="text-sm font-medium text-[#ff3e1d]">{selectedVisitor.browser || "Unknown"}</p>
                     </div>
                   </div>
                 </div>
