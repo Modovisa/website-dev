@@ -18,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -90,7 +90,7 @@ const SidebarLoadingSkeleton = () => (
   </div>
 );
 
-const NoVisitorsPlaceholder = () => (
+const InlineNoVisitors = () => (
   <div className="text-center py-12">
     <Users className="h-16 w-16 text-muted-foreground/70 mx-auto mb-4" />
     <p className="text-base text-muted-foreground">No visitors yet. Waiting for traffic to arrive...</p>
@@ -196,7 +196,15 @@ const LiveTracking = () => {
               visitor.pages.forEach((p: Page, i: number) => (p.is_active = i === lastIndex && isActiveNow));
             }
 
-            setVisitorDataMap((prev) => ({ ...prev, [visitor.id]: visitor }));
+            setVisitorDataMap((prev) => {
+              const updated = { ...prev, [visitor.id]: visitor };
+              return updated;
+            });
+
+            // ✅ Auto-select the first active visitor as soon as one appears via WS
+            if (!selectedVisitorId && isActiveNow) {
+              setSelectedVisitorId(visitor.id);
+            }
           } catch (e) {
             console.error("❌ Failed to process live visitor", e);
           }
@@ -216,7 +224,7 @@ const LiveTracking = () => {
     } catch (err) {
       console.error("❌ Failed to setup WebSocket", err);
     }
-  }, [currentWebsite, isSuspended]);
+  }, [currentWebsite, isSuspended, selectedVisitorId]);
 
   /* -------------------------- initial/refresh -------------------------- */
   const refreshVisitorList = useCallback(async () => {
@@ -275,8 +283,10 @@ const LiveTracking = () => {
       setVisitorDataMap(normalized);
       setIsLoading(false);
 
+      // ✅ Auto-select first visitor after initial/refresh load (active preferred)
       if (!selectedVisitorId && Object.keys(normalized).length > 0) {
-        setSelectedVisitorId(Object.keys(normalized)[0]);
+        const firstActive = Object.values(normalized).find((v) => v.status === "active");
+        setSelectedVisitorId(firstActive ? firstActive.id : Object.keys(normalized)[0]);
       }
     } catch (err) {
       console.error("❌ Failed to refresh visitor list", err);
@@ -371,15 +381,29 @@ const LiveTracking = () => {
   recentVisitors.sort((a, b) => getLastTimestamp(b) - getLastTimestamp(a));
 
   const selectedVisitor = selectedVisitorId ? visitorDataMap[selectedVisitorId] : null;
-
   const haveAnyVisitors = activeVisitors.length + recentVisitors.length > 0;
 
-  // When there are no visitors post-load, make sure "Live Visitors" section is collapsed and non-expandable visual
+  // Keep the sidebar header behavior (collapse & red dot) when empty
   useEffect(() => {
     if (!isLoading && !haveAnyVisitors) {
       setLiveVisitorsOpen(false);
+      setSelectedVisitorId(null); // ensure right pane shows the empty state card
     }
   }, [isLoading, haveAnyVisitors]);
+
+  // Extra guard: if a live visitor appears and nothing is selected, select it immediately.
+  useEffect(() => {
+    if (!isLoading && activeVisitors.length > 0 && !selectedVisitorId) {
+      setSelectedVisitorId(activeVisitors[0].id);
+    }
+  }, [isLoading, activeVisitors, selectedVisitorId]);
+
+  // If the selected visitor disappears from the map, clear selection.
+  useEffect(() => {
+    if (selectedVisitorId && !visitorDataMap[selectedVisitorId]) {
+      setSelectedVisitorId(null);
+    }
+  }, [selectedVisitorId, visitorDataMap]);
 
   /* ------------------------- auth loading gate ------------------------ */
   if (authLoading) {
@@ -451,7 +475,7 @@ const LiveTracking = () => {
       )}
 
       <ScrollArea className="flex-1">
-        {/* While loading: hide the two rows and show a big skeleton block */}
+        {/* Hide rows while loading */}
         {isLoading ? (
           <SidebarLoadingSkeleton />
         ) : (
@@ -643,7 +667,6 @@ const LiveTracking = () => {
           </div>
 
           <div className="p-6 lg:p-8 space-y-6 pt-8">
-            {/* If a visitor is selected, show full details */}
             {selectedVisitor ? (
               <>
                 <div className="flex items-center gap-3 mb-2">
@@ -755,8 +778,12 @@ const LiveTracking = () => {
                 </Card>
               </>
             ) : (
-              // Initial/empty state: ONLY the icon + message (no "What pages..." heading)
-              <NoVisitorsPlaceholder />
+              // ✅ Empty state must be centered INSIDE a Card (matching the journey container)
+              <Card className="shadow-none border">
+                <CardContent className="flex items-center justify-center h-60">
+                  <InlineNoVisitors />
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>
