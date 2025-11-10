@@ -75,7 +75,7 @@ const LiveTracking = () => {
           </CollapsibleTrigger>
 
           <CollapsibleContent>
-            <div className="divide-y bg-background">
+            <div className="bg-background">
               {visitors.map((visitor) => (
                 <div
                   key={visitor.id}
@@ -125,13 +125,13 @@ const LiveTracking = () => {
           </CollapsibleTrigger>
 
           <CollapsibleContent>
-            <div className="divide-y bg-background">
+            <div className="bg-background">
               {recentlyLeft.map((visitor) => (
                 <div
                   key={visitor.id}
-                  className="p-4 cursor-pointer transition-colors hover:bg-muted/20"
+                  className="p-1 cursor-pointer transition-colors hover:bg-muted/20"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 p-3 rounded-sm border">
                     <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarFallback className="bg-muted border border-border">
                         <User className="h-4 w-4 text-muted-foreground" />
