@@ -435,7 +435,7 @@ const LiveTracking = () => {
 
       <ScrollArea className="flex-1">
         <Collapsible open={liveVisitorsOpen} onOpenChange={setLiveVisitorsOpen}>
-          <CollapsibleTrigger className="w-full">
+          <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -443,7 +443,7 @@ const LiveTracking = () => {
                   <span className="text-md font-semibold">Live Visitors</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-primary">{activeVisitors.length}</span>
+                  <span className="text-md font-bold text-primary">{activeVisitors.length}</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${liveVisitorsOpen ? '' : '-rotate-90'}`} />
                 </div>
               </div>
@@ -499,7 +499,7 @@ const LiveTracking = () => {
         </Collapsible>
 
         <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
-          <CollapsibleTrigger className="w-full">
+          <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -507,7 +507,7 @@ const LiveTracking = () => {
                   <span className="text-md font-semibold">Recently left</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-primary">{recentVisitors.length}</span>
+                  <span className="text-md font-bold text-primary">{recentVisitors.length}</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recentlyLeftOpen ? '' : '-rotate-90'}`} />
                 </div>
               </div>
