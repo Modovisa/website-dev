@@ -266,7 +266,7 @@ const LiveTracking = () => {
                     >
                       {/* Timeline line */}
                       {index < journeySteps.length - 1 && (
-                        <div className="absolute left-[29px] top-12 bottom-0 w-0.5 bg-border" />
+                        <div className="absolute left-[12px] top-12 bottom-0 w-0.5 bg-border" />
                       )}
                       
                       {/* Main flex container */}
@@ -281,8 +281,8 @@ const LiveTracking = () => {
                           />
                           
                           {/* Page icon - window icon with orange border */}
-                          <div className="h-16 w-16 rounded flex items-center justify-center flex-shrink-0 bg-white border-4 border-warning">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" className="text-warning">
+                          <div className="rounded flex items-center justify-center flex-shrink-0 bg-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="55" height="55" viewBox="0 0 24 24" className="text-warning">
                               <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
                             </svg>
                           </div>
