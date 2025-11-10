@@ -39,6 +39,10 @@ const RECENT_MAX_AGE_MS = 20 * 60 * 1000; // 20 minutes
 const REBUCKET_EVERY_MS = 30_000; // 30 seconds
 const WS_PING_INTERVAL = 25_000; // 25 seconds
 
+// Bootstrap-like list cap
+const INITIAL_ACTIVE_LIMIT = 15;
+const LIMIT_STEP = 15;
+
 /* -------------------------------- types ------------------------------ */
 interface Page {
   title: string;
@@ -147,6 +151,15 @@ const LiveTracking = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [liveVisitorsOpen, setLiveVisitorsOpen] = useState(true);
   const [recentlyLeftOpen, setRecentlyLeftOpen] = useState(false);
+
+  // user intent flags (prevents effects from fighting your toggles)
+  const [userToggledLive, setUserToggledLive] = useState(false);
+  const [userToggledRecent, setUserToggledRecent] = useState(false);
+
+  // "show more" caps
+  const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
+  const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
+
   const [websites, setWebsites] = useState<Website[]>([]);
   const [currentWebsite, setCurrentWebsite] = useState<Website | null>(null);
   const [visitorDataMap, setVisitorDataMap] = useState<Record<string, Visitor>>({});
@@ -158,6 +171,10 @@ const LiveTracking = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const rebucketTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // site isolation refs (avoid bleed-through)
+  const currentSiteIdRef = useRef<string | number | null>(null);
+  const siteEpochRef = useRef(0); // bump on site switch; ignore stale async
 
   /* ------------------------------ helpers ----------------------------- */
   const safeURL = (raw: string) => {
@@ -182,10 +199,12 @@ const LiveTracking = () => {
   const setupWebSocket = useCallback(async () => {
     if (!currentWebsite) return;
 
+    // bump epoch for this connection
+    const myEpoch = ++siteEpochRef.current;
+    currentSiteIdRef.current = currentWebsite.id;
+
     if (wsRef.current) {
-      try {
-        wsRef.current.close();
-      } catch {}
+      try { wsRef.current.close(); } catch {}
     }
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
 
@@ -198,6 +217,7 @@ const LiveTracking = () => {
       if (!tRes.ok) return;
 
       const { ticket } = await tRes.json();
+      // NB: server ticket is scoped to this site; we still guard client-side
       const ws = new WebSocket(
         `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`
       );
@@ -210,12 +230,14 @@ const LiveTracking = () => {
       });
 
       ws.addEventListener("message", async (event) => {
+        if (myEpoch !== siteEpochRef.current) return; // stale connection
         const data = JSON.parse(event.data || "{}");
         if (data.type === "pong") return;
 
         if (data.type === "new_event") {
           const payload = data.payload || {};
-          if (String(payload.site_id) !== String(currentWebsite.id)) return;
+          // hard-guard by current site id
+          if (String(payload.site_id) !== String(currentSiteIdRef.current)) return;
           if (isSuspended) return;
 
           try {
@@ -224,8 +246,11 @@ const LiveTracking = () => {
               { method: "GET" }
             );
             if (!res.ok) return;
+            if (myEpoch !== siteEpochRef.current) return; // site switched mid-flight
 
             const visitor: Visitor = await res.json();
+
+            // normalize activeness + is_active flag
             const latestPage = visitor.pages?.at(-1);
             const latestTime = new Date(latestPage?.timestamp || visitor.last_seen || 0).getTime();
             const isActiveNow = Date.now() - latestTime <= ACTIVE_MAX_AGE_MS;
@@ -238,7 +263,7 @@ const LiveTracking = () => {
 
             setVisitorDataMap((prev) => ({ ...prev, [visitor.id]: visitor }));
 
-            // Only auto-select if the visitor is currently active
+            // only auto-select if NOTHING is selected
             if (!selectedVisitorId && isActiveNow) {
               setSelectedVisitorId(visitor.id);
             }
@@ -248,20 +273,19 @@ const LiveTracking = () => {
         }
 
         if (data.type === "user_status") {
-          setIsSuspended(data.status === "suspended" ? true : false);
+          setIsSuspended(data.status === "suspended");
         }
       });
 
       ws.addEventListener("close", () => {
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-        setTimeout(() => setupWebSocket(), 5000);
+        // auto-reconnect only if still the same epoch/site
+        setTimeout(() => {
+          if (myEpoch === siteEpochRef.current) setupWebSocket();
+        }, 5000);
       });
 
-      ws.addEventListener("error", (err) => {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("WS error (benign)", err);
-        }
-      });
+      ws.addEventListener("error", () => {});
     } catch (err) {
       console.error("❌ Failed to setup WebSocket", err);
     }
@@ -270,6 +294,7 @@ const LiveTracking = () => {
   /* -------------------------- initial/refresh -------------------------- */
   const refreshVisitorList = useCallback(async () => {
     if (!currentWebsite) return;
+    const myEpoch = siteEpochRef.current;
 
     try {
       const res = await secureFetch("https://api.modovisa.com/api/live-visitor-tracking", {
@@ -308,7 +333,6 @@ const LiveTracking = () => {
 
       const now = Date.now();
       const normalized: Record<string, Visitor> = {};
-
       visitors.forEach((v: Visitor) => {
         const lastTs = new Date(v.pages?.at(-1)?.timestamp || v.last_seen || 0).getTime();
         const isActiveNow = now - lastTs <= ACTIVE_MAX_AGE_MS;
@@ -321,10 +345,13 @@ const LiveTracking = () => {
         normalized[v.id] = v;
       });
 
+      // ignore if site switched mid-flight
+      if (myEpoch !== siteEpochRef.current) return;
+
       setVisitorDataMap(normalized);
       setIsLoading(false);
 
-      // Only auto-select if an ACTIVE visitor exists; otherwise leave right pane empty.
+      // only auto-select if nothing selected (keep your choice)
       if (!selectedVisitorId) {
         const firstActive = Object.values(normalized).find((v) => v.status === "active");
         setSelectedVisitorId(firstActive ? firstActive.id : null);
@@ -382,6 +409,7 @@ const LiveTracking = () => {
         const firstSite = result.projects[0];
         setIsLoading(true);
         setCurrentWebsite(firstSite);
+        currentSiteIdRef.current = firstSite.id;
         localStorage.setItem("active_website_domain", firstSite.domain);
       } catch (err) {
         console.error("❌ Error loading websites", err);
@@ -394,14 +422,18 @@ const LiveTracking = () => {
 
   useEffect(() => {
     if (!currentWebsite) return;
+    // reset caps & toggles on site switch
+    setActiveShowLimit(INITIAL_ACTIVE_LIMIT);
+    setRecentShowLimit(INITIAL_ACTIVE_LIMIT);
+    setUserToggledLive(false);
+    setUserToggledRecent(false);
+
     setupWebSocket();
     refreshVisitorList();
 
     return () => {
       if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch {}
+        try { wsRef.current.close(); } catch {}
       }
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     };
@@ -425,37 +457,21 @@ const LiveTracking = () => {
 
   /* ---------------------- live/recent open/close UX ------------------- */
 
-  // If there are NO active visitors, collapse Live and clear selection so the right pane is empty.
+  // If actives appear and you haven't manually toggled, auto-open Live once
   useEffect(() => {
     if (isLoading) return;
-    if (activeVisitors.length === 0) {
-      if (liveVisitorsOpen) setLiveVisitorsOpen(false);
-      if (selectedVisitorId) setSelectedVisitorId(null);
+    if (activeVisitors.length > 0 && !userToggledLive) {
+      setLiveVisitorsOpen(true);
     }
-  }, [isLoading, activeVisitors.length, liveVisitorsOpen, selectedVisitorId]);
+  }, [isLoading, activeVisitors.length, userToggledLive]);
 
-  // If a live visitor appears and nothing is selected, select it immediately.
-  useEffect(() => {
-    if (!isLoading && activeVisitors.length > 0 && !selectedVisitorId) {
-      setSelectedVisitorId(activeVisitors[0].id);
-    }
-  }, [isLoading, activeVisitors, selectedVisitorId]);
-
-  // If the selected visitor disappears from the map entirely, clear selection.
+  // Do NOT clear selection when there are no actives; allow selecting a recent.
+  // Only clear if the selected visitor no longer exists at all (pruned or site switch).
   useEffect(() => {
     if (selectedVisitorId && !visitorDataMap[selectedVisitorId]) {
       setSelectedVisitorId(null);
     }
   }, [selectedVisitorId, visitorDataMap]);
-
-  // When actives exist: open Live and collapse Recent (consistent UX)
-  useEffect(() => {
-    if (isLoading) return;
-    if (activeVisitors.length > 0) {
-      if (!liveVisitorsOpen) setLiveVisitorsOpen(true);
-      if (recentlyLeftOpen) setRecentlyLeftOpen(false);
-    }
-  }, [isLoading, activeVisitors.length, liveVisitorsOpen, recentlyLeftOpen]);
 
   /* ------------------------- auth loading gate ------------------------ */
   if (authLoading) {
@@ -497,10 +513,22 @@ const LiveTracking = () => {
                   <DropdownMenuItem
                     key={site.id}
                     onClick={() => {
+                      // site switch reset
                       setIsLoading(true);
                       setCurrentWebsite(site);
+                      currentSiteIdRef.current = site.id;
+
                       setVisitorDataMap({});
                       setSelectedVisitorId(null);
+
+                      // reset buckets & caps
+                      setLiveVisitorsOpen(true);
+                      setRecentlyLeftOpen(false);
+                      setUserToggledLive(false);
+                      setUserToggledRecent(false);
+                      setActiveShowLimit(INITIAL_ACTIVE_LIMIT);
+                      setRecentShowLimit(INITIAL_ACTIVE_LIMIT);
+
                       localStorage.setItem("active_website_domain", site.domain);
                     }}
                   >
@@ -533,7 +561,14 @@ const LiveTracking = () => {
           <>
             {/* LIVE VISITORS */}
             {activeVisitors.length > 0 ? (
-              <Collapsible open={liveVisitorsOpen} onOpenChange={setLiveVisitorsOpen}>
+              <Collapsible
+                open={liveVisitorsOpen}
+                onOpenChange={(open) => {
+                  setLiveVisitorsOpen(open);
+                  setUserToggledLive(true);
+                  // don't auto-collapse "Recently left" here; let the user control both
+                }}
+              >
                 <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
                   <div className="p-4 border-b bg-[#f9f9f9]">
                     <div className="flex items-center justify-between">
@@ -557,7 +592,7 @@ const LiveTracking = () => {
 
                 <CollapsibleContent>
                   <div className="bg-background">
-                    {activeVisitors.map((visitor) => {
+                    {activeVisitors.slice(0, activeShowLimit).map((visitor) => {
                       const lastPage = visitor.pages?.[visitor.pages.length - 1];
                       const { Icon, label, className } = stageMeta(lastPage?.stage);
 
@@ -597,7 +632,6 @@ const LiveTracking = () => {
                                 </Badge>
                               </div>
 
-                              {/* Stage row (only for known stages) */}
                               {label && (
                                 <div className="flex items-center gap-2 mt-1">
                                   <Icon className={`h-5 w-5 ${className}`} />
@@ -609,6 +643,18 @@ const LiveTracking = () => {
                         </div>
                       );
                     })}
+
+                    {activeVisitors.length > activeShowLimit && (
+                      <div className="p-3 flex justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveShowLimit((n) => n + LIMIT_STEP)}
+                        >
+                          Show more ({activeVisitors.length - activeShowLimit})
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -631,7 +677,13 @@ const LiveTracking = () => {
             )}
 
             {/* RECENTLY LEFT */}
-            <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
+            <Collapsible
+              open={recentlyLeftOpen}
+              onOpenChange={(open) => {
+                setRecentlyLeftOpen(open);
+                setUserToggledRecent(true);
+              }}
+            >
               <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
                 <div className="p-4 border-b bg-[#f3f3f3]">
                   <div className="flex items-center justify-between">
@@ -658,53 +710,68 @@ const LiveTracking = () => {
                   {recentVisitors.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground">No recent visitors</div>
                   ) : (
-                    recentVisitors.map((visitor) => {
-                      const lastPage = visitor.pages?.[visitor.pages.length - 1];
-                      const { Icon, label, className } = stageMeta(lastPage?.stage);
+                    <>
+                      {recentVisitors.slice(0, recentShowLimit).map((visitor) => {
+                        const lastPage = visitor.pages?.[visitor.pages.length - 1];
+                        const { Icon, label, className } = stageMeta(lastPage?.stage);
 
-                      return (
-                        <div
-                          key={visitor.id}
-                          className="p-1 cursor-pointer transition-colors hover:bg-muted/20"
-                          onClick={() => setSelectedVisitorId(visitor.id)}
-                        >
-                          <div className="flex items-center gap-3 p-3 rounded-sm border">
-                            <Avatar className="h-8 w-8 flex-shrink-0">
-                              <AvatarFallback className="bg-muted border border-border">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0 space-y-2">
-                              <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
-                                {visitor.title || "(No title)"}
-                              </p>
-                              <div className="flex items-center gap-2 flex-wrap justify-between">
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap"
-                                >
-                                  Left Site
-                                </Badge>
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
-                                >
-                                  Session: {visitor.session_time}
-                                </Badge>
-                              </div>
-
-                              {/* Stage row (only for known stages) */}
-                              {label && (
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Icon className={`h-5 w-5 ${className}`} />
-                                  <small className="text-muted-foreground">{label}</small>
+                        return (
+                          <div
+                            key={visitor.id}
+                            className={`p-1 cursor-pointer transition-colors ${
+                              selectedVisitorId === visitor.id ? "bg-muted/30" : "hover:bg-muted/20"
+                            }`}
+                            onClick={() => setSelectedVisitorId(visitor.id)}
+                          >
+                            <div className="flex items-center gap-3 p-3 rounded-sm border">
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                <AvatarFallback className="bg-muted border border-border">
+                                  <User className="h-4 w-4 text-muted-foreground" />
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0 space-y-2">
+                                <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
+                                  {visitor.title || "(No title)"}
+                                </p>
+                                <div className="flex items-center gap-2 flex-wrap justify-between">
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap"
+                                  >
+                                    Left Site
+                                  </Badge>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
+                                  >
+                                    Session: {visitor.session_time}
+                                  </Badge>
                                 </div>
-                              )}
+
+                                {label && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Icon className={`h-5 w-5 ${className}`} />
+                                    <small className="text-muted-foreground">{label}</small>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
+                        );
+                      })}
+
+                      {recentVisitors.length > recentShowLimit && (
+                        <div className="p-3 flex justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setRecentShowLimit((n) => n + LIMIT_STEP)}
+                          >
+                            Show more ({recentVisitors.length - recentShowLimit})
+                          </Button>
                         </div>
-                      );
-                    })
+                      )}
+                    </>
                   )}
                 </div>
               </CollapsibleContent>
@@ -806,7 +873,7 @@ const LiveTracking = () => {
                               <span className="jt-dot"></span>
                               <div className="flex items-center w-full">
                                 <span className="me-4">
-                                  <meta.Icon className={`h-[55px] w-[55px] ${meta.className}`} />
+                                  <meta.Icon className={`h-[22px] w-[22px] ${meta.className}`} />
                                 </span>
                                 <div className="flex-1 min-w-0 me-2">
                                   <span className="font-medium text-base text-foreground">
