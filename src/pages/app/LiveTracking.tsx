@@ -258,57 +258,40 @@ const LiveTracking = () => {
                 <CardTitle className="text-2xl">What pages have they seen?</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-0">
-                  {journeySteps.map((step, index) => (
-                    <div
+                <ul className="journey-timeline list-none p-0 m-0">
+                  {journeySteps.map((step) => (
+                    <li
                       key={step.id}
-                      className="relative pb-3 last:pb-0"
+                      className={`jt-item ${step.isActive ? 'is-active' : 'is-left'} flex items-center m-2 shadow-sm rounded-[14px] border p-3 ${!step.isActive ? 'bg-muted/30' : 'bg-card'}`}
                     >
-                      {/* Timeline line */}
-                      {index < journeySteps.length - 1 && (
-                        <div className="absolute left-[12px] top-12 bottom-0 w-0.5 bg-border" />
-                      )}
-                      
-                      {/* Main flex container */}
-                      <div className="flex items-center items-start gap-4 p-3 border rounded-sm">
-                        {/* Left side: Timeline dot and icon */}
-                        <div className="flex items-center items-start gap-3 flex-shrink-0">
-                          {/* Status dot */}
-                          <div
-                            className={`mt-1 h-3 w-3 rounded-full flex-shrink-0 ${
-                              step.isActive ? 'bg-[#71dd37]' : 'bg-[#ff6b6b]'
-                            }`}
-                          />
-                          
-                          {/* Page icon - window icon with orange border */}
-                          <div className="rounded flex items-center justify-center flex-shrink-0 bg-white">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="55" height="55" viewBox="0 0 24 24" className="text-warning">
-                              <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
-                            </svg>
-                          </div>
-                        </div>
-
-                        {/* Middle: Content */}
-                        <div className="flex-1 min-w-0 space-y-2 pt-0">
-                          <h4 className="font-medium text-base leading-tight text-foreground">{step.title}</h4>
-                          
-                          <p className="text-sm text-muted-foreground">
+                      <span className="jt-dot"></span>
+                      <div className="flex items-center w-full">
+                        <span className="ms-3 me-4">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" className="text-warning">
+                            <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
+                          </svg>
+                        </span>
+                        <div className="flex-1 min-w-0 me-2">
+                          <span className="font-medium text-base text-foreground">{step.title}</span>
+                          <br />
+                          <small className="text-sm text-muted-foreground block mt-2">
                             View this page by clicking on the following link:
-                          </p>
-                          <a
-                            href={step.url}
-                            className="text-sm text-[#ff3e1d] hover:underline break-all inline-block"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {step.url}
-                          </a>
+                          </small>
+                          <br />
+                          <small className="block">
+                            <a
+                              href={step.url}
+                              className="text-sm text-[#ff3e1d] hover:underline break-all"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {step.url}
+                            </a>
+                          </small>
                         </div>
-
-                        {/* Right side: Badges */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="ms-auto flex items-center gap-2">
                           {step.isActive && (
-                            <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0">
+                            <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
                               Active now
                             </Badge>
                           )}
@@ -317,9 +300,9 @@ const LiveTracking = () => {
                           </Badge>
                         </div>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </CardContent>
             </Card>
           </div>

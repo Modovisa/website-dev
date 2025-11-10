@@ -234,3 +234,66 @@ All colors MUST be HSL.
     box-shadow: 0 0 0 15px rgba(113, 221, 55, 0);
   }
 }
+
+/* Visitor Journey Timeline */
+.journey-timeline {
+  position: relative;
+  padding: 0 0 12px 0;
+}
+
+.jt-item {
+  position: relative;
+  padding-left: 56px;
+  margin: 0 0 14px 0;
+}
+
+.jt-item::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 0;
+  bottom: -14px;
+  width: 2px;
+  background: hsl(var(--border));
+}
+
+.jt-item:last-child::before {
+  bottom: 1px;
+}
+
+.jt-dot {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(var(--muted-foreground));
+  border: 3px solid hsl(var(--card));
+  box-shadow: 0 0 0 3px hsl(var(--border));
+  transform: translateY(-50%);
+}
+
+.jt-item.is-active .jt-dot {
+  background: hsl(var(--success));
+}
+
+.jt-item.is-idle .jt-dot {
+  background: hsl(var(--warning));
+}
+
+.jt-item.is-left .jt-dot {
+  background: hsl(var(--destructive));
+}
+
+@media (max-width: 700px) {
+  .jt-item {
+    padding-left: 48px;
+  }
+  .jt-item::before {
+    left: 16px;
+  }
+  .jt-dot {
+    left: 8px;
+  }
+}
