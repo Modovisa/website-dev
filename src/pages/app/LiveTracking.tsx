@@ -472,12 +472,12 @@ const LiveTracking = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <p className="text-sm font-medium leading-tight text-foreground truncate">
+                        <p className="text-sm font-medium leading-tight text-foreground truncate block">
                           {visitor.title || '(No title)'}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap justify-between">
                           <Badge 
-                            className={`text-xs font-medium border-0 rounded-md px-2 py-1 ${
+                            className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
                               visitor.is_new_visitor
                                 ? 'bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]' 
                                 : 'bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]'
@@ -485,7 +485,7 @@ const LiveTracking = () => {
                           >
                             {visitor.is_new_visitor ? 'New Visitor' : 'Returning Visitor'}
                           </Badge>
-                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2">
+                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap">
                             Session: {visitor.session_time}
                           </Badge>
                         </div>
@@ -532,14 +532,14 @@ const LiveTracking = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <p className="text-sm font-medium leading-tight text-foreground truncate">
+                        <p className="text-sm font-medium leading-tight text-foreground truncate block">
                           {visitor.title || '(No title)'}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap justify-between">
-                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
+                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap">
                             Left Site
                           </Badge>
-                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2">
+                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap">
                             Session: {visitor.session_time}
                           </Badge>
                         </div>
