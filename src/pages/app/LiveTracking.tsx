@@ -1,3 +1,5 @@
+// src/pages/app/LiveTracking.tsx
+
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,19 +7,25 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const LiveTracking = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [liveVisitorsOpen, setLiveVisitorsOpen] = useState(true);
+  const [recentlyLeftOpen, setRecentlyLeftOpen] = useState(true);
   
   const visitors = [
-    { id: 1, page: "Contact us | Kosh mArt Hong Kong", session: "4s", type: "new", selected: true },
-    { id: 2, page: "Contact us | Kosh mArt Hong Kong", session: "42s", type: "new", selected: false },
-    { id: 3, page: "Oil Painting Reproductions | Art Rep...", session: "1m", type: "returning", selected: false },
-    { id: 4, page: "Mercury Confiding the Infant Bacch...", session: "4m", type: "new", selected: false },
-    { id: 5, page: "The Thaw On the Seine, near Vethe...", session: "4m", type: "new", selected: false },
-    { id: 6, page: "Contact us | Kosh mArt Hong Kong", session: "4m", type: "new", selected: false },
+    { id: 1, page: "Contact us | Kosh mArt Hong Kong", session: "2m", type: "new", selected: true },
+    { id: 2, page: "Contact us | Kosh mArt Hong Kong", session: "3m", type: "new", selected: false },
+    { id: 3, page: "Contact us | Kosh mArt Hong Kong", session: "3m", type: "new", selected: false },
+    { id: 4, page: "Four Darks In Red (1958) by Mark R...", session: "7m", type: "new", selected: false },
+  ];
+
+  const recentlyLeft = [
+    { id: 1, page: "Morning in the City by Edward Hop...", session: "9m", type: "left" },
+    { id: 2, page: "Saint-Tropez, Fontaine Des Lices af...", session: "6m", type: "left" },
   ];
 
   const journeySteps = [
@@ -32,8 +40,8 @@ const LiveTracking = () => {
   ];
 
   const VisitorSidebar = () => (
-    <div className="w-full h-full bg-background flex flex-col border-r">
-      <div className="p-6 border-b space-y-4">
+    <div className="w-full h-full bg-background flex flex-col border rounded-md">
+      <div className="p-6 space-y-4 pt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Visitors</h2>
           <Button className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4">
@@ -47,68 +55,117 @@ const LiveTracking = () => {
       </div>
 
       <ScrollArea className="flex-1">
-        {/* Live Visitors Header */}
-        <div className="p-4 border-b bg-background">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-success" />
-              <span className="text-sm font-semibold">Live Visitors</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-primary">{visitors.length}</span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </div>
-        </div>
-
-        {/* Visitor List */}
-        <div className="divide-y">
-          {visitors.map((visitor) => (
-            <div
-              key={visitor.id}
-              className={`p-4 cursor-pointer transition-colors ${
-                visitor.selected ? 'bg-muted/50' : 'hover:bg-muted/30'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <Avatar className="h-10 w-10 flex-shrink-0">
-                  <AvatarFallback className="bg-muted">
-                    <User className="h-5 w-5 text-muted-foreground" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0 space-y-2">
-                  <p className="text-sm font-medium leading-tight">{visitor.page}</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={`text-xs font-normal ${
-                      visitor.type === 'new' 
-                        ? 'bg-success/20 text-success hover:bg-success/20' 
-                        : 'bg-purple-500/20 text-purple-700 hover:bg-purple-500/20'
-                    }`}>
-                      {visitor.type === 'new' ? 'New Visitor' : 'Returning Visitor'}
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs font-normal bg-muted">
-                      Session: {visitor.session}
-                    </Badge>
-                  </div>
+        {/* Live Visitors Section */}
+        <Collapsible open={liveVisitorsOpen} onOpenChange={setLiveVisitorsOpen}>
+          <CollapsibleTrigger className="w-full">
+            <div className="p-4 border-b bg-background">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-success pulse" style={{ boxShadow: '0 0 0 0px hsl(var(--success) / 0.15)' }} />
+                  <span className="text-sm font-semibold">Live Visitors</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-primary">{visitors.length}</span>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${liveVisitorsOpen ? '' : '-rotate-90'}`} />
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="divide-y">
+              {visitors.map((visitor) => (
+                <div
+                  key={visitor.id}
+                  className={`p-4 cursor-pointer transition-colors ${
+                    visitor.selected ? 'bg-muted/50' : 'hover:bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-10 w-10 flex-shrink-0">
+                      <AvatarFallback className="bg-success/10">
+                        <User className="h-5 w-5 text-success" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <p className="text-sm font-medium leading-tight text-muted-foreground">{visitor.page}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className="text-xs font-normal bg-success/20 text-success hover:bg-success/20">
+                          New Visitor
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs font-normal bg-muted text-foreground">
+                          Session: {visitor.session}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Recently Left Section */}
+        <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
+          <CollapsibleTrigger className="w-full">
+            <div className="p-4 border-b bg-background">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-orange-500" />
+                  <span className="text-sm font-semibold">Recently left</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-primary">{recentlyLeft.length}</span>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recentlyLeftOpen ? '' : '-rotate-90'}`} />
+                </div>
+              </div>
+            </div>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="divide-y">
+              {recentlyLeft.map((visitor) => (
+                <div
+                  key={visitor.id}
+                  className="p-4 cursor-pointer transition-colors hover:bg-muted/30"
+                >
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-10 w-10 flex-shrink-0">
+                      <AvatarFallback className="bg-muted">
+                        <User className="h-5 w-5 text-muted-foreground" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <p className="text-sm font-medium leading-tight text-muted-foreground">{visitor.page}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="secondary" className="text-xs font-normal bg-muted text-foreground">
+                          Left Site
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs font-normal bg-muted text-foreground">
+                          Session: {visitor.session}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </ScrollArea>
     </div>
   );
 
   return (
     <DashboardLayout>
-      <div className="flex h-full overflow-hidden">
+      <div className="flex h-full overflow-hidden gap-6 pl-10">
         {/* Desktop Sidebar */}
-        <div className="hidden lg:block w-96">
+        <div className="hidden lg:block w-96 mt-8">
           <VisitorSidebar />
         </div>
 
         {/* Main Content - Visitor Details */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto pr-6">
           {/* Mobile Menu Button */}
           <div className="lg:hidden p-4 border-b bg-card sticky top-0 z-10">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -124,7 +181,7 @@ const LiveTracking = () => {
             </Sheet>
           </div>
 
-          <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+          <div className="p-6 lg:p-8 space-y-6 pt-8">
             <div className="flex items-center gap-3 mb-2">
               <Avatar className="h-12 w-12">
                 <AvatarFallback className="bg-muted">

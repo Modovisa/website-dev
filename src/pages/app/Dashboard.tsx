@@ -1,3 +1,5 @@
+// src/pages/app/Dashboard.tsx
+
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
