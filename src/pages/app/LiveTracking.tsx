@@ -280,9 +280,9 @@ const LiveTracking = () => {
                             }`}
                           />
                           
-                          {/* Page icon - using custom window SVG with warning colors */}
-                          <div className="h-16 w-16 rounded flex items-center justify-center flex-shrink-0 bg-warning">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" className="text-warning-foreground">
+                          {/* Page icon - window icon with orange border */}
+                          <div className="h-16 w-16 rounded flex items-center justify-center flex-shrink-0 bg-white border-4 border-warning">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" className="text-warning">
                               <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
                             </svg>
                           </div>
