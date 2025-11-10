@@ -83,7 +83,7 @@ const LiveTracking = () => {
                     visitor.selected ? 'bg-muted/30' : 'hover:bg-muted/20'
                   }`}
                 >
-                  <div className="flex items-start gap-3 p-3 rounded-sm border">
+                  <div className="flex items-center gap-3 p-3 rounded-sm border">
                     <Avatar className="h-8 w-8 flex-shrink-0 pulse">
                       <AvatarFallback className="bg-[#71dd37]/10 border-1 border-[#71dd37]">
                         <User className="h-4 w-4 text-[#71dd37]" />
@@ -137,7 +137,7 @@ const LiveTracking = () => {
                   key={visitor.id}
                   className="p-1 cursor-pointer transition-colors hover:bg-muted/20"
                 >
-                  <div className="flex items-start gap-3 p-3 rounded-sm border">
+                  <div className="flex items-center gap-3 p-3 rounded-sm border">
                     <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarFallback className="bg-muted border border-border">
                         <User className="h-4 w-4 text-muted-foreground" />
@@ -149,7 +149,7 @@ const LiveTracking = () => {
                         <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
                           Left Site
                         </Badge>
-                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1">
+                        <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2">
                           Session: {visitor.session}
                         </Badge>
                       </div>
