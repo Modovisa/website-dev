@@ -1,66 +1,108 @@
-import { useEffect, useRef } from 'react';
+// src/hooks/useLiveVisitorsWS.ts
 
-type Options = {
-  siteId?: number | string;
+import { useEffect, useRef } from "react";
+import type { DashboardPayload } from "@/types/dashboard";
+
+type Opts = {
+  siteId?: number;
   onLiveCount?: (n: number) => void;
-  onDashboardSnapshot?: (payload: any) => void; // you can narrow if needed
-  getTicket?: (siteId: number | string) => Promise<string>; // fetch ws ticket
+  onDashboardSnapshot?: (payload: DashboardPayload) => void;
+  getTicket: (siteId: number) => Promise<string>;
 };
 
-export function useLiveVisitorsWS({ siteId, onLiveCount, onDashboardSnapshot, getTicket }: Options) {
+export function useLiveVisitorsWS({
+  siteId,
+  onLiveCount,
+  onDashboardSnapshot,
+  getTicket,
+}: Opts) {
   const wsRef = useRef<WebSocket | null>(null);
-  const pingRef = useRef<any>(null);
+  const pingRef = useRef<number | null>(null);
+  const activeSite = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    if (!siteId || !getTicket) return;
+    if (!siteId) return;
 
-    let cancelled = false;
+    activeSite.current = siteId;
 
-    (async () => {
+    let closed = false;
+
+    async function connect() {
       try {
         const ticket = await getTicket(siteId);
-        if (cancelled) return;
+        if (closed) return;
 
-        const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
-        const ws = new WebSocket(url);
+        // close any previous
+        try {
+          wsRef.current?.close();
+        } catch {}
+        if (pingRef.current) window.clearInterval(pingRef.current);
+
+        const ws = new WebSocket(
+          `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(
+            ticket
+          )}`
+        );
         wsRef.current = ws;
 
         ws.onopen = () => {
-          pingRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
-          }, 25_000);
+          // Ping keepalive
+          pingRef.current = window.setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "ping" }));
+            }
+          }, 25000);
         };
 
-        ws.onmessage = (e) => {
+        ws.onmessage = (ev) => {
           try {
-            const msg = JSON.parse(e.data);
-            if (!msg) return;
+            const msg = JSON.parse(ev.data);
+            if (msg?.site_id?.toString() !== activeSite.current?.toString())
+              return;
 
-            if (msg.type === 'live_visitor_update') {
-              const n = Number(msg?.payload?.count) || 0;
+            if (msg.type === "live_visitor_update") {
+              const n = Number(msg.payload?.count) || 0;
               onLiveCount?.(n);
             }
-
-            if (msg.type === 'dashboard_analytics') {
-              onDashboardSnapshot?.(msg.payload);
+            if (msg.type === "live_visitor_location_grouped") {
+              const total = (msg.payload || []).reduce(
+                (s: number, v: any) => s + (Number(v.count) || 0),
+                0
+              );
+              onLiveCount?.(total);
+            }
+            if (msg.type === "dashboard_analytics" && msg.payload) {
+              onDashboardSnapshot?.(msg.payload as DashboardPayload);
             }
           } catch {}
         };
 
         ws.onclose = () => {
-          if (pingRef.current) clearInterval(pingRef.current);
+          if (closed) return;
+          // backoff ~4.5–5.5s
+          const jitter = 500 + Math.floor(Math.random() * 500);
+          setTimeout(connect, 4000 + jitter);
         };
-      } catch (e) {
-        // silently ignore; page still shows HTTP metrics
+
+        ws.onerror = () => {
+          try {
+            ws.close();
+          } catch {}
+        };
+      } catch {
+        // retry ticket
+        setTimeout(connect, 3000);
       }
-    })();
+    }
+
+    connect();
 
     return () => {
-      cancelled = true;
-      if (pingRef.current) clearInterval(pingRef.current);
+      closed = true;
       try {
         wsRef.current?.close();
       } catch {}
+      if (pingRef.current) window.clearInterval(pingRef.current);
     };
   }, [siteId, getTicket, onLiveCount, onDashboardSnapshot]);
 }

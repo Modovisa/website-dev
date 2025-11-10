@@ -1,67 +1,86 @@
-export type RangeKey = '24h' | '7d' | '30d' | '90d' | '12mo';
+// src/types/dashboard.ts
 
-export type LabelCount = { label: string; count: number };
-export type LabelSeries = { label: string; visitors?: number; views?: number };
+export type RangeKey = "24h" | "7d" | "30d" | "90d" | "12mo";
 
-export type CountryRow = { country: string; iso_code?: string; count: number };
-export type ReferrerRow = { domain: string; visitors: number };
-export type BrowserRow = { name: string; count: number };
-export type DeviceRow = { type: string; count: number };
-export type OSRow = { name: string; count: number };
-export type TopPageRow = { url: string; views: number };
-export type UTMSourceRow = { source: string; visitors: number };
-export type UTMCampaignRow = { url: string; visitors: number };
-
-export type PerformanceSeries = {
-  impressions_timeline?: LabelCount[];
-  impressions_previous_timeline?: LabelCount[];
-  clicks_timeline?: LabelCount[];
-  clicks_previous_timeline?: LabelCount[];
-  search_visitors_timeline?: LabelCount[];
-  search_visitors_previous_timeline?: LabelCount[];
-  conversions_timeline?: LabelCount[];
-  conversions_previous_timeline?: LabelCount[];
+export type TimeBucket = {
+  label: string;
+  visitors: number;
+  views: number;
 };
 
-export type DashboardPayload = PerformanceSeries & {
+export type LabelCount = {
+  label: string;
+  count: number;
+};
+
+export type UniqueReturningPoint = {
+  label: string;
+  unique: number;
+  returning: number;
+};
+
+export type ReferrerRow = {
+  domain: string;
+  visitors: number;
+};
+
+export type TopPageRow = {
+  url: string;
+  views: number;
+};
+
+export type TechSlice = { name?: string; type?: string; count: number };
+
+export type CountryRow = { country: string; iso_code?: string; count: number };
+
+export type UTMCampaignRow = { url: string; visitors: number };
+export type UTMSrcRow = { source: string; visitors: number };
+
+export type DashboardPayload = {
   range: RangeKey;
+
   live_visitors?: number;
+
   unique_visitors?: { total: number; delta?: number };
   bounce_rate?: number;
   bounce_rate_delta?: number;
-  avg_duration?: string; // e.g. '4m 32s'
+  avg_duration?: string | number;
   avg_duration_delta?: number;
-  conversions_per_user?: number | null;
-  conversions_per_user_delta?: number | null;
-  revenue_per_user?: number | null;
-  revenue_per_user_delta?: number | null;
-  multi_page_visits?: number | string;
-  multi_page_visits_delta?: number | null;
 
-  time_grouped_visits?: LabelSeries[];
+  // charts
+  time_grouped_visits?: TimeBucket[];
   events_timeline?: LabelCount[];
 
-  unique_vs_returning?: { label: string; unique: number; returning: number }[];
+  unique_vs_returning?: UniqueReturningPoint[];
 
-  countries?: CountryRow[];
-  referrers?: ReferrerRow[];
+  impressions_timeline?: LabelCount[];
+  impressions_previous_timeline?: LabelCount[];
 
-  browsers?: BrowserRow[];
-  devices?: DeviceRow[];
-  os?: OSRow[];
+  clicks_timeline?: LabelCount[];
+  clicks_previous_timeline?: LabelCount[];
+
+  conversions_timeline?: LabelCount[];
+  conversions_previous_timeline?: LabelCount[];
+
+  search_visitors_timeline?: LabelCount[];
+  search_visitors_previous_timeline?: LabelCount[];
+
+  unique_visitors_timeline?: LabelCount[];
+  previous_unique_visitors_timeline?: LabelCount[];
 
   top_pages?: TopPageRow[];
-  utm_sources?: UTMSourceRow[];
+  referrers?: ReferrerRow[];
+
+  browsers?: TechSlice[];
+  devices?: TechSlice[];
+  os?: TechSlice[];
+
   utm_campaigns?: UTMCampaignRow[];
+  utm_sources?: UTMSrcRow[];
 
-  calendar_density?: [string, number][]; // [['2025-06-08', 123], ...]
-};
+  countries?: CountryRow[];
 
-export type GeoCityPoint = {
-  city?: string;
-  country?: string;
-  lat: number;
-  lng: number;
-  count: number;
-  debug_ids?: string[];
+  // optional: calendar, map etc. (kept for future)
+  calendar_density?: [string, number][];
+  page_flow?: { nodes: any[]; links: any[] };
 };
