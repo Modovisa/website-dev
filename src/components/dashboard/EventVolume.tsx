@@ -1,10 +1,18 @@
 // src/components/dashboard/EventVolume.tsx
 
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+} from 'recharts';
 import type { LabelCount } from '@/types/dashboard';
 
 export default function EventVolume({ data }: { data: LabelCount[] }) {
-  const hasData = data && data.length > 0;
+  const hasData = Array.isArray(data) && data.length > 0;
+
   return (
     <div className="h-[300px]">
       {!hasData ? (
@@ -14,7 +22,7 @@ export default function EventVolume({ data }: { data: LabelCount[] }) {
           <LineChart data={data}>
             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip />
+            <RechartsTooltip />
             <Line type="monotone" dataKey="count" dot={false} stroke="hsl(var(--primary))" />
           </LineChart>
         </ResponsiveContainer>
@@ -22,3 +30,4 @@ export default function EventVolume({ data }: { data: LabelCount[] }) {
     </div>
   );
 }
+

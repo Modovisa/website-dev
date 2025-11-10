@@ -44,7 +44,7 @@ export const AppSidebar = () => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="p-4 border-b flex items-center justify-between">
+      <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Updated: Using Logo component with square variant */}
           <Logo 
