@@ -236,12 +236,9 @@ const LiveTracking = () => {
               visitor.pages.forEach((p: Page, i: number) => (p.is_active = i === lastIndex && isActiveNow));
             }
 
-            setVisitorDataMap((prev) => {
-              const updated = { ...prev, [visitor.id]: visitor };
-              return updated;
-            });
+            setVisitorDataMap((prev) => ({ ...prev, [visitor.id]: visitor }));
 
-            // Auto-select the first active visitor as soon as one appears via WS
+            // Only auto-select if the visitor is currently active
             if (!selectedVisitorId && isActiveNow) {
               setSelectedVisitorId(visitor.id);
             }
@@ -327,10 +324,10 @@ const LiveTracking = () => {
       setVisitorDataMap(normalized);
       setIsLoading(false);
 
-      // Auto-select first visitor after initial/refresh load (active preferred)
-      if (!selectedVisitorId && Object.keys(normalized).length > 0) {
+      // Only auto-select if an ACTIVE visitor exists; otherwise leave right pane empty.
+      if (!selectedVisitorId) {
         const firstActive = Object.values(normalized).find((v) => v.status === "active");
-        setSelectedVisitorId(firstActive ? firstActive.id : Object.keys(normalized)[0]);
+        setSelectedVisitorId(firstActive ? firstActive.id : null);
       }
     } catch (err) {
       console.error("❌ Failed to refresh visitor list", err);
@@ -425,15 +422,17 @@ const LiveTracking = () => {
   recentVisitors.sort((a, b) => getLastTimestamp(b) - getLastTimestamp(a));
 
   const selectedVisitor = selectedVisitorId ? visitorDataMap[selectedVisitorId] : null;
-  const haveAnyVisitors = activeVisitors.length + recentVisitors.length > 0;
 
-  // Keep the sidebar header behavior (collapse & red dot) when empty
+  /* ---------------------- live/recent open/close UX ------------------- */
+
+  // If there are NO active visitors, collapse Live and clear selection so the right pane is empty.
   useEffect(() => {
-    if (!isLoading && !haveAnyVisitors) {
-      setLiveVisitorsOpen(false);
-      setSelectedVisitorId(null); // ensure right pane shows the empty state card
+    if (isLoading) return;
+    if (activeVisitors.length === 0) {
+      if (liveVisitorsOpen) setLiveVisitorsOpen(false);
+      if (selectedVisitorId) setSelectedVisitorId(null);
     }
-  }, [isLoading, haveAnyVisitors]);
+  }, [isLoading, activeVisitors.length, liveVisitorsOpen, selectedVisitorId]);
 
   // If a live visitor appears and nothing is selected, select it immediately.
   useEffect(() => {
@@ -442,14 +441,14 @@ const LiveTracking = () => {
     }
   }, [isLoading, activeVisitors, selectedVisitorId]);
 
-  // If the selected visitor disappears from the map, clear selection.
+  // If the selected visitor disappears from the map entirely, clear selection.
   useEffect(() => {
     if (selectedVisitorId && !visitorDataMap[selectedVisitorId]) {
       setSelectedVisitorId(null);
     }
   }, [selectedVisitorId, visitorDataMap]);
 
-  // Auto-open groups when data arrives (open Live, collapse Recent)
+  // When actives exist: open Live and collapse Recent (consistent UX)
   useEffect(() => {
     if (isLoading) return;
     if (activeVisitors.length > 0) {
@@ -528,13 +527,12 @@ const LiveTracking = () => {
       )}
 
       <ScrollArea className="flex-1">
-        {/* Hide rows while loading */}
         {isLoading ? (
           <SidebarLoadingSkeleton />
         ) : (
           <>
             {/* LIVE VISITORS */}
-            {haveAnyVisitors ? (
+            {activeVisitors.length > 0 ? (
               <Collapsible open={liveVisitorsOpen} onOpenChange={setLiveVisitorsOpen}>
                 <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
                   <div className="p-4 border-b bg-[#f9f9f9]">
@@ -559,67 +557,63 @@ const LiveTracking = () => {
 
                 <CollapsibleContent>
                   <div className="bg-background">
-                    {activeVisitors.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground">No active visitors</div>
-                    ) : (
-                      activeVisitors.map((visitor) => {
-                        const lastPage = visitor.pages?.[visitor.pages.length - 1];
-                        const { Icon, label, className } = stageMeta(lastPage?.stage);
+                    {activeVisitors.map((visitor) => {
+                      const lastPage = visitor.pages?.[visitor.pages.length - 1];
+                      const { Icon, label, className } = stageMeta(lastPage?.stage);
 
-                        return (
-                          <div
-                            key={visitor.id}
-                            className={`p-1 cursor-pointer transition-colors ${
-                              selectedVisitorId === visitor.id ? "bg-muted/30" : "hover:bg-muted/20"
-                            }`}
-                            onClick={() => setSelectedVisitorId(visitor.id)}
-                          >
-                            <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                <AvatarFallback className="bg-[#71dd37]/10 border border-[#71dd37]">
-                                  <User className="h-4 w-4 text-[#71dd37]" />
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0 space-y-2">
-                                <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
-                                  {visitor.title || "(No title)"}
-                                </p>
-                                <div className="flex items-center gap-2 flex-wrap justify-between">
-                                  <Badge
-                                    className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
-                                      visitor.is_new_visitor
-                                        ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
-                                        : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
-                                    }`}
-                                  >
-                                    {visitor.is_new_visitor ? "New Visitor" : "Returning Visitor"}
-                                  </Badge>
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
-                                  >
-                                    Session: {visitor.session_time}
-                                  </Badge>
-                                </div>
-
-                                {/* Stage row (only for known stages) */}
-                                {label && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Icon className={`h-5 w-5 ${className}`} />
-                                    <small className="text-muted-foreground">{label}</small>
-                                  </div>
-                                )}
+                      return (
+                        <div
+                          key={visitor.id}
+                          className={`p-1 cursor-pointer transition-colors ${
+                            selectedVisitorId === visitor.id ? "bg-muted/30" : "hover:bg-muted/20"
+                          }`}
+                          onClick={() => setSelectedVisitorId(visitor.id)}
+                        >
+                          <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
+                            <Avatar className="h-8 w-8 flex-shrink-0">
+                              <AvatarFallback className="bg-[#71dd37]/10 border border-[#71dd37]">
+                                <User className="h-4 w-4 text-[#71dd37]" />
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
+                                {visitor.title || "(No title)"}
+                              </p>
+                              <div className="flex items-center gap-2 flex-wrap justify-between">
+                                <Badge
+                                  className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
+                                    visitor.is_new_visitor
+                                      ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
+                                      : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
+                                  }`}
+                                >
+                                  {visitor.is_new_visitor ? "New Visitor" : "Returning Visitor"}
+                                </Badge>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
+                                >
+                                  Session: {visitor.session_time}
+                                </Badge>
                               </div>
+
+                              {/* Stage row (only for known stages) */}
+                              {label && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Icon className={`h-5 w-5 ${className}`} />
+                                  <small className="text-muted-foreground">{label}</small>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        );
-                      })
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
             ) : (
-              // Non-expandable, red dot, collapsed
+              // No active visitors ➜ red header, collapsed, count 0
               <div className="shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
                 <div className="p-4 border-b bg-[#f9f9f9]">
                   <div className="flex items-center justify-between">
@@ -662,10 +656,7 @@ const LiveTracking = () => {
               <CollapsibleContent>
                 <div className="bg-background">
                   {recentVisitors.length === 0 ? (
-                    // Hide the placeholder when there are zero visitors overall
-                    haveAnyVisitors ? (
-                      <div className="p-4 text-center text-muted-foreground">No recent visitors</div>
-                    ) : null
+                    <div className="p-4 text-center text-muted-foreground">No recent visitors</div>
                   ) : (
                     recentVisitors.map((visitor) => {
                       const lastPage = visitor.pages?.[visitor.pages.length - 1];
@@ -815,7 +806,7 @@ const LiveTracking = () => {
                               <span className="jt-dot"></span>
                               <div className="flex items-center w-full">
                                 <span className="ms-3 me-4">
-                                  <meta.Icon className={`h-[55px] w-[55px] ${meta.className}`} />
+                                  <meta.Icon className={`h-[22px] w-[22px] ${meta.className}`} />
                                 </span>
                                 <div className="flex-1 min-w-0 me-2">
                                   <span className="font-medium text-base text-foreground">
@@ -860,7 +851,6 @@ const LiveTracking = () => {
                 </Card>
               </>
             ) : (
-              // Empty state centered INSIDE a Card (matching the journey container)
               <Card className="shadow-none border">
                 <CardContent className="flex items-center justify-center h-60">
                   <InlineNoVisitors />
