@@ -75,7 +75,7 @@ const Login = () => {
           sessionStorage.setItem('twofa_temp_token', result.temp_token);
           sessionStorage.setItem('pending_2fa_user_id', result.user_id);
           setLoadingMessage("Redirecting to verification...");
-          navigate('/auth/two-factor');
+          navigate('/2fa');
           return;
         }
 
@@ -200,7 +200,7 @@ const Login = () => {
         sessionStorage.setItem('twofa_temp_token', result.temp_token);
         sessionStorage.setItem('pending_2fa_user_id', result.user_id);
         setLoadingMessage("Redirecting to verification...");
-        navigate('/auth/two-factor');
+        navigate('/2fa');
         return;
       }
 
