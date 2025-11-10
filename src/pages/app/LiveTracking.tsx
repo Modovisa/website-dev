@@ -660,8 +660,8 @@ const LiveTracking = () => {
               </Collapsible>
             ) : (
               // No active visitors ➜ red header, collapsed, count 0
-              <div className="shadow-[0_2px_4px_rgba(0,0,0,0.06)] my-2">
-                <div className="p-4 border-b bg-[#f9f9f9]">
+              <div className="shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
+                <div className="p-4 border-b bg-[#f9f9f9] my-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full bg-[#ff3e1d] shadow-[0_0_0_4px_rgba(255,62,29,0.12)]" />
