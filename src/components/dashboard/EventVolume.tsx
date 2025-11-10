@@ -1,3 +1,5 @@
+// src/components/dashboard/EventVolume.tsx
+
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import type { LabelCount } from '@/types/dashboard';
 

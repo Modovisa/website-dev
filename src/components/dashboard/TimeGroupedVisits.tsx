@@ -1,3 +1,5 @@
+// src/components/dashboard/TimeGroupedVisits.tsx
+
 import { ResponsiveContainer, BarChart, XAxis, YAxis, Bar, Tooltip, Legend } from 'recharts';
 import type { LabelSeries, RangeKey } from '@/types/dashboard';
 
