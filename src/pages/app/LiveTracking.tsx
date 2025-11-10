@@ -472,7 +472,7 @@ const LiveTracking = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <p className="text-sm font-medium leading-tight text-foreground truncate block">
+                        <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
                           {visitor.title || '(No title)'}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap justify-between">
@@ -532,7 +532,7 @@ const LiveTracking = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <p className="text-sm font-medium leading-tight text-foreground truncate block">
+                        <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
                           {visitor.title || '(No title)'}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap justify-between">
