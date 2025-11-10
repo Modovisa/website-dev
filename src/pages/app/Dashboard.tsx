@@ -18,19 +18,24 @@ import Donut from '@/components/dashboard/Donut';
 import UTMCampaignsTable from '@/components/dashboard/UTMCampaignsTable';
 import UTMSourcesTable from '@/components/dashboard/UTMSourcesTable';
 import { nf, pct, truncateMiddle } from '@/lib/format';
-import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { secureFetch } from "@/lib/auth";
+import { useAuthGuard } from '@/hooks/useAuthGuard';
+import { secureFetch } from '@/lib/auth';
 
-// NOTE: Keep ECharts only for the world map & calendar later.
-// Everything else will be Recharts components we add one-by-one.
+type Website = { id: number; website_name: string; domain: string };
 
 export default function Dashboard() {
+  const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
+
   // ── Controls
   const [siteId, setSiteId] = useState<number | null>(() => {
     const saved = localStorage.getItem('current_website_id');
     return saved ? Number(saved) : null;
   });
   const [range, setRange] = useState<RangeKey>('24h');
+
+  // ── Websites (authoritative source = secureFetch)
+  const [websites, setWebsites] = useState<Website[]>([]);
+  const [sitesLoading, setSitesLoading] = useState<boolean>(true);
 
   // ── Data
   const { data, isLoading, refetch } = useDashboardData({ siteId: siteId ?? undefined, range });
@@ -42,15 +47,13 @@ export default function Dashboard() {
     siteId: siteId ?? undefined,
     onLiveCount: (n) => setLiveCount(n),
     onDashboardSnapshot: (payload: DashboardPayload) => {
-      // Optional: if snapshot range matches, optimistically update cache
       if (payload?.range === range) {
         qc.setQueryData(['dashboard', siteId, range], (old: any) => ({ ...(old || {}), ...payload }));
       }
     },
     getTicket: async (sid) => {
-      const res = await fetch('https://api.modovisa.com/api/ws-ticket', {
+      const res = await secureFetch('https://api.modovisa.com/api/ws-ticket', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ site_id: sid }),
       });
@@ -60,33 +63,60 @@ export default function Dashboard() {
     },
   });
 
-  // ── Fake “your sites” list (replace with your real source)
-  const sites = useMemo(
-    () =>
-      JSON.parse(localStorage.getItem('mv.sites') || '[]') as { id: number; name: string }[],
-    []
-  );
-
+  // ── Load websites once (auth’d) and prime localStorage cache
   useEffect(() => {
-    // fallback: if no local cache, ask a minimal endpoint and cache
-    if (!sites.length) {
-      (async () => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setSitesLoading(true);
+        const res = await secureFetch('https://api.modovisa.com/api/tracking-websites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) throw new Error('tracking-websites failed');
+        const j = await res.json();
+        const arr: Website[] = (j?.projects || []).map((p: any) => ({
+          id: Number(p.id),
+          website_name: String(p.website_name || p.name || `Site ${p.id}`),
+          domain: String(p.domain || ''),
+        }));
+
+        if (cancelled) return;
+
+        setWebsites(arr);
+        localStorage.setItem('mv.sites', JSON.stringify(arr));
+
+        // auto-select if nothing selected
+        if ((siteId == null || Number.isNaN(siteId)) && arr[0]) {
+          setSiteId(arr[0].id);
+          localStorage.setItem('current_website_id', String(arr[0].id));
+        }
+      } catch (err) {
+        console.error('❌ /api/tracking-websites', err);
+        // fall back to cache if any
         try {
-          const r = await fetch('https://api.modovisa.com/api/tracking-websites', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          });
-          const j = await r.json();
-          const arr = (j?.projects || []).map((p: any) => ({ id: p.id, name: p.website_name }));
-          localStorage.setItem('mv.sites', JSON.stringify(arr));
-          if (!siteId && arr[0]) setSiteId(arr[0].id);
+          const cached = JSON.parse(localStorage.getItem('mv.sites') || '[]') as Website[];
+          setWebsites(cached);
+          if ((siteId == null || Number.isNaN(siteId)) && cached[0]) {
+            setSiteId(cached[0].id);
+            localStorage.setItem('current_website_id', String(cached[0].id));
+          }
         } catch {}
-      })();
-    } else if (!siteId && sites[0]) {
-      setSiteId(sites[0].id);
-    }
-  }, [sites, siteId]);
+      } finally {
+        if (!cancelled) setSitesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // once on mount
+
+  // ── Derived site options (pure)
+  const siteOptions = useMemo(
+    () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
+    [websites]
+  );
 
   const topCards = [
     {
@@ -119,6 +149,21 @@ export default function Dashboard() {
     },
   ];
 
+  // ── Auth gate (match LiveTracking UX)
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-lg text-muted-foreground">Verifying authentication...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+  if (!isAuthenticated) return null;
+
   return (
     <DashboardLayout>
       <div className="p-6 md:p-8 space-y-8">
@@ -132,21 +177,28 @@ export default function Dashboard() {
           <div className="flex gap-3 items-center">
             {/* Site Selector */}
             <Select
-              value={siteId ? String(siteId) : undefined}
+              value={siteId != null ? String(siteId) : undefined}
               onValueChange={(v) => {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem('current_website_id', String(n));
                 refetch();
               }}
+              disabled={sitesLoading || siteOptions.length === 0}
             >
               <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Choose Website" />
+                <SelectValue placeholder={sitesLoading ? 'Loading...' : 'Choose Website'} />
               </SelectTrigger>
               <SelectContent>
-                {sites.map(s => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                ))}
+                {siteOptions.length === 0 && !sitesLoading ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
+                ) : (
+                  siteOptions.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
 
@@ -164,7 +216,9 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
+            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
+              Refresh
+            </Button>
           </div>
         </div>
 
@@ -177,9 +231,15 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{typeof stat.value === 'number' ? nf(stat.value) : stat.value}</div>
+                <div className="text-3xl font-bold">
+                  {typeof stat.value === 'number' ? nf(stat.value) : stat.value}
+                </div>
                 {stat.change != null && (
-                  <p className={`text-xs mt-1 ${Number(stat.change) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  <p
+                    className={`text-xs mt-1 ${
+                      Number(stat.change) >= 0 ? 'text-success' : 'text-destructive'
+                    }`}
+                  >
                     {pct(Number(stat.change))} from last period
                   </p>
                 )}
@@ -191,14 +251,18 @@ export default function Dashboard() {
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2">
-            <CardHeader><CardTitle>Visits</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Visits</CardTitle>
+            </CardHeader>
             <CardContent>
               <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Event Volume</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Event Volume</CardTitle>
+            </CardHeader>
             <CardContent>
               <EventVolume data={data?.events_timeline ?? []} />
             </CardContent>
@@ -208,7 +272,9 @@ export default function Dashboard() {
         {/* Tables Row */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Top Pages</CardTitle>
+            </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {(data?.top_pages ?? []).map((p) => {
@@ -231,7 +297,9 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Referrers</CardTitle>
+            </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {(data?.referrers ?? []).map((r) => (
@@ -251,14 +319,18 @@ export default function Dashboard() {
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Unique vs Returning</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Unique vs Returning</CardTitle>
+            </CardHeader>
             <CardContent>
               <UniqueReturning data={data?.unique_vs_returning ?? []} />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Conversions</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Conversions</CardTitle>
+            </CardHeader>
             <CardContent>
               <PerformanceLine
                 title="Conversions"
@@ -272,7 +344,10 @@ export default function Dashboard() {
 
         {/* Charts Row 3 - Performance quartet */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card><CardHeader><CardTitle>Impressions</CardTitle></CardHeader>
+          <Card>
+            <CardHeader>
+              <CardTitle>Impressions</CardTitle>
+            </CardHeader>
             <CardContent>
               <PerformanceLine
                 title="Impressions"
@@ -283,7 +358,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card><CardHeader><CardTitle>Clicks</CardTitle></CardHeader>
+          <Card>
+            <CardHeader>
+              <CardTitle>Clicks</CardTitle>
+            </CardHeader>
             <CardContent>
               <PerformanceLine
                 title="Clicks"
@@ -294,7 +372,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card><CardHeader><CardTitle>Visitors from Search</CardTitle></CardHeader>
+          <Card>
+            <CardHeader>
+              <CardTitle>Visitors from Search</CardTitle>
+            </CardHeader>
             <CardContent>
               <PerformanceLine
                 title="Visitors from Search"
@@ -305,7 +386,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card><CardHeader><CardTitle>All Visitors</CardTitle></CardHeader>
+          <Card>
+            <CardHeader>
+              <CardTitle>All Visitors</CardTitle>
+            </CardHeader>
             <CardContent>
               <PerformanceLine
                 title="All Visitors"
@@ -319,29 +403,51 @@ export default function Dashboard() {
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Card><CardHeader><CardTitle>Browsers</CardTitle></CardHeader>
-            <CardContent><Donut data={data?.browsers ?? []} nameKey="name" valueKey="count" /></CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>Browsers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Donut data={data?.browsers ?? []} nameKey="name" valueKey="count" />
+            </CardContent>
           </Card>
-          <Card><CardHeader><CardTitle>Devices</CardTitle></CardHeader>
-            <CardContent><Donut data={data?.devices ?? []} nameKey="type" valueKey="count" /></CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>Devices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Donut data={data?.devices ?? []} nameKey="type" valueKey="count" />
+            </CardContent>
           </Card>
-          <Card><CardHeader><CardTitle>OS</CardTitle></CardHeader>
-            <CardContent><Donut data={data?.os ?? []} nameKey="name" valueKey="count" /></CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>OS</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Donut data={data?.os ?? []} nameKey="name" valueKey="count" />
+            </CardContent>
           </Card>
         </div>
 
         {/* UTM tables */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2">
-            <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
-            <CardContent><UTMCampaignsTable rows={data?.utm_campaigns ?? []} /></CardContent>
+            <CardHeader>
+              <CardTitle>UTM Campaign URLs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
+            </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
-            <CardContent><UTMSourcesTable rows={data?.utm_sources ?? []} /></CardContent>
+            <CardHeader>
+              <CardTitle>UTM Sources</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <UTMSourcesTable rows={data?.utm_sources ?? []} />
+            </CardContent>
           </Card>
         </div>
-
       </div>
     </DashboardLayout>
   );
