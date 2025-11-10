@@ -439,7 +439,7 @@ const LiveTracking = () => {
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-[#71dd37]" />
+                  <div className="h-3 w-3 rounded-full bg-[#71dd37] shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
                   <span className="text-md font-semibold">Live Visitors</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -503,7 +503,7 @@ const LiveTracking = () => {
             <div className="p-4 border-b bg-background">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-[#ffab00]" />
+                  <div className="h-3 w-3 rounded-full bg-[#ffab00] shadow-[0_0_0_4px_rgba(245,158,11,0.12)]" />
                   <span className="text-md font-semibold">Recently left</span>
                 </div>
                 <div className="flex items-center gap-2">
