@@ -4,21 +4,32 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor } from "lucide-react";
+import { MapPin, Globe, ExternalLink, User, Menu, ChevronDown, Monitor, Users } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { secureFetch } from "@/lib/auth";
 
+// NEW: shadcn dropdown menu for "Choose Website"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
 // Constants
 const ACTIVE_MAX_AGE_MS = 8 * 60 * 1000;     // 8 minutes
 const RECENT_MAX_AGE_MS = 20 * 60 * 1000;    // 20 minutes
-const REBUCKET_EVERY_MS = 30_000;             // 30 seconds
-const WS_PING_INTERVAL = 25_000;              // 25 seconds
+const REBUCKET_EVERY_MS = 30_000;            // 30 seconds
+const WS_PING_INTERVAL = 25_000;             // 25 seconds
 
 interface Page {
   title: string;
@@ -34,7 +45,7 @@ interface Visitor {
   title: string;
   session_time: string;
   is_new_visitor: boolean;
-  status: 'active' | 'left' | 'inactive';
+  status: "active" | "left" | "inactive";
   location: string;
   attribution_source: string;
   device: string;
@@ -50,12 +61,31 @@ interface Website {
   domain: string;
 }
 
+/* ---------- Small view components (skeleton + empty state) ---------- */
+
+const SidebarSkeleton = () => (
+  <div className="px-6 pb-4">
+    <ul className="list-none bg-muted/50 rounded-md p-4 animate-pulse space-y-3">
+      <li className="h-4 w-10/12 bg-muted rounded" />
+      <li className="h-4 w-8/12 bg-muted rounded" />
+      <li className="h-4 w-6/12 bg-muted rounded" />
+    </ul>
+  </div>
+);
+
+const NoVisitorsPlaceholder = () => (
+  <div className="text-center py-10">
+    <Users className="h-14 w-14 text-muted-foreground/70 mx-auto mb-3" />
+    <p className="text-muted-foreground">No visitors yet. Waiting for traffic to arrive...</p>
+  </div>
+);
+
 const LiveTracking = () => {
   const navigate = useNavigate();
-  
+
   // Auth guard - check authentication before rendering
   const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
-  
+
   // State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [liveVisitorsOpen, setLiveVisitorsOpen] = useState(true);
@@ -66,7 +96,7 @@ const LiveTracking = () => {
   const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(null);
   const [isSuspended, setIsSuspended] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -87,9 +117,9 @@ const LiveTracking = () => {
 
   const getBucketFor = (now: number, visitor: Visitor) => {
     const age = now - getLastTimestamp(visitor);
-    if (age <= ACTIVE_MAX_AGE_MS) return 'active';
-    if (age <= RECENT_MAX_AGE_MS) return 'recent';
-    return 'expired';
+    if (age <= ACTIVE_MAX_AGE_MS) return "active";
+    if (age <= RECENT_MAX_AGE_MS) return "recent";
+    return "expired";
   };
 
   // Setup WebSocket
@@ -97,32 +127,34 @@ const LiveTracking = () => {
     if (!currentWebsite) return;
 
     if (wsRef.current) {
-      try { wsRef.current.close(); } catch {}
+      try {
+        wsRef.current.close();
+      } catch {}
     }
     if (pingIntervalRef.current) {
       clearInterval(pingIntervalRef.current);
     }
 
     try {
-      const tRes = await secureFetch('https://api.modovisa.com/api/ws-ticket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site_id: currentWebsite.id })
+      const tRes = await secureFetch("https://api.modovisa.com/api/ws-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_id: currentWebsite.id }),
       });
 
       if (!tRes.ok) {
-        console.error('❌ WS ticket mint failed');
+        console.error("❌ WS ticket mint failed");
         return;
       }
 
       const { ticket } = await tRes.json();
 
-      const ws = new WebSocket(`wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`);
+      const ws = new WebSocket(
+        `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`
+      );
       wsRef.current = ws;
 
-      ws.addEventListener('open', () => {
-        console.log("✅ Connected to WebSocket");
-        
+      ws.addEventListener("open", () => {
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "ping" }));
@@ -130,9 +162,9 @@ const LiveTracking = () => {
         }, WS_PING_INTERVAL);
       });
 
-      ws.addEventListener('message', async (event) => {
+      ws.addEventListener("message", async (event) => {
         const data = JSON.parse(event.data || "{}");
-        
+
         if (data.type === "pong") return;
 
         if (data.type === "new_event") {
@@ -149,48 +181,46 @@ const LiveTracking = () => {
             if (!res.ok) return;
 
             const visitor = await res.json();
-            
+
             const latestPage = visitor.pages?.at(-1);
             const latestTime = new Date(latestPage?.timestamp || visitor.last_seen || 0).getTime();
             const now = Date.now();
-            const isActiveNow = (now - latestTime) <= ACTIVE_MAX_AGE_MS;
+            const isActiveNow = now - latestTime <= ACTIVE_MAX_AGE_MS;
 
-            visitor.status = isActiveNow ? 'active' : 'left';
+            visitor.status = isActiveNow ? "active" : "left";
 
             if (Array.isArray(visitor.pages) && visitor.pages.length) {
               const lastIndex = visitor.pages.length - 1;
               visitor.pages.forEach((p: Page, i: number) => {
-                p.is_active = (i === lastIndex) && isActiveNow;
+                p.is_active = i === lastIndex && isActiveNow;
               });
             }
 
-            setVisitorDataMap(prev => ({ ...prev, [visitor.id]: visitor }));
-
+            setVisitorDataMap((prev) => ({ ...prev, [visitor.id]: visitor }));
           } catch (err) {
             console.error("❌ Failed to process live visitor", err);
           }
         }
 
         if (data.type === "user_status") {
-          if (data.status === 'suspended') {
+          if (data.status === "suspended") {
             setIsSuspended(true);
-          } else if (data.status === 'active') {
+          } else if (data.status === "active") {
             setIsSuspended(false);
           }
         }
       });
 
-      ws.addEventListener('close', () => {
+      ws.addEventListener("close", () => {
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
         }
         setTimeout(() => setupWebSocket(), 5000);
       });
 
-      ws.addEventListener('error', (err) => {
+      ws.addEventListener("error", (err) => {
         console.error("❌ WebSocket error", err);
       });
-
     } catch (err) {
       console.error("❌ Failed to setup WebSocket", err);
     }
@@ -201,18 +231,14 @@ const LiveTracking = () => {
     if (!currentWebsite) return;
 
     try {
-      const res = await secureFetch(
-        "https://api.modovisa.com/api/live-visitor-tracking",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ site_id: currentWebsite.id })
-        }
-      );
+      const res = await secureFetch("https://api.modovisa.com/api/live-visitor-tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_id: currentWebsite.id }),
+      });
 
       if (res.status === 401) {
-        console.warn('Session expired, redirecting to login');
-        navigate('/login', { replace: true });
+        navigate("/login", { replace: true });
         return;
       }
 
@@ -226,8 +252,7 @@ const LiveTracking = () => {
           return;
         }
         if (errorText.includes("blocked")) {
-          console.warn('Account blocked, redirecting to login');
-          navigate('/login', { replace: true });
+          navigate("/login", { replace: true });
           return;
         }
       }
@@ -238,6 +263,7 @@ const LiveTracking = () => {
 
       if (!Array.isArray(visitors)) {
         console.warn("⚠️ Unexpected visitor data format");
+        setIsLoading(false);
         return;
       }
 
@@ -246,14 +272,14 @@ const LiveTracking = () => {
 
       visitors.forEach((v: Visitor) => {
         const lastTs = new Date(v.pages?.at(-1)?.timestamp || v.last_seen || 0).getTime();
-        const isActiveNow = (now - lastTs) <= ACTIVE_MAX_AGE_MS;
+        const isActiveNow = now - lastTs <= ACTIVE_MAX_AGE_MS;
 
-        v.status = isActiveNow ? 'active' : 'left';
+        v.status = isActiveNow ? "active" : "left";
 
         if (Array.isArray(v.pages) && v.pages.length) {
           const lastIndex = v.pages.length - 1;
           v.pages.forEach((p, i) => {
-            p.is_active = (i === lastIndex) && isActiveNow;
+            p.is_active = i === lastIndex && isActiveNow;
           });
         }
 
@@ -263,11 +289,11 @@ const LiveTracking = () => {
       setVisitorDataMap(normalizedVisitors);
       setIsLoading(false);
 
+      // Auto-select first visitor (keep if you want Bootstrap’s “auto focus” feel)
       if (!selectedVisitorId && Object.keys(normalizedVisitors).length > 0) {
         const firstVisitorId = Object.keys(normalizedVisitors)[0];
         setSelectedVisitorId(firstVisitorId);
       }
-
     } catch (err) {
       console.error("❌ Failed to refresh visitor list", err);
       setIsLoading(false);
@@ -280,8 +306,8 @@ const LiveTracking = () => {
 
     rebucketTimerRef.current = setInterval(() => {
       const now = Date.now();
-      
-      setVisitorDataMap(prev => {
+
+      setVisitorDataMap((prev) => {
         const updated = { ...prev };
         Object.entries(updated).forEach(([id, v]) => {
           const age = now - getLastTimestamp(v);
@@ -306,33 +332,34 @@ const LiveTracking = () => {
   useEffect(() => {
     const loadWebsites = async () => {
       try {
-        const res = await secureFetch('https://api.modovisa.com/api/tracking-websites', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+        const res = await secureFetch("https://api.modovisa.com/api/tracking-websites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
         });
 
         if (res.status === 401) {
-          // Not authenticated - redirect to login
-          console.warn('Not authenticated, redirecting to login');
-          navigate('/login', { replace: true });
+          navigate("/login", { replace: true });
           return;
         }
 
         const result = await res.json();
 
         if (!result.projects || result.projects.length === 0) {
+          setWebsites([]);
+          setCurrentWebsite(null);
+          setVisitorDataMap({});
           setIsLoading(false);
           return;
         }
 
         setWebsites(result.projects);
-        
+
         if (result.projects.length > 0) {
           const firstSite = result.projects[0];
+          setIsLoading(true); // show skeleton while first fetch happens
           setCurrentWebsite(firstSite);
-          localStorage.setItem('active_website_domain', firstSite.domain);
+          localStorage.setItem("active_website_domain", firstSite.domain);
         }
-
       } catch (err) {
         console.error("❌ Error loading websites", err);
         setIsLoading(false);
@@ -351,7 +378,9 @@ const LiveTracking = () => {
 
     return () => {
       if (wsRef.current) {
-        try { wsRef.current.close(); } catch {}
+        try {
+          wsRef.current.close();
+        } catch {}
       }
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
@@ -364,10 +393,10 @@ const LiveTracking = () => {
   const activeVisitors: Visitor[] = [];
   const recentVisitors: Visitor[] = [];
 
-  Object.values(visitorDataMap).forEach(v => {
+  Object.values(visitorDataMap).forEach((v) => {
     const bucket = getBucketFor(now, v);
-    if (bucket === 'active') activeVisitors.push(v);
-    else if (bucket === 'recent') recentVisitors.push(v);
+    if (bucket === "active") activeVisitors.push(v);
+    else if (bucket === "recent") recentVisitors.push(v);
   });
 
   activeVisitors.sort((a, b) => getLastTimestamp(b) - getLastTimestamp(a));
@@ -399,41 +428,58 @@ const LiveTracking = () => {
       <div className="p-6 space-y-4 pt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Visitors</h2>
-          <select
-            className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 rounded-md text-sm font-medium cursor-pointer"
-            value={currentWebsite?.id || ''}
-            onChange={(e) => {
-              const site = websites.find(w => w.id === e.target.value);
-              if (site) {
-                setCurrentWebsite(site);
-                setVisitorDataMap({});
-                setSelectedVisitorId(null);
-                localStorage.setItem('active_website_domain', site.domain);
-              }
-            }}
-          >
-            {websites.map(site => (
-              <option key={site.id} value={site.id}>
-                {site.website_name}
-              </option>
-            ))}
-          </select>
+
+          {/* Dropdown "Choose Website" (Bootstrap-like UX) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="h-9 px-3">
+                {currentWebsite ? currentWebsite.website_name : "Choose Website"}
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Choose Website</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {websites.length === 0 ? (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
+              ) : (
+                websites.map((site) => (
+                  <DropdownMenuItem
+                    key={site.id}
+                    onClick={() => {
+                      setIsLoading(true); // show skeleton while switching
+                      setCurrentWebsite(site);
+                      setVisitorDataMap({});
+                      setSelectedVisitorId(null);
+                      localStorage.setItem("active_website_domain", site.domain);
+                    }}
+                  >
+                    {site.website_name}
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <div className="bg-cyan-100 text-cyan-900 rounded px-4 py-2 text-center text-sm font-medium">
-          {currentWebsite?.domain || 'No website selected'}
+
+        {/* Domain chip (Bootstrap pale cyan style) */}
+        <div className="bg-[#dff7fb] text-[#055160] rounded px-4 py-2 text-center text-sm font-medium">
+          {currentWebsite?.domain || "Loading domain..."}
         </div>
       </div>
 
+      {/* Suspension badge */}
       {isSuspended && (
         <div className="mx-6 mb-4">
-          <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded">
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded flex items-center justify-center gap-2">
             <strong>Live Tracking Suspended</strong>
-            <p className="text-sm">You've reached your monthly event limit.</p>
+            <span className="text-sm">You’ve reached your monthly event limit.</span>
           </div>
         </div>
       )}
 
       <ScrollArea className="flex-1">
+        {/* ACTIVE */}
         <Collapsible open={liveVisitorsOpen} onOpenChange={setLiveVisitorsOpen}>
           <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
             <div className="p-4 border-b bg-[#f9f9f9]">
@@ -443,8 +489,14 @@ const LiveTracking = () => {
                   <span className="text-md font-semibold">Live Visitors</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">{activeVisitors.length}</span>
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${liveVisitorsOpen ? '' : '-rotate-90'}`} />
+                  <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">
+                    {activeVisitors.length}
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 text-muted-foreground transition-transform ${
+                      liveVisitorsOpen ? "" : "-rotate-90"
+                    }`}
+                  />
                 </div>
               </div>
             </div>
@@ -453,7 +505,7 @@ const LiveTracking = () => {
           <CollapsibleContent>
             <div className="bg-background">
               {isLoading ? (
-                <div className="p-4 text-center text-muted-foreground">Loading...</div>
+                <SidebarSkeleton />
               ) : activeVisitors.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">No active visitors</div>
               ) : (
@@ -461,31 +513,34 @@ const LiveTracking = () => {
                   <div
                     key={visitor.id}
                     className={`p-1 cursor-pointer transition-colors ${
-                      selectedVisitorId === visitor.id ? 'bg-muted/30' : 'hover:bg-muted/20'
+                      selectedVisitorId === visitor.id ? "bg-muted/30" : "hover:bg-muted/20"
                     }`}
                     onClick={() => setSelectedVisitorId(visitor.id)}
                   >
                     <div className="flex items-center gap-3 p-3 rounded-sm border shadow-sm">
-                      <Avatar className="h-8 w-8 flex-shrink-0 pulse">
-                        <AvatarFallback className="bg-[#71dd37]/10 border-1 border-[#71dd37]">
+                      <Avatar className="h-8 w-8 flex-shrink-0">
+                        <AvatarFallback className="bg-[#71dd37]/10 border border-[#71dd37]">
                           <User className="h-4 w-4 text-[#71dd37]" />
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 space-y-2">
                         <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
-                          {visitor.title || '(No title)'}
+                          {visitor.title || "(No title)"}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap justify-between">
-                          <Badge 
+                          <Badge
                             className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
                               visitor.is_new_visitor
-                                ? 'bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]' 
-                                : 'bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]'
+                                ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
+                                : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
                             }`}
                           >
-                            {visitor.is_new_visitor ? 'New Visitor' : 'Returning Visitor'}
+                            {visitor.is_new_visitor ? "New Visitor" : "Returning Visitor"}
                           </Badge>
-                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
+                          >
                             Session: {visitor.session_time}
                           </Badge>
                         </div>
@@ -498,6 +553,7 @@ const LiveTracking = () => {
           </CollapsibleContent>
         </Collapsible>
 
+        {/* RECENT */}
         <Collapsible open={recentlyLeftOpen} onOpenChange={setRecentlyLeftOpen}>
           <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
             <div className="p-4 border-b bg-[#f3f3f3]">
@@ -507,8 +563,14 @@ const LiveTracking = () => {
                   <span className="text-md font-semibold">Recently left</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">{recentVisitors.length}</span>
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recentlyLeftOpen ? '' : '-rotate-90'}`} />
+                  <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">
+                    {recentVisitors.length}
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 text-muted-foreground transition-transform ${
+                      recentlyLeftOpen ? "" : "-rotate-90"
+                    }`}
+                  />
                 </div>
               </div>
             </div>
@@ -516,7 +578,9 @@ const LiveTracking = () => {
 
           <CollapsibleContent>
             <div className="bg-background">
-              {recentVisitors.length === 0 ? (
+              {isLoading ? (
+                <SidebarSkeleton />
+              ) : recentVisitors.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">No recent visitors</div>
               ) : (
                 recentVisitors.map((visitor) => (
@@ -533,13 +597,19 @@ const LiveTracking = () => {
                       </Avatar>
                       <div className="flex-1 min-w-0 space-y-2">
                         <p className="text-sm font-medium leading-tight text-foreground truncate block max-w-[260px]">
-                          {visitor.title || '(No title)'}
+                          {visitor.title || "(No title)"}
                         </p>
                         <div className="flex items-center gap-2 flex-wrap justify-between">
-                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 whitespace-nowrap"
+                          >
                             Left Site
                           </Badge>
-                          <Badge variant="secondary" className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
+                          >
                             Session: {visitor.session_time}
                           </Badge>
                         </div>
@@ -563,6 +633,7 @@ const LiveTracking = () => {
         </div>
 
         <div className="flex-1 overflow-auto pr-6">
+          {/* Mobile sidebar trigger */}
           <div className="lg:hidden p-4 border-b bg-card sticky top-0 z-10">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
@@ -586,7 +657,7 @@ const LiveTracking = () => {
                       <User className="h-6 w-6 text-muted-foreground" />
                     </AvatarFallback>
                   </Avatar>
-                  <h1 className="text-3xl font-bold">Who's this?</h1>
+                  <h1 className="text-3xl font-bold">Who&apos;s this?</h1>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -594,7 +665,9 @@ const LiveTracking = () => {
                     <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Location:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.location || 'Unknown'}</p>
+                      <p className="font-semibold text-[#ff3e1d]">
+                        {selectedVisitor.location || "Unknown"}
+                      </p>
                     </div>
                   </div>
 
@@ -602,7 +675,9 @@ const LiveTracking = () => {
                     <ExternalLink className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Referrer:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.attribution_source || 'Direct'}</p>
+                      <p className="font-semibold text-[#ff3e1d]">
+                        {selectedVisitor.attribution_source || "Direct"}
+                      </p>
                     </div>
                   </div>
 
@@ -610,7 +685,9 @@ const LiveTracking = () => {
                     <Monitor className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Device:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.device || 'Unknown'}</p>
+                      <p className="font-semibold text-[#ff3e1d]">
+                        {selectedVisitor.device || "Unknown"}
+                      </p>
                     </div>
                   </div>
 
@@ -618,7 +695,9 @@ const LiveTracking = () => {
                     <Globe className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Browser:</p>
-                      <p className="font-semibold text-[#ff3e1d]">{selectedVisitor.browser || 'Unknown'}</p>
+                      <p className="font-semibold text-[#ff3e1d]">
+                        {selectedVisitor.browser || "Unknown"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -633,17 +712,30 @@ const LiveTracking = () => {
                         [...selectedVisitor.pages].reverse().map((page, index) => (
                           <li
                             key={index}
-                            className={`jt-item ${page.is_active ? 'is-active' : 'is-left'} flex items-center m-2 ${page.is_active ? 'shadow-sm' : ''} rounded-[14px] border p-3 ${!page.is_active ? 'bg-muted/30' : 'bg-card'}`}
+                            className={`jt-item ${page.is_active ? "is-active" : "is-left"} flex items-center m-2 ${
+                              page.is_active ? "shadow-sm" : ""
+                            } rounded-md border p-3 ${!page.is_active ? "bg-muted/30" : "bg-card"}`}
                           >
                             <span className="jt-dot"></span>
                             <div className="flex items-center w-full">
                               <span className="ms-3 me-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="55" height="55" viewBox="0 0 24 24" className="text-warning">
-                                  <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="55"
+                                  height="55"
+                                  viewBox="0 0 24 24"
+                                  className="text-warning"
+                                >
+                                  <path
+                                    fill="currentColor"
+                                    d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"
+                                  />
                                 </svg>
                               </span>
                               <div className="flex-1 min-w-0 me-2">
-                                <span className="font-medium text-base text-foreground">{page.title || '(No title)'}</span>
+                                <span className="font-medium text-base text-foreground">
+                                  {page.title || "(No title)"}
+                                </span>
                                 <small className="text-sm text-muted-foreground block mt-2">
                                   View this page by clicking on the following link:
                                 </small>
@@ -664,7 +756,10 @@ const LiveTracking = () => {
                                     Active now
                                   </Badge>
                                 )}
-                                <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"
+                                >
                                   {page.time_spent}
                                 </Badge>
                               </div>
@@ -672,22 +767,40 @@ const LiveTracking = () => {
                           </li>
                         ))
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          No page views yet
-                        </div>
+                        <div className="text-center py-8 text-muted-foreground">No page views yet</div>
                       )}
                     </ul>
                   </CardContent>
                 </Card>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-xl font-medium text-muted-foreground">
-                    {isLoading ? 'Loading visitors...' : 'Select a visitor to view details'}
-                  </p>
+              // Bootstrap-like initial state: Static header + empty placeholder (or skeleton while loading)
+              <div className="p-6 lg:p-8 space-y-6 pt-8">
+                <div className="flex items-center gap-3 mb-2">
+                  <Avatar className="h-12 w-12">
+                    <AvatarFallback className="bg-muted">
+                      <User className="h-6 w-6 text-muted-foreground" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <h1 className="text-3xl font-bold">Who&apos;s this?</h1>
                 </div>
+
+                <Card className="shadow-none border border-border">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-2xl">What pages have they seen?</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-2">
+                    {isLoading ? (
+                      <div className="space-y-3">
+                        <Skeleton className="h-4 w-10/12" />
+                        <Skeleton className="h-4 w-8/12" />
+                        <Skeleton className="h-4 w-6/12" />
+                      </div>
+                    ) : (
+                      <NoVisitorsPlaceholder />
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
