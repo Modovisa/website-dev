@@ -13,14 +13,14 @@ ChartJS.register(ArcElement);
 
 // Subtle, Bootstrap-like palette (stable order)
 const PALETTE = [
-  "hsl(250 95% 63% / 0.58)",               // violet (brand)
-  "hsl(217.2 91.2% 59.8% / 0.28)",         // sidebar-ring blue (brand-ish)
-  "hsl(110 61% 64% / 0.32)",               // success green (lighter)
-  "hsl(42 100% 65% / 0.32)",               // warning amber (lighter)
-  "hsl(8 100% 66% / 0.30)",                // destructive red (lighter)
-  "hsl(220 13% 70% / 0.30)",               // neutral slate
-  "hsl(200 90% 70% / 0.30)",               // soft sky/cyan (harmonizes with brand blues)
-  "hsl(84 65% 68% / 0.32)",                // lime-ish accent
+  "hsl(250 95% 63% / 0.40)",               // violet (brand)
+  "hsl(217.2 91.2% 59.8% / 0.40)",         // sidebar-ring blue (brand-ish)
+  "hsl(110 61% 64% / 0.40)",               // success green (lighter)
+  "hsl(42 100% 65% / 0.40)",               // warning amber (lighter)
+  "hsl(8 100% 66% / 0.40)",                // destructive red (lighter)
+  "hsl(220 13% 70% / 0.40)",               // neutral slate
+  "hsl(200 90% 70% / 0.40)",               // soft sky/cyan (harmonizes with brand blues)
+  "hsl(84 65% 68% / 0.40)",                // lime-ish accent
 ];
 
 export default function Donut({
