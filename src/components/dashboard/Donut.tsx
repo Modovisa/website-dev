@@ -13,14 +13,14 @@ ChartJS.register(ArcElement);
 
 // Subtle, Bootstrap-like palette (stable order)
 const PALETTE = [
-  "#635bff", // primary
-  "#3b82f6", // info
-  "#22c55e", // success
-  "#f59e0b", // warning
-  "#ef4444", // red
-  "#a855f7", // violet
-  "#06b6d4", // cyan
-  "#84cc16", // lime
+  "#e0adff", // primary
+  "#b3d6ff", // info
+  "#94f5e8", // success
+  "#ffd895", // warning
+  "#fe93a3", // red
+  "#fe9aef", // violet
+  "#71e4d7", // cyan
+  "#ceeea5", // lime
 ];
 
 export default function Donut({
