@@ -10,6 +10,7 @@ import { Users, Eye, MousePointerClick, TrendingUp } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useLiveVisitorsWS } from '@/hooks/useLiveVisitorsWS';
 import type { RangeKey, DashboardPayload } from '@/types/dashboard';
+
 import TimeGroupedVisits from '@/components/dashboard/TimeGroupedVisits';
 import EventVolume from '@/components/dashboard/EventVolume';
 import UniqueReturning from '@/components/dashboard/UniqueReturning';
@@ -17,6 +18,7 @@ import PerformanceLine from '@/components/dashboard/PerformanceLine';
 import Donut from '@/components/dashboard/Donut';
 import UTMCampaignsTable from '@/components/dashboard/UTMCampaignsTable';
 import UTMSourcesTable from '@/components/dashboard/UTMSourcesTable';
+
 import { nf, pct, truncateMiddle } from '@/lib/format';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { secureFetch } from '@/lib/auth';
@@ -250,23 +252,10 @@ export default function Dashboard() {
 
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Visits</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Event Volume</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EventVolume data={data?.events_timeline ?? []} />
-            </CardContent>
-          </Card>
+          <div className="md:col-span-2">
+            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={isLoading} />
+          </div>
+          <EventVolume data={data?.events_timeline ?? []} loading={isLoading} />
         </div>
 
         {/* Tables Row */}
@@ -318,115 +307,53 @@ export default function Dashboard() {
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Unique vs Returning</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <UniqueReturning data={data?.unique_vs_returning ?? []} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Conversions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceLine
-                title="Conversions"
-                current={data?.conversions_timeline ?? []}
-                previous={data?.conversions_previous_timeline ?? []}
-                color="#8b5cf6"
-              />
-            </CardContent>
-          </Card>
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading} />
+          <PerformanceLine
+            title="Conversions"
+            current={data?.conversions_timeline ?? []}
+            previous={data?.conversions_previous_timeline ?? []}
+            color="#8b5cf6"
+            loading={isLoading}
+          />
         </div>
 
         {/* Charts Row 3 - Performance quartet */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Impressions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceLine
-                title="Impressions"
-                current={data?.impressions_timeline ?? []}
-                previous={data?.impressions_previous_timeline ?? []}
-                color="#22c55e"
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Clicks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceLine
-                title="Clicks"
-                current={data?.clicks_timeline ?? []}
-                previous={data?.clicks_previous_timeline ?? []}
-                color="#3b82f6"
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Visitors from Search</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceLine
-                title="Visitors from Search"
-                current={data?.search_visitors_timeline ?? []}
-                previous={data?.search_visitors_previous_timeline ?? []}
-                color="#f97316"
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>All Visitors</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceLine
-                title="All Visitors"
-                current={(data as any)?.unique_visitors_timeline ?? []}
-                previous={(data as any)?.previous_unique_visitors_timeline ?? []}
-                color="#0ea5e9"
-              />
-            </CardContent>
-          </Card>
+          <PerformanceLine
+            title="Impressions"
+            current={data?.impressions_timeline ?? []}
+            previous={data?.impressions_previous_timeline ?? []}
+            color="#22c55e"
+            loading={isLoading}
+          />
+          <PerformanceLine
+            title="Clicks"
+            current={data?.clicks_timeline ?? []}
+            previous={data?.clicks_previous_timeline ?? []}
+            color="#3b82f6"
+            loading={isLoading}
+          />
+          <PerformanceLine
+            title="Visitors from Search"
+            current={data?.search_visitors_timeline ?? []}
+            previous={data?.search_visitors_previous_timeline ?? []}
+            color="#f97316"
+            loading={isLoading}
+          />
+          <PerformanceLine
+            title="All Visitors"
+            current={(data as any)?.unique_visitors_timeline ?? []}
+            previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+            color="#0ea5e9"
+            loading={isLoading}
+          />
         </div>
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Browsers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Donut data={data?.browsers ?? []} nameKey="name" valueKey="count" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Devices</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Donut data={data?.devices ?? []} nameKey="type" valueKey="count" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>OS</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Donut data={data?.os ?? []} nameKey="name" valueKey="count" />
-            </CardContent>
-          </Card>
+          <Donut title="Browsers" info="Most used browsers." data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading} />
+          <Donut title="Devices" info="Device split." data={data?.devices ?? []} nameKey="type" valueKey="count" loading={isLoading} />
+          <Donut title="OS" info="Operating systems." data={data?.os ?? []} nameKey="name" valueKey="count" loading={isLoading} />
         </div>
 
         {/* UTM tables */}
