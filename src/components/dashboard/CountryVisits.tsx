@@ -29,7 +29,7 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
   return (
     <div className="h-full flex flex-col text-sm">
       {/* Header: only Country + Visitors */}
-      <div className="grid grid-cols-[1fr,170px] px-4 pb-2 text-muted-foreground font-semibold">
+      <div className="grid grid-cols-[1fr,170px] px-4 pb-2 text-muted-foreground text-lg font-semibold">
         <div>Country</div>
         <div className="text-right">Visitors</div>
       </div>
@@ -59,7 +59,7 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
                     alt={name}
                     width={20}
                     height={15}
-                    className="rounded-sm"
+                    className="rounded"
                     onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
                   />
                 ) : null}
