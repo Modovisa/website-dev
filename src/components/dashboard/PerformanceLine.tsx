@@ -5,15 +5,16 @@ import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 
 type Row = { label: string; count: number };
 
-function hexToRgba(hex: string, alpha: number) {
+function withAlphaHex(hex: string, alpha: number) {
+  // alpha: 0..1 -> 00..FF
+  const a = Math.max(0, Math.min(1, alpha));
+  const aa = Math.round(a * 255)
+    .toString(16)
+    .padStart(2, "0");
+  // normalize #RGB -> #RRGGBB
   const h = hex.replace("#", "");
-  const to = (s: string) => parseInt(s, 16);
-  if (h.length === 3) {
-    const r = to(h[0] + h[0]), g = to(h[1] + h[1]), b = to(h[2] + h[2]);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-  const r = to(h.slice(0, 2)), g = to(h.slice(2, 4)), b = to(h.slice(4, 6));
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h.slice(0, 6);
+  return `#${full}${aa}`;
 }
 
 export default function PerformanceLine({
@@ -36,7 +37,7 @@ export default function PerformanceLine({
   const dsCurrent = labels.map((l) => current.find((c) => c.label === l)?.count ?? null);
   const dsPrev = labels.map((l) => prevMap.get(l) ?? null);
 
-  const background = filled ? hexToRgba(color, 0.18) : "transparent";
+  const bg = filled ? withAlphaHex(color, 0.18) : "transparent";
 
   const ds = {
     labels,
@@ -45,8 +46,8 @@ export default function PerformanceLine({
         label: title,
         data: dsCurrent,
         borderColor: color,
-        backgroundColor: background,
-        fill: filled ? { target: "origin" } : false, // <<< ensures visible area
+        backgroundColor: bg,
+        fill: filled ? true : false, // <-- simple & reliable
         tension: 0.35,
         pointRadius: filled ? 3 : 0,
         pointHoverRadius: filled ? 5 : 0,
@@ -55,7 +56,6 @@ export default function PerformanceLine({
         pointBorderColor: "#fff",
         borderWidth: 2,
         spanGaps: true,
-        clip: false,
       },
       {
         label: "Previous Period",
@@ -82,6 +82,7 @@ export default function PerformanceLine({
     plugins: {
       legend: { position: "bottom" as const, labels: { usePointStyle: true } },
       tooltip: { mode: "index" as const, intersect: false },
+      filler: { propagate: false }, // <-- ensure fill draws under the line
     },
     maintainAspectRatio: false,
   } as const;

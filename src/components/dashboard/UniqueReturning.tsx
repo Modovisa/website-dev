@@ -25,7 +25,7 @@ export default function UniqueReturning({
         borderColor: "#3b82f6",
         backgroundColor: "rgba(55, 128, 246,0.55)",
         fill: true,
-        tension: 0.35,
+        tension: 0.4,
         pointRadius: 2,               // show points
         pointHoverRadius: 3,
         borderWidth: 2,
@@ -37,7 +37,7 @@ export default function UniqueReturning({
         borderColor: "#22c55e",
         backgroundColor: "rgba(34,197,94,0.20)",
         fill: true,
-        tension: 0.35,
+        tension: 0.4,
         pointRadius: 2,               // show points
         pointHoverRadius: 3,
         borderWidth: 2,

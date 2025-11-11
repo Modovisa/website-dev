@@ -22,7 +22,7 @@ import UTMSourcesTable from "@/components/dashboard/UTMSourcesTable";
 import TopPagesTable from "@/components/dashboard/TopPagesTable";
 import ReferrersTable from "@/components/dashboard/ReferrersTable";
 
-import { nf, pct, truncateMiddle } from "@/lib/format";
+import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { secureFetch } from "@/lib/auth";
 
@@ -104,7 +104,9 @@ export default function Dashboard() {
         if (!cancelled) setSitesLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -162,14 +164,18 @@ export default function Dashboard() {
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
                 ) : (
                   siteOptions.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
 
             <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
-              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="24h">Today</SelectItem>
                 <SelectItem value="7d">Last 7 Days</SelectItem>
@@ -179,7 +185,9 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>Refresh</Button>
+            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
+              Refresh
+            </Button>
           </div>
         </div>
 
@@ -262,7 +270,6 @@ export default function Dashboard() {
           </Card>
         </div>
 
-
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
           <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading} />
@@ -278,10 +285,34 @@ export default function Dashboard() {
 
         {/* Charts Row 3 */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <PerformanceLine title="Impressions" current={data?.impressions_timeline ?? []} previous={data?.impressions_previous_timeline ?? []} color="#22c55e" loading={isLoading} />
-          <PerformanceLine title="Clicks" current={data?.clicks_timeline ?? []} previous={data?.clicks_previous_timeline ?? []} color="#3b82f6" loading={isLoading} />
-          <PerformanceLine title="Visitors from Search" current={data?.search_visitors_timeline ?? []} previous={data?.search_visitors_previous_timeline ?? []} color="#f97316" loading={isLoading} />
-          <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" loading={isLoading} />
+          <PerformanceLine
+            title="Impressions"
+            current={data?.impressions_timeline ?? []}
+            previous={data?.impressions_previous_timeline ?? []}
+            color="#22c55e"
+            loading={isLoading}
+          />
+          <PerformanceLine
+            title="Clicks"
+            current={data?.clicks_timeline ?? []}
+            previous={data?.clicks_previous_timeline ?? []}
+            color="#3b82f6"
+            loading={isLoading}
+          />
+          <PerformanceLine
+            title="Visitors from Search"
+            current={data?.search_visitors_timeline ?? []}
+            previous={data?.search_visitors_previous_timeline ?? []}
+            color="#f59e0b"
+            loading={isLoading}
+          />
+          <PerformanceLine
+            title="All Visitors"
+            current={(data as any)?.unique_visitors_timeline ?? []}
+            previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+            color="#0ea5e9"
+            loading={isLoading}
+          />
         </div>
 
         {/* Donuts */}
@@ -294,20 +325,32 @@ export default function Dashboard() {
         {/* UTM tables */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2">
-            <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>UTM Campaign URLs</CardTitle>
+            </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
               ) : (
                 <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
               )}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>UTM Sources</CardTitle>
+            </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
               ) : (
                 <UTMSourcesTable rows={data?.utm_sources ?? []} />
               )}
