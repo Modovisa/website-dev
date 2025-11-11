@@ -52,7 +52,7 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
                       alt={name}
                       width={20}
                       height={15}
-                      className="rounded-sm"
+                      className="rounded"
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                     />
                   ) : null}
