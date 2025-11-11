@@ -24,7 +24,7 @@ export default function UniqueReturning({
         data: uniques,
         borderColor: "#3b82f6",      // solid blue
         backgroundColor: "transparent",
-        fill: false,                  // no area fill
+        fill: true,                  // no area fill
         tension: 0.35,
         pointRadius: 2,               // show points
         pointHoverRadius: 3,
@@ -36,7 +36,7 @@ export default function UniqueReturning({
         data: returning,
         borderColor: "#22c55e",      // solid green
         backgroundColor: "transparent",
-        fill: false,                  // no area fill
+        fill: true,                  // no area fill
         tension: 0.35,
         pointRadius: 2,               // show points
         pointHoverRadius: 3,
