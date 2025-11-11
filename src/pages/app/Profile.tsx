@@ -1,8 +1,8 @@
 // src/pages/app/Profile.tsx
 
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,28 +31,52 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import {
+  useUserProfile,
+  useWebsites,
+  useUpdateWebsite,
+  useDeleteWebsite,
+  useBillingInfo,
+  useDashboardStats,
+  useChangePassword,
+  useSetup2FA,
+  useVerify2FA,
+  useReset2FA,
+  useDeletionPolicy,
+  useDeleteAccount,
+} from "@/hooks/useProfile";
+import { useToast } from "@/hooks/use-toast";
 
 const Profile = () => {
-  const [websites, setWebsites] = useState([
-    {
-      name: "Koshmart",
-      domain: "koshmart.com",
-      token: "a0c4f0ca-6381-413f-9428-1c72237316 9a",
-      timezone: "Asia/Calcutta",
-      initial: "K",
-    },
-    {
-      name: "Koshmart Dev",
-      domain: "dev.koshmart.com",
-      token: "f315c647-3170-4bac-a5ba-fca0a1df2050",
-      timezone: "Europe/London",
-      initial: "KD",
-    },
-  ]);
+  // Auth guard - redirects to login if not authenticated
+  const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
+  const { toast } = useToast();
   
+  // Data hooks
+  const { data: profile, isLoading: profileLoading } = useUserProfile();
+  const { data: websites = [], isLoading: websitesLoading } = useWebsites();
+  const { data: billingInfo, isLoading: billingLoading } = useBillingInfo();
+  const { data: dashboardStats } = useDashboardStats();
+  const { data: deletionPolicy } = useDeletionPolicy();
+  
+  // Mutation hooks
+  const updateWebsiteMutation = useUpdateWebsite();
+  const deleteWebsiteMutation = useDeleteWebsite();
+  const changePasswordMutation = useChangePassword();
+  const setup2FAMutation = useSetup2FA();
+  const verify2FAMutation = useVerify2FA();
+  const reset2FAMutation = useReset2FA();
+  const deleteAccountMutation = useDeleteAccount();
+  
+  // Edit website modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingWebsite, setEditingWebsite] = useState<number | null>(null);
+  const [editingWebsiteId, setEditingWebsiteId] = useState<string | number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", timezone: "" });
+  
+  // Delete confirmation state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletingWebsite, setDeletingWebsite] = useState<{ id: string | number; name: string } | null>(null);
   
   // Security state
   const [showOldPassword, setShowOldPassword] = useState(false);
@@ -61,38 +85,199 @@ const Profile = () => {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [showPasswordAlert, setShowPasswordAlert] = useState(true);
+  
+  // 2FA state
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [qrCode, setQrCode] = useState<string>("");
+  const [otpSecret, setOtpSecret] = useState<string>("");
+  const [show2FASetup, setShow2FASetup] = useState(false);
 
-  const handleEditClick = (index: number) => {
-    setEditingWebsite(index);
+  // Format date helper
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "–";
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).replace(',', '');
+  };
+
+  // Calculate events this month from dashboard stats
+  const eventsThisMonth = dashboardStats?.events?.last_30_days || 0;
+
+  // Handle edit website
+  const handleEditClick = (website: any) => {
+    setEditingWebsiteId(website.id);
     setEditForm({
-      name: websites[index].name,
-      timezone: websites[index].timezone,
+      name: website.website_name,
+      timezone: website.timezone,
     });
     setEditModalOpen(true);
   };
 
-  const handleSaveChanges = () => {
-    if (editingWebsite !== null) {
-      const updatedWebsites = [...websites];
-      updatedWebsites[editingWebsite] = {
-        ...updatedWebsites[editingWebsite],
-        name: editForm.name,
-        timezone: editForm.timezone,
-      };
-      setWebsites(updatedWebsites);
-    }
+  const handleSaveChanges = async () => {
+    if (editingWebsiteId === null) return;
+    
+    await updateWebsiteMutation.mutateAsync({
+      id: editingWebsiteId,
+      website_name: editForm.name,
+      timezone: editForm.timezone,
+    });
+    
     setEditModalOpen(false);
   };
 
-  const handleDeleteClick = (index: number) => {
-    const updatedWebsites = websites.filter((_, i) => i !== index);
-    setWebsites(updatedWebsites);
+  // Handle delete website
+  const handleDeleteClick = (website: any) => {
+    setDeletingWebsite({ id: website.id, name: website.website_name });
+    setDeleteModalOpen(true);
   };
 
+  const confirmDelete = async () => {
+    if (!deletingWebsite) return;
+    
+    await deleteWebsiteMutation.mutateAsync({ id: deletingWebsite.id });
+    
+    setDeleteModalOpen(false);
+    setDeletingWebsite(null);
+  };
+
+  // Handle password change
+  const handlePasswordChange = async () => {
+    // Validation
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      toast({
+        title: "Error",
+        description: "All fields are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Password complexity validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      toast({
+        title: "Error",
+        description: "Password must be 8+ chars with uppercase, lowercase, digit, and special character",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await changePasswordMutation.mutateAsync({
+      old_password: oldPassword,
+      new_password: newPassword,
+    });
+
+    // Clear fields on success
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  // Handle 2FA setup
+  const handleSetup2FA = async () => {
+    const result = await setup2FAMutation.mutateAsync();
+    setQrCode(result.qr_svg);
+    setOtpSecret(result.secret);
+    setShow2FASetup(true);
+  };
+
+  // Handle 2FA verification
+  const handleVerify2FA = async () => {
+    if (!twoFactorCode || twoFactorCode.length !== 6) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid 6-digit code",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await verify2FAMutation.mutateAsync({ code: twoFactorCode });
+    setTwoFactorCode("");
+    setShow2FASetup(false);
+  };
+
+  // Handle 2FA reset
+  const handleReset2FA = async () => {
+    if (confirm("Are you sure you want to reset 2FA? You will need to set it up again.")) {
+      await reset2FAMutation.mutateAsync();
+      setShow2FASetup(false);
+      setQrCode("");
+      setOtpSecret("");
+    }
+  };
+
+  // Handle account deactivation
+  const handleDeactivate = async () => {
+    const msg = [
+      'Deactivate your account?',
+      '• You will be signed out immediately.',
+      deletionPolicy?.deactivate_grace_days
+        ? `• You may restore your account within ${deletionPolicy.deactivate_grace_days} day(s).`
+        : '• You may restore your account later (if allowed by policy).',
+      'This will also cancel your Stripe subscription.'
+    ].join('\n');
+
+    if (confirm(msg)) {
+      await deleteAccountMutation.mutateAsync({
+        mode: 'deactivate',
+        reason: 'self-service',
+      });
+    }
+  };
+
+  // Handle account deletion
+  const handleDeleteAccount = async () => {
+    const msg = [
+      '⚠️ Permanently delete your account and all associated data?',
+      '• This action cannot be undone.',
+      '• Your Stripe subscription will be cancelled immediately.',
+      deletionPolicy?.username_cooldown_days
+        ? `• Your username will be reserved for ${deletionPolicy.username_cooldown_days} day(s) before it can be re-used.`
+        : null
+    ].filter(Boolean).join('\n');
+
+    if (confirm(msg)) {
+      await deleteAccountMutation.mutateAsync({
+        mode: 'immediate',
+        reason: 'self-service',
+      });
+    }
+  };
+
+  // Loading state
+  if (authLoading || profileLoading || websitesLoading || billingLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">Loading...</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Not authenticated - useAuthGuard will redirect
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  // Check if free forever
+  const isFreeForever = String(billingInfo?.is_free_forever) === "1" || billingInfo?.is_free_forever === true;
+  const username = profile?.username || profile?.email?.split('@')[0] || "User";
+  const initials = username.charAt(0).toUpperCase();
+
   return (
-    <AppLayout>
+    <DashboardLayout>
       <div className="flex flex-col lg:flex-row h-full">
         {/* Left sidebar - Profile card */}
         <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
@@ -101,7 +286,7 @@ const Profile = () => {
               <div className="flex flex-col items-center space-y-4">
                 <Avatar className="h-24 w-24 ring-4 ring-primary/20">
                   <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-semibold">
-                    K
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
                 <Badge className="bg-success">Active</Badge>
@@ -109,7 +294,7 @@ const Profile = () => {
                   <div className="bg-primary/10 rounded-lg p-3 inline-block mb-2">
                     <FileText className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-3xl font-bold">13,508</p>
+                  <p className="text-3xl font-bold">{eventsThisMonth.toLocaleString()}</p>
                   <p className="text-sm text-muted-foreground">Events this month</p>
                 </div>
               </div>
@@ -119,24 +304,30 @@ const Profile = () => {
                 <div className="space-y-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Username:</span>
-                    <span className="ml-2 font-medium">koshmart</span>
+                    <span className="ml-2 font-medium">{username}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Email:</span>
-                    <span className="ml-2 font-medium">we.care@koshmart.com</span>
+                    <span className="ml-2 font-medium">{profile?.email}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Plan:</span>
-                    <span className="ml-2">Free</span>
-                    <Badge className="ml-2 bg-success text-xs">Forever</Badge>
+                    {isFreeForever ? (
+                      <>
+                        <span className="ml-2">Free</span>
+                        <Badge className="ml-2 bg-success text-xs">Forever</Badge>
+                      </>
+                    ) : (
+                      <span className="ml-2">{billingInfo?.plan_name || "Free"}</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Created:</span>
-                    <span className="ml-2 font-medium">May 8 2025</span>
+                    <span className="ml-2 font-medium">{formatDate(profile?.created_at)}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Last Login:</span>
-                    <span className="ml-2 font-medium">Oct 24 2025</span>
+                    <span className="ml-2 font-medium">{formatDate(profile?.last_login_at)}</span>
                   </div>
                 </div>
               </div>
@@ -178,51 +369,54 @@ const Profile = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {websites.map((site, index) => (
-                          <tr key={index} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                    {site.initial}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="font-medium">{site.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm">{site.domain}</td>
-                            <td className="px-6 py-4">
-                              <code className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">
-                                {site.token}
-                              </code>
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge variant="secondary">{site.timezone}</Badge>
-                            </td>
-                            <td className="px-6 py-4">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40">
-                                  <DropdownMenuItem onClick={() => handleEditClick(index)} className="cursor-pointer">
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => handleDeleteClick(index)} 
-                                    className="cursor-pointer text-destructive focus:text-destructive"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
-                          </tr>
-                        ))}
+                        {websites.map((site) => {
+                          const siteInitials = (site.website_name?.match(/\b\w/g) || []).join('').substring(0, 2).toUpperCase() || 'W';
+                          return (
+                            <tr key={site.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                      {siteInitials}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium">{site.website_name}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-sm">{site.domain}</td>
+                              <td className="px-6 py-4">
+                                <code className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">
+                                  {site.tracking_token}
+                                </code>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge variant="secondary">{site.timezone}</Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-40">
+                                    <DropdownMenuItem onClick={() => handleEditClick(site)} className="cursor-pointer">
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteClick(site)} 
+                                      className="cursor-pointer text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -230,7 +424,7 @@ const Profile = () => {
               </Card>
 
               <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Showing 1 to 2 of 2 entries</span>
+                <span>Showing 1 to {websites.length} of {websites.length} entries</span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" disabled>
                     Previous
@@ -282,10 +476,20 @@ const Profile = () => {
                     Deactivating will disable your account temporarily. Deleting will permanently remove your account and all data.
                   </p>
                   <div className="flex gap-4">
-                    <Button variant="outline" className="text-warning border-warning hover:bg-warning/10">
+                    <Button 
+                      variant="outline" 
+                      className="text-warning border-warning hover:bg-warning/10"
+                      onClick={handleDeactivate}
+                      disabled={deleteAccountMutation.isPending}
+                    >
                       Deactivate my account
                     </Button>
-                    <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10">
+                    <Button 
+                      variant="outline" 
+                      className="text-destructive border-destructive hover:bg-destructive/10"
+                      onClick={handleDeleteAccount}
+                      disabled={deleteAccountMutation.isPending}
+                    >
                       Delete my account
                     </Button>
                   </div>
@@ -402,8 +606,12 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    <Button className="bg-primary hover:bg-primary/90">
-                      Change Password
+                    <Button 
+                      className="bg-primary hover:bg-primary/90"
+                      onClick={handlePasswordChange}
+                      disabled={changePasswordMutation.isPending}
+                    >
+                      {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
                     </Button>
                   </div>
                 </CardContent>
@@ -414,12 +622,23 @@ const Profile = () => {
                 <CardContent className="pt-6 space-y-6">
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-semibold">Two-factor Authentication</h2>
-                    <Badge className="bg-success text-success-foreground">Enabled</Badge>
+                    <Badge className={profile?.twofa_enabled ? "bg-success" : "bg-secondary"}>
+                      {profile?.twofa_enabled ? "Enabled" : "Disabled"}
+                    </Badge>
                   </div>
                   
                   <p className="text-muted-foreground">
                     Secure your account with an authenticator app.
                   </p>
+
+                  {show2FASetup && qrCode && (
+                    <div className="space-y-4 p-4 border rounded-lg">
+                      <div className="text-center">
+                        <div dangerouslySetInnerHTML={{ __html: qrCode }} />
+                        <p className="mt-2 text-sm">Secret: <code>{otpSecret}</code></p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-4">
                     <div className="space-y-2">
@@ -429,21 +648,39 @@ const Profile = () => {
                         type="text"
                         placeholder="123456"
                         value={twoFactorCode}
-                        onChange={(e) => setTwoFactorCode(e.target.value)}
+                        onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                         maxLength={6}
                       />
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-                        Show QR Code
-                      </Button>
-                      <Button className="bg-primary hover:bg-primary/90">
+                      {!profile?.twofa_enabled && (
+                        <Button 
+                          variant="outline" 
+                          className="border-primary text-primary hover:bg-primary/10"
+                          onClick={handleSetup2FA}
+                          disabled={setup2FAMutation.isPending}
+                        >
+                          Show QR Code
+                        </Button>
+                      )}
+                      <Button 
+                        className="bg-primary hover:bg-primary/90"
+                        onClick={handleVerify2FA}
+                        disabled={verify2FAMutation.isPending || !twoFactorCode}
+                      >
                         Verify Code
                       </Button>
-                      <Button variant="link" className="text-destructive hover:text-destructive/90 p-0">
-                        Reset 2FA
-                      </Button>
+                      {profile?.twofa_enabled && (
+                        <Button 
+                          variant="link" 
+                          className="text-destructive hover:text-destructive/90 p-0"
+                          onClick={handleReset2FA}
+                          disabled={reset2FAMutation.isPending}
+                        >
+                          Reset 2FA
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -460,30 +697,41 @@ const Profile = () => {
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
                         <span className="text-lg">Your Current Plan is</span>
-                        <Badge className="bg-success text-success-foreground text-sm px-3 py-1">
-                          Free Forever
-                        </Badge>
+                        {isFreeForever ? (
+                          <Badge className="bg-success text-success-foreground text-sm px-3 py-1">
+                            Free Forever
+                          </Badge>
+                        ) : (
+                          <span className="font-semibold">{billingInfo?.plan_name}</span>
+                        )}
                       </div>
                       
                       <div className="space-y-2">
-                        <h3 className="text-xl font-semibold">Free Forever</h3>
+                        <h3 className="text-xl font-semibold">
+                          {isFreeForever ? "Free Forever" : billingInfo?.plan_name}
+                        </h3>
                         <p className="text-muted-foreground">
-                          Enjoy unlimited events and full access — forever free.
+                          {isFreeForever 
+                            ? "Enjoy unlimited events and full access — forever free."
+                            : billingInfo?.plan_features || "Professional plan features"
+                          }
                         </p>
                       </div>
                     </div>
 
                     {/* Right side - Usage stats */}
                     <div className="space-y-4">
-                      <h3 className="text-xl font-semibold">Lifetime Events</h3>
+                      <h3 className="text-xl font-semibold">
+                        {isFreeForever ? "Lifetime Events" : "Current Period"}
+                      </h3>
                       <div className="flex items-center gap-3">
                         <Badge className="bg-[hsl(190,100%,45%)] text-white text-lg px-4 py-2 font-bold">
-                          6,710
+                          {eventsThisMonth.toLocaleString()}
                         </Badge>
-                        <span className="text-base">events used so far</span>
+                        <span className="text-base">events used {isFreeForever ? "so far" : "this period"}</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        since May 8, 2025 (6 months 7 days)
+                        since {formatDate(profile?.created_at)}
                       </p>
                     </div>
                   </div>
@@ -548,13 +796,50 @@ const Profile = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
-              Save changes
+            <Button 
+              onClick={handleSaveChanges} 
+              className="bg-primary hover:bg-primary/90"
+              disabled={updateWebsiteMutation.isPending}
+            >
+              {updateWebsiteMutation.isPending ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <p>
+              Are you sure you want to delete <strong>{deletingWebsite?.name}</strong>?
+              <br />
+              This will also permanently delete all associated visitor data.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteWebsiteMutation.isPending}
+            >
+              {deleteWebsiteMutation.isPending ? "Deleting..." : "Yes, Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
   );
 };
 
