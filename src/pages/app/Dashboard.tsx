@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
-import { useDashboardData } from "@/hooks/useDashboardData";
+import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
 import { useLiveVisitorsWS } from "@/hooks/useLiveVisitorsWS";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
@@ -24,7 +24,7 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 
 import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { secureFetch } from "@/lib/auth";
+import { getWSTicket } from "@/services/dashboardService";
 
 type Website = { id: number; website_name: string; domain: string };
 
@@ -37,8 +37,26 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  const [websites, setWebsites] = useState<Website[]>([]);
-  const [sitesLoading, setSitesLoading] = useState<boolean>(true);
+  // Websites via service-layer hook
+  const { data: websitesRaw = [], isLoading: sitesLoading } = useTrackingWebsites();
+  const websites: Website[] = (websitesRaw || []).map((p: any) => ({
+    id: Number(p.id),
+    website_name: String(p.website_name || p.name || `Site ${p.id}`),
+    domain: String(p.domain || ""),
+  }));
+
+  // Keep a tiny local cache + auto-select first site if none chosen
+  useEffect(() => {
+    if (websites.length) {
+      try {
+        localStorage.setItem("mv.sites", JSON.stringify(websites));
+      } catch {}
+    }
+    if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
+      setSiteId(websites[0].id);
+      localStorage.setItem("current_website_id", String(websites[0].id));
+    }
+  }, [websites, siteId]);
 
   const { data, isLoading, refetch } = useDashboardData({ siteId: siteId ?? undefined, range });
   const qc = useQueryClient();
@@ -52,63 +70,8 @@ export default function Dashboard() {
         qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...payload }));
       }
     },
-    getTicket: async (sid) => {
-      const res = await secureFetch("https://api.modovisa.com/api/ws-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site_id: sid }),
-      });
-      if (!res.ok) throw new Error("ticket");
-      const j = await res.json();
-      return j.ticket as string;
-    },
+    getTicket: async (sid) => getWSTicket(sid),
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setSitesLoading(true);
-        const res = await secureFetch("https://api.modovisa.com/api/tracking-websites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (!res.ok) throw new Error("tracking-websites failed");
-        const j = await res.json();
-        const arr: Website[] = (j?.projects || []).map((p: any) => ({
-          id: Number(p.id),
-          website_name: String(p.website_name || p.name || `Site ${p.id}`),
-          domain: String(p.domain || ""),
-        }));
-
-        if (cancelled) return;
-
-        setWebsites(arr);
-        localStorage.setItem("mv.sites", JSON.stringify(arr));
-
-        if ((siteId == null || Number.isNaN(siteId)) && arr[0]) {
-          setSiteId(arr[0].id);
-          localStorage.setItem("current_website_id", String(arr[0].id));
-        }
-      } catch (err) {
-        console.error("❌ /api/tracking-websites", err);
-        try {
-          const cached = JSON.parse(localStorage.getItem("mv.sites") || "[]") as Website[];
-          setWebsites(cached);
-          if ((siteId == null || Number.isNaN(siteId)) && cached[0]) {
-            setSiteId(cached[0].id);
-            localStorage.setItem("current_website_id", String(cached[0].id));
-          }
-        } catch {}
-      } finally {
-        if (!cancelled) setSitesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
@@ -283,7 +246,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Charts Row 3 (now with translucent fill like Bootstrap) */}
+        {/* Charts Row 3 (translucent fills) */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <PerformanceLine
             title="Impressions"
