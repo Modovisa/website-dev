@@ -242,7 +242,7 @@ export default function Dashboard() {
         {/* Geographic Insights */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Card>
+            <Card className="h-[600px]">
               <CardHeader>
                 <CardTitle>World Visitors</CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -253,20 +253,14 @@ export default function Dashboard() {
                   range === "12mo"? "Past 12 months": ""}
                 </p>
               </CardHeader>
-              <CardContent className="pt-2">
+              <CardContent className="pt-2 h-[540px]"> {/* map area height */}
                 {isLoading ? (
-                  <Skeleton className="h-[540px] w-full" />
+                  <Skeleton className="h-full w-full" />
                 ) : (
                   <WorldMap
                     countries={data?.countries ?? []}
                     cities={geoCities}
-                    rangeLabel={
-                      range === "24h" ? "Past 24 hours" :
-                      range === "7d"  ? "Past 7 days"   :
-                      range === "30d" ? "Past 30 days"  :
-                      range === "90d" ? "Past 90 days"  :
-                      range === "12mo"? "Past 12 months": undefined
-                    }
+                    rangeLabel={undefined}
                     height={540}
                   />
                 )}
@@ -275,14 +269,14 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <Card>
+            <Card className="h-[600px]">
               <CardHeader>
                 <CardTitle>Visits by Country</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="h-[540px] overflow-auto"> {/* scroll inside */}
                 {isLoading ? (
                   <div className="space-y-2">
-                    {Array.from({ length: 8 }).map((_, i) => (
+                    {Array.from({ length: 10 }).map((_, i) => (
                       <Skeleton key={i} className="h-8 w-full" />
                     ))}
                   </div>
@@ -293,6 +287,7 @@ export default function Dashboard() {
             </Card>
           </div>
         </div>
+
 
         {/* Visitor Density Calendar */}
         <Card>
