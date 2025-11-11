@@ -80,7 +80,7 @@ export const AppSidebar = () => {
               key={item.name}
               to={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-3 rounded-lg transition-all min-h-[44px]",
+                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all min-h-[44px]",
                 isActive
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
