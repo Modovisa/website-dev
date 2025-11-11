@@ -6,9 +6,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Info, Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
+import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useLiveVisitorsWS } from "@/hooks/useLiveVisitorsWS";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
@@ -27,78 +26,21 @@ import { secureFetch } from "@/lib/auth";
 
 type Website = { id: number; website_name: string; domain: string };
 
-/* -------------------------------- Helpers -------------------------------- */
-
-function InfoTip({ text }: { text: string }) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button className="text-muted-foreground hover:text-foreground" aria-label="Info">
-            <Info className="h-4 w-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[280px] text-xs leading-5">
-          {text}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-function ChartCard({
-  title,
-  info,
-  loading,
-  height = 300,
-  children,
-}: {
-  title: string;
-  info?: string;
-  loading?: boolean;
-  height?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
-        {info ? <InfoTip text={info} /> : null}
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className="w-full rounded-md" style={{ height }} />
-        ) : (
-          <div style={{ height }}>
-            {children}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/* --------------------------------- Page ---------------------------------- */
-
 export default function Dashboard() {
   const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
 
-  // Controls
   const [siteId, setSiteId] = useState<number | null>(() => {
     const saved = localStorage.getItem("current_website_id");
     return saved ? Number(saved) : null;
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Websites (authoritative source = secureFetch)
   const [websites, setWebsites] = useState<Website[]>([]);
   const [sitesLoading, setSitesLoading] = useState<boolean>(true);
 
-  // Data
   const { data, isLoading, refetch } = useDashboardData({ siteId: siteId ?? undefined, range });
   const qc = useQueryClient();
 
-  // Live WS
   const [liveCount, setLiveCount] = useState<number | null>(null);
   useLiveVisitorsWS({
     siteId: siteId ?? undefined,
@@ -120,7 +62,6 @@ export default function Dashboard() {
     },
   });
 
-  // Load websites once
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -161,50 +102,22 @@ export default function Dashboard() {
         if (!cancelled) setSitesLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // once on mount
+  }, []);
 
-  // Derived site options
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
     [websites]
   );
 
   const topCards = [
-    {
-      key: "live",
-      name: "Live Visitors",
-      value: liveCount ?? data?.live_visitors ?? 0,
-      icon: Users,
-      change: null,
-    },
-    {
-      key: "unique",
-      name: "Total Visitors",
-      value: data?.unique_visitors?.total ?? 0,
-      icon: Eye,
-      change: data?.unique_visitors?.delta ?? null,
-    },
-    {
-      key: "avg",
-      name: "Avg. Session",
-      value: data?.avg_duration ?? "--",
-      icon: MousePointerClick,
-      change: data?.avg_duration_delta ?? null,
-    },
-    {
-      key: "bounce",
-      name: "Bounce Rate",
-      value: `${data?.bounce_rate ?? 0}%`,
-      icon: TrendingUp,
-      change: data?.bounce_rate_delta ?? null,
-    },
+    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
+    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
+    { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
+    { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null },
   ];
 
-  // Auth gate
   if (authLoading) {
     return (
       <DashboardLayout>
@@ -228,9 +141,7 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground mt-1">Your traffic at a glance.</p>
           </div>
-
           <div className="flex gap-3 items-center">
-            {/* Site Selector */}
             <Select
               value={siteId != null ? String(siteId) : undefined}
               onValueChange={(v) => {
@@ -249,19 +160,14 @@ export default function Dashboard() {
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
                 ) : (
                   siteOptions.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
 
-            {/* Range */}
             <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="24h">Today</SelectItem>
                 <SelectItem value="7d">Last 7 Days</SelectItem>
@@ -271,9 +177,7 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
-              Refresh
-            </Button>
+            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>Refresh</Button>
           </div>
         </div>
 
@@ -287,10 +191,13 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <>
-                    <Skeleton className="h-8 w-24 mb-2" />
-                    <Skeleton className="h-3 w-20" />
-                  </>
+                  <div className="space-y-2">
+                    <Skeleton className="h-8 w-24" />
+                    <div className="flex gap-2 justify-start">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3 w-10" />
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <div className="text-3xl font-bold">
@@ -311,33 +218,19 @@ export default function Dashboard() {
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2">
-            <ChartCard
-              title={`Visits — ${range === "24h" ? "Today" : range === "7d" ? "Last 7 Days" : range === "30d" ? "Last 30 Days" : range === "90d" ? "Last 90 Days" : "Last 12 Months"}`}
-              info="Shows the number of visitors and page views over time based on the selected range. Helps spot engagement trends."
-              loading={isLoading}
-              height={360}
-            >
-              <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={false} />
-            </ChartCard>
+            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={isLoading} />
           </div>
-
-          <ChartCard title="Event Volume" loading={isLoading} height={300}>
-            <EventVolume data={data?.events_timeline ?? []} loading={false} />
-          </ChartCard>
+          <EventVolume data={data?.events_timeline ?? []} loading={isLoading} />
         </div>
 
         {/* Tables Row */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Top Pages</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -345,10 +238,7 @@ export default function Dashboard() {
                     const rel = p.url.replace(/^https?:\/\/[^/]+/, "") || "/";
                     const views = nf(p.views);
                     return (
-                      <div
-                        key={p.url}
-                        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50"
-                      >
+                      <div key={p.url} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
                         <span className="text-sm font-medium truncate max-w-[70%]" title={p.url}>
                           {truncateMiddle(rel, 64)}
                         </span>
@@ -365,23 +255,16 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Referrers</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
                 <div className="space-y-3">
                   {(data?.referrers ?? []).map((r) => (
-                    <div
-                      key={r.domain}
-                      className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50"
-                    >
+                    <div key={r.domain} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
                       <span className="text-sm font-medium">{r.domain}</span>
                       <span className="text-sm text-muted-foreground">{nf(r.visitors)} visitors</span>
                     </div>
@@ -397,103 +280,49 @@ export default function Dashboard() {
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
-          <ChartCard title="Unique vs Returning" loading={isLoading} height={300}>
-            <UniqueReturning data={data?.unique_vs_returning ?? []} loading={false} />
-          </ChartCard>
-
-          <ChartCard title="Conversions" loading={isLoading} height={300}>
-            <PerformanceLine
-              title="Conversions"
-              current={data?.conversions_timeline ?? []}
-              previous={data?.conversions_previous_timeline ?? []}
-              color="#8b5cf6"
-              loading={false}
-            />
-          </ChartCard>
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading} />
+          <PerformanceLine
+            title="Conversions"
+            current={data?.conversions_timeline ?? []}
+            previous={data?.conversions_previous_timeline ?? []}
+            color="#8b5cf6"
+            filled
+            loading={isLoading}
+          />
         </div>
 
-        {/* Charts Row 3 - Performance quartet */}
+        {/* Charts Row 3 */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <ChartCard title="Impressions" loading={isLoading} height={260}>
-            <PerformanceLine
-              title="Impressions"
-              current={data?.impressions_timeline ?? []}
-              previous={data?.impressions_previous_timeline ?? []}
-              color="#22c55e"
-              loading={false}
-            />
-          </ChartCard>
-          <ChartCard title="Clicks" loading={isLoading} height={260}>
-            <PerformanceLine
-              title="Clicks"
-              current={data?.clicks_timeline ?? []}
-              previous={data?.clicks_previous_timeline ?? []}
-              color="#3b82f6"
-              loading={false}
-            />
-          </ChartCard>
-          <ChartCard title="Visitors from Search" loading={isLoading} height={260}>
-            <PerformanceLine
-              title="Visitors from Search"
-              current={data?.search_visitors_timeline ?? []}
-              previous={data?.search_visitors_previous_timeline ?? []}
-              color="#f97316"
-              loading={false}
-            />
-          </ChartCard>
-          <ChartCard title="All Visitors" loading={isLoading} height={260}>
-            <PerformanceLine
-              title="All Visitors"
-              current={(data as any)?.unique_visitors_timeline ?? []}
-              previous={(data as any)?.previous_unique_visitors_timeline ?? []}
-              color="#0ea5e9"
-              loading={false}
-            />
-          </ChartCard>
+          <PerformanceLine title="Impressions" current={data?.impressions_timeline ?? []} previous={data?.impressions_previous_timeline ?? []} color="#22c55e" loading={isLoading} />
+          <PerformanceLine title="Clicks" current={data?.clicks_timeline ?? []} previous={data?.clicks_previous_timeline ?? []} color="#3b82f6" loading={isLoading} />
+          <PerformanceLine title="Visitors from Search" current={data?.search_visitors_timeline ?? []} previous={data?.search_visitors_previous_timeline ?? []} color="#f97316" loading={isLoading} />
+          <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" loading={isLoading} />
         </div>
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <ChartCard title="Browsers" loading={isLoading} height={260}>
-            <Donut data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={false} />
-          </ChartCard>
-          <ChartCard title="Devices" loading={isLoading} height={260}>
-            <Donut data={data?.devices ?? []} nameKey="type" valueKey="count" loading={false} />
-          </ChartCard>
-          <ChartCard title="OS" loading={isLoading} height={260}>
-            <Donut data={data?.os ?? []} nameKey="name" valueKey="count" loading={false} />
-          </ChartCard>
+          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading} />
+          <Donut title="Devices" data={data?.devices ?? []} nameKey="type" valueKey="count" loading={isLoading} />
+          <Donut title="OS" data={data?.os ?? []} nameKey="name" valueKey="count" loading={isLoading} />
         </div>
 
         {/* UTM tables */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>UTM Campaign URLs</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
-                </div>
+                <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
               ) : (
                 <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
               )}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader>
-              <CardTitle>UTM Sources</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
-                </div>
+                <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
               ) : (
                 <UTMSourcesTable rows={data?.utm_sources ?? []} />
               )}

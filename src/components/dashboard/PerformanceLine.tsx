@@ -9,12 +9,14 @@ export default function PerformanceLine({
   current,
   previous,
   color = chartTheme.info,
+  filled = false,
   loading,
 }: {
   title: string;
   current: Row[];
   previous?: Row[];
   color?: string;
+  filled?: boolean;
   loading?: boolean;
 }) {
   const labels = (current || previous || []).map((d) => d.label);
@@ -29,29 +31,45 @@ export default function PerformanceLine({
         label: title,
         data: dsCurrent,
         borderColor: color,
-        backgroundColor: "transparent",
-        fill: false,
-        tension: 0.35,
+        backgroundColor: filled ? `${color}20` : "transparent",
+        fill: filled,
+        tension: 0.4,
         pointRadius: 0,
         borderWidth: 2,
+        spanGaps: true,
       },
       {
-        label: "Previous",
+        label: "Previous Period",
         data: dsPrev,
         borderColor: chartTheme.gray,
         borderDash: [5, 5],
         backgroundColor: "transparent",
         fill: false,
-        tension: 0.35,
+        tension: 0.4,
         pointRadius: 0,
         borderWidth: 2,
+        spanGaps: true,
       },
     ],
   };
-  const options = useBaseOptions({ yBeginAtZero: true, showLegend: true });
+
+  const options = {
+    ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
+    scales: {
+      x: { grid: { display: false } },
+      y: { beginAtZero: true, grid: { color: chartTheme.grid } },
+    },
+    plugins: {
+      legend: { position: "bottom" as const, labels: { usePointStyle: true } },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+      },
+    },
+  } as const;
 
   return (
-    <ChartCard title={title} loading={loading}>
+    <ChartCard title={title} loading={loading} height={260}>
       <Line data={ds} options={options} />
     </ChartCard>
   );

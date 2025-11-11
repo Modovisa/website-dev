@@ -2,28 +2,46 @@
 
 import { Line } from "react-chartjs-2";
 import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
-import type { LabelCount } from "@/types/dashboard";
 
-export default function EventVolume({ data, loading }: { data: LabelCount[]; loading?: boolean }) {
+type Row = { label: string; count: number };
+
+export default function EventVolume({
+  data,
+  loading,
+}: {
+  data: Row[];
+  loading?: boolean;
+}) {
   const labels = (data || []).map((d) => d.label);
+  const values = (data || []).map((d) => d.count || 0);
+
   const ds = {
     labels,
     datasets: [
       {
         label: "Events",
-        data: data.map((d) => d.count),
-        borderColor: chartTheme.info,
-        backgroundColor: "rgba(59,130,246,0.18)",
+        data: values,
+        borderColor: "rgba(54,162,235,1)",
+        backgroundColor: "rgba(54,162,235,0.20)",
         fill: true,
-        tension: 0.35,
+        tension: 0.4,
         pointRadius: 0,
         borderWidth: 2,
+        spanGaps: true,
       },
     ],
   };
-  const options = useBaseOptions({ yBeginAtZero: true, showLegend: true });
+
+  const options = {
+    ...useBaseOptions({ yBeginAtZero: true, showLegend: false }),
+    scales: {
+      x: { grid: { display: true, color: "rgba(0,0,0,0.03)" } },
+      y: { beginAtZero: true, grid: { color: chartTheme.grid } },
+    },
+  } as const;
+
   return (
-    <ChartCard title="Event Volume" info="Total tracked events per time bucket." loading={loading}>
+    <ChartCard title="Event Volume" loading={loading} height={300}>
       <Line data={ds} options={options} />
     </ChartCard>
   );
