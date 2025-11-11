@@ -19,6 +19,8 @@ import PerformanceLine from "@/components/dashboard/PerformanceLine";
 import Donut from "@/components/dashboard/Donut";
 import UTMCampaignsTable from "@/components/dashboard/UTMCampaignsTable";
 import UTMSourcesTable from "@/components/dashboard/UTMSourcesTable";
+import TopPagesTable from "@/components/dashboard/TopPagesTable";
+import ReferrersTable from "@/components/dashboard/ReferrersTable";
 
 import { nf, pct, truncateMiddle } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -226,57 +228,40 @@ export default function Dashboard() {
         {/* Tables Row */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Top Pages</CardTitle>
+            </CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {(data?.top_pages ?? []).map((p) => {
-                    const rel = p.url.replace(/^https?:\/\/[^/]+/, "") || "/";
-                    const views = nf(p.views);
-                    return (
-                      <div key={p.url} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
-                        <span className="text-sm font-medium truncate max-w-[70%]" title={p.url}>
-                          {truncateMiddle(rel, 64)}
-                        </span>
-                        <span className="text-sm text-muted-foreground">{views} views</span>
-                      </div>
-                    );
-                  })}
-                  {!data?.top_pages?.length && (
-                    <div className="text-sm text-muted-foreground py-8 text-center">No page data</div>
-                  )}
-                </div>
+                <TopPagesTable rows={(data?.top_pages ?? []).map((p) => ({ url: p.url, views: p.views }))} />
               )}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Referrers</CardTitle>
+            </CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {(data?.referrers ?? []).map((r) => (
-                    <div key={r.domain} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
-                      <span className="text-sm font-medium">{r.domain}</span>
-                      <span className="text-sm text-muted-foreground">{nf(r.visitors)} visitors</span>
-                    </div>
-                  ))}
-                  {!data?.referrers?.length && (
-                    <div className="text-sm text-muted-foreground py-8 text-center">No referrer data</div>
-                  )}
-                </div>
+                <ReferrersTable rows={(data?.referrers ?? []).map((r) => ({ domain: r.domain, visitors: r.visitors }))} />
               )}
             </CardContent>
           </Card>
         </div>
+
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">

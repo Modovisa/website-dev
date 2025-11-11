@@ -22,30 +22,32 @@ export default function UniqueReturning({
       {
         label: "Unique",
         data: uniques,
-        borderColor: "#3b82f6",
-        backgroundColor: "rgba(59,130,246,0.20)",
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
+        borderColor: "#3b82f6",      // solid blue
+        backgroundColor: "transparent",
+        fill: false,                  // no area fill
+        tension: 0.35,
+        pointRadius: 2,               // show points
+        pointHoverRadius: 3,
         borderWidth: 2,
-        stack: "uvr",
+        spanGaps: true,
       },
       {
         label: "Returning",
         data: returning,
-        borderColor: "#22c55e",
-        backgroundColor: "rgba(34,197,94,0.20)",
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
+        borderColor: "#22c55e",      // solid green
+        backgroundColor: "transparent",
+        fill: false,                  // no area fill
+        tension: 0.35,
+        pointRadius: 2,               // show points
+        pointHoverRadius: 3,
         borderWidth: 2,
-        stack: "uvr",
+        spanGaps: true,
       },
     ],
   };
 
   const options = {
-    ...useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true }),
+    ...useBaseOptions({ stacked: false, yBeginAtZero: true, showLegend: true }),
     plugins: {
       legend: { position: "bottom" as const, labels: { usePointStyle: true } },
       tooltip: {
@@ -65,15 +67,15 @@ export default function UniqueReturning({
       },
     },
     scales: {
-      x: { stacked: true, grid: { display: true, color: "rgba(0,0,0,0.03)" } },
-      y: { stacked: true, beginAtZero: true, grid: { color: chartTheme.grid } },
+      x: { grid: { display: true, color: "rgba(0,0,0,0.03)" } },
+      y: { beginAtZero: true, grid: { color: chartTheme.grid } },
     },
   } as const;
 
   return (
     <ChartCard
       title="Unique vs Returning"
-      info="Stacked unique vs returning visitors over time. Tooltip shows totals and share."
+      info="Unique and returning visitors over time."
       loading={loading}
       height={300}
     >
