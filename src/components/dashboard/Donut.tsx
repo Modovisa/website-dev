@@ -13,7 +13,7 @@ ChartJS.register(ArcElement);
 
 // Subtle, Bootstrap-like palette (stable order)
 const PALETTE = [
-  "hsl(var(--primary) / 0.28)",            // violet (brand)
+  "hsl(250 95% 63%; / 0.28)",              // violet (brand)
   "hsl(217.2 91.2% 59.8% / 0.28)",         // sidebar-ring blue (brand-ish)
   "hsl(110 61% 64% / 0.32)",               // success green (lighter)
   "hsl(42 100% 65% / 0.32)",               // warning amber (lighter)
