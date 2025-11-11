@@ -23,7 +23,7 @@ export default function UniqueReturning({
         label: "Unique",
         data: uniques,
         borderColor: "#3b82f6",
-        backgroundColor: "rgba(59,130,246,0.80)",
+        backgroundColor: "rgba(59,130,246,0.60)",
         fill: true,
         tension: 0.4,
         pointRadius: 2,               // show points
