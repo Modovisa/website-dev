@@ -2,6 +2,26 @@
 
 import { Doughnut } from "react-chartjs-2";
 import { ChartCard } from "./ChartKit";
+import {
+  Chart as ChartJS,
+  TooltipItem,
+  Plugin,
+  ArcElement,
+} from "chart.js";
+
+ChartJS.register(ArcElement);
+
+// Subtle, Bootstrap-like palette (stable order)
+const PALETTE = [
+  "#635bff", // primary
+  "#3b82f6", // info
+  "#22c55e", // success
+  "#f59e0b", // warning
+  "#ef4444", // red
+  "#a855f7", // violet
+  "#06b6d4", // cyan
+  "#84cc16", // lime
+];
 
 export default function Donut({
   data,
@@ -18,24 +38,69 @@ export default function Donut({
   info?: string;
   loading?: boolean;
 }) {
-  const labels = (data || []).map((d) => d[nameKey]);
-  const values = (data || []).map((d) => d[valueKey]);
-  const colors = labels.map((_, i) => `hsl(${(i * 57) % 360},70%,65%)`);
+  const rows = (data || []).slice().sort((a, b) => (b[valueKey] ?? 0) - (a[valueKey] ?? 0));
+  const labels = rows.map((d) => String(d[nameKey] ?? "—"));
+  const values = rows.map((d) => Number(d[valueKey] ?? 0));
+  const total = values.reduce((a, v) => a + v, 0);
+
   const ds = {
     labels,
     datasets: [
       {
         data: values,
-        backgroundColor: colors,
-        borderWidth: 1,
+        backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
       },
     ],
   };
-  const options = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" as const } } };
+
+  const centerText: Plugin<"doughnut"> = {
+    id: "centerText",
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart;
+      if (!ctx || !chartArea) return;
+      const txt = total ? String(total) : "0";
+      ctx.save();
+      ctx.font = "600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillStyle = "#111827";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const { left, right, top, bottom } = chartArea;
+      ctx.fillText(txt, (left + right) / 2, (top + bottom) / 2);
+      ctx.restore();
+    },
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: "68%",
+    plugins: {
+      legend: {
+        display: true,
+        position: "bottom" as const,
+        labels: { usePointStyle: true },
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx: TooltipItem<"doughnut">) => {
+            const v = Number(ctx.parsed) || 0;
+            const pct = total ? Math.round((v / total) * 100) : 0;
+            return `${ctx.label}: ${v} (${pct}%)`;
+          },
+        },
+      },
+    },
+  } as const;
 
   return (
-    <ChartCard title={title || "Donut"} info={info} loading={loading}>
-      {labels.length ? <Doughnut data={ds} options={options} /> : <div className="text-muted-foreground">No data</div>}
+    <ChartCard title={title || "Donut"} info={info} loading={loading} height={280}>
+      {labels.length ? (
+        <Doughnut data={ds} options={options} plugins={[centerText]} />
+      ) : (
+        <div className="text-muted-foreground text-sm">No data</div>
+      )}
     </ChartCard>
   );
 }

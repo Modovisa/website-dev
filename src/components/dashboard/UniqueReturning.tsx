@@ -5,38 +5,78 @@ import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 
 type Row = { label: string; unique: number; returning: number };
 
-export default function UniqueReturning({ data, loading }: { data: Row[]; loading?: boolean }) {
+export default function UniqueReturning({
+  data,
+  loading,
+}: {
+  data: Row[];
+  loading?: boolean;
+}) {
   const labels = (data || []).map((d) => d.label);
+  const uniques = (data || []).map((d) => d.unique || 0);
+  const returning = (data || []).map((d) => d.returning || 0);
+
   const ds = {
     labels,
     datasets: [
       {
         label: "Unique",
-        data: data.map((d) => d.unique),
-        borderColor: chartTheme.info,
+        data: uniques,
+        borderColor: "#3b82f6",
         backgroundColor: "rgba(59,130,246,0.20)",
         fill: true,
-        tension: 0.35,
+        tension: 0.4,
         pointRadius: 0,
         borderWidth: 2,
-        stack: "s",
+        stack: "uvr",
       },
       {
         label: "Returning",
-        data: data.map((d) => d.returning),
-        borderColor: chartTheme.success,
+        data: returning,
+        borderColor: "#22c55e",
         backgroundColor: "rgba(34,197,94,0.20)",
         fill: true,
-        tension: 0.35,
+        tension: 0.4,
         pointRadius: 0,
         borderWidth: 2,
-        stack: "s",
+        stack: "uvr",
       },
     ],
   };
-  const options = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
+
+  const options = {
+    ...useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true }),
+    plugins: {
+      legend: { position: "bottom" as const, labels: { usePointStyle: true } },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+        callbacks: {
+          footer: (items: any[]) => {
+            const sum = items.reduce((a, i) => a + (Number(i.raw) || 0), 0);
+            if (!sum) return "";
+            const u = Number(items.find((i) => i.dataset.label === "Unique")?.raw || 0);
+            const r = Number(items.find((i) => i.dataset.label === "Returning")?.raw || 0);
+            const up = ((u / sum) * 100).toFixed(0);
+            const rp = ((r / sum) * 100).toFixed(0);
+            return `Total: ${sum}  •  U ${up}%  •  R ${rp}%`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: { stacked: true, grid: { display: true, color: "rgba(0,0,0,0.03)" } },
+      y: { stacked: true, beginAtZero: true, grid: { color: chartTheme.grid } },
+    },
+  } as const;
+
   return (
-    <ChartCard title="Unique vs Returning" info="First-time vs repeat visitors." loading={loading}>
+    <ChartCard
+      title="Unique vs Returning"
+      info="Stacked unique vs returning visitors over time. Tooltip shows totals and share."
+      loading={loading}
+      height={300}
+    >
       <Line data={ds} options={options} />
     </ChartCard>
   );
