@@ -1,7 +1,7 @@
 // src/pages/app/Profile.tsx
 
 import { useState } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
+import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -92,7 +92,7 @@ const Profile = () => {
   };
 
   return (
-    <DashboardLayout>
+    <AppLayout>
       <div className="flex flex-col lg:flex-row h-full">
         {/* Left sidebar - Profile card */}
         <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
@@ -554,7 +554,7 @@ const Profile = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </AppLayout>
   );
 };
 

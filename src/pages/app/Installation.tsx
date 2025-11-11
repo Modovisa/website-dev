@@ -1,6 +1,6 @@
 // src/pages/app/Installation.tsx
 
-import { DashboardLayout } from "@/components/DashboardLayout";
+import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
@@ -30,7 +30,7 @@ const Installation = () => {
   };
 
   return (
-    <DashboardLayout>
+    <AppLayout>
       <div className="p-4 md:p-8 space-y-8 max-w-4xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Installation</h1>
@@ -120,7 +120,7 @@ const Installation = () => {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </AppLayout>
   );
 };
 

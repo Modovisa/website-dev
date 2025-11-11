@@ -1,6 +1,6 @@
 // src/pages/app/LiveTracking.tsx
 
-import { DashboardLayout } from "@/components/DashboardLayout";
+import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -476,14 +476,14 @@ const LiveTracking = () => {
   /* ------------------------- auth loading gate ------------------------ */
   if (authLoading) {
     return (
-      <DashboardLayout>
+      <AppLayout>
         <div className="flex items-center justify-center h-screen">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
             <p className="text-lg text-muted-foreground">Verifying authentication...</p>
           </div>
         </div>
-      </DashboardLayout>
+      </AppLayout>
     );
   }
 
@@ -784,7 +784,7 @@ const LiveTracking = () => {
 
   /* ------------------------------ content ----------------------------- */
   return (
-    <DashboardLayout>
+    <AppLayout>
       <div className="flex h-full overflow-hidden gap-6 pl-12">
         <div className="hidden lg:block w-96 mt-8">
           <VisitorSidebar />
@@ -927,7 +927,7 @@ const LiveTracking = () => {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AppLayout>
     
   );
 };
