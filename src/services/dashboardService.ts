@@ -40,3 +40,20 @@ export async function getWSTicket(siteId: number): Promise<string> {
   });
   return j.ticket;
 }
+
+export type GeoCityPoint = {
+  city: string;
+  country: string;
+  lat: number;
+  lng: number;
+  count: number;
+  debug_ids?: string[];
+};
+
+export async function getGeoEvents(siteId: number): Promise<GeoCityPoint[]> {
+  // returns [{ city, country, lat, lng, count, debug_ids? }, ...]
+  return http<GeoCityPoint[]>(`/api/geo-events?site_id=${siteId}`, {
+    method: "GET",
+    timeoutMs: 20_000,
+  });
+}

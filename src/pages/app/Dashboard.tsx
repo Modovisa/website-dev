@@ -21,6 +21,10 @@ import UTMCampaignsTable from "@/components/dashboard/UTMCampaignsTable";
 import UTMSourcesTable from "@/components/dashboard/UTMSourcesTable";
 import TopPagesTable from "@/components/dashboard/TopPagesTable";
 import ReferrersTable from "@/components/dashboard/ReferrersTable";
+import WorldMap from "@/components/dashboard/WorldMap";
+import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
+import CountryVisits from "@/components/dashboard/CountryVisits";
+import { useGeoEvents } from "@/hooks/useGeoEvents";
 
 import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -72,6 +76,8 @@ export default function Dashboard() {
     },
     getTicket: async (sid) => getWSTicket(sid),
   });
+
+  const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
@@ -232,6 +238,76 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Geographic Insights */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>World Visitors</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {range === "24h" ? "Past 24 hours" :
+                  range === "7d"  ? "Past 7 days"   :
+                  range === "30d" ? "Past 30 days"  :
+                  range === "90d" ? "Past 90 days"  :
+                  range === "12mo"? "Past 12 months": ""}
+                </p>
+              </CardHeader>
+              <CardContent className="pt-2">
+                {isLoading ? (
+                  <Skeleton className="h-[540px] w-full" />
+                ) : (
+                  <WorldMap
+                    countries={data?.countries ?? []}
+                    cities={geoCities}
+                    rangeLabel={
+                      range === "24h" ? "Past 24 hours" :
+                      range === "7d"  ? "Past 7 days"   :
+                      range === "30d" ? "Past 30 days"  :
+                      range === "90d" ? "Past 90 days"  :
+                      range === "12mo"? "Past 12 months": undefined
+                    }
+                    height={540}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Visits by Country</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <CountryVisits countries={data?.countries ?? []} />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Visitor Density Calendar */}
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Visitor Density Calendar</CardTitle>
+            {/* If you want a year picker later, lift state to Dashboard and pass as prop */}
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[220px] w-full" />
+            ) : (
+              <VisitorsHeatmap data={data?.calendar_density ?? []} height={220} />
+            )}
+          </CardContent>
+        </Card>
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
