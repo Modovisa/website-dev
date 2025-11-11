@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { FileText, MoreVertical, Pencil, Trash2, X } from "lucide-react";
+import { FileText, MoreVertical, Pencil, Trash2, X, Eye, EyeOff } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +53,16 @@ const Profile = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingWebsite, setEditingWebsite] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", timezone: "" });
+  
+  // Security state
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [showPasswordAlert, setShowPasswordAlert] = useState(true);
 
   const handleEditClick = (index: number) => {
     setEditingWebsite(index);
@@ -282,24 +293,200 @@ const Profile = () => {
               </Card>
             </TabsContent>
 
-            <TabsContent value="security">
+            <TabsContent value="security" className="space-y-6">
+              {/* Change Password Section */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Security Settings</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">Security settings coming soon...</p>
+                <CardContent className="pt-6 space-y-6">
+                  <h2 className="text-2xl font-semibold">Change Password</h2>
+                  
+                  {showPasswordAlert && (
+                    <Alert className="bg-warning/10 border-warning/20">
+                      <AlertDescription className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-warning mb-1">Ensure that these requirements are met</p>
+                          <p className="text-sm text-warning/90">Minimum 8 characters long, uppercase & symbol</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-0 hover:bg-transparent"
+                          onClick={() => setShowPasswordAlert(false)}
+                        >
+                          <X className="h-4 w-4 text-warning" />
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="old-password">Old Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="old-password"
+                          type={showOldPassword ? "text" : "password"}
+                          placeholder="Old Password"
+                          value={oldPassword}
+                          onChange={(e) => setOldPassword(e.target.value)}
+                          className="pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowOldPassword(!showOldPassword)}
+                        >
+                          {showOldPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="new-password"
+                            type={showNewPassword ? "text" : "password"}
+                            placeholder="New Password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm-password">Confirm New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="confirm-password"
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="Confirm Password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button className="bg-primary hover:bg-primary/90">
+                      Change Password
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Two-factor Authentication Section */}
+              <Card>
+                <CardContent className="pt-6 space-y-6">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-semibold">Two-factor Authentication</h2>
+                    <Badge className="bg-success text-success-foreground">Enabled</Badge>
+                  </div>
+                  
+                  <p className="text-muted-foreground">
+                    Secure your account with an authenticator app.
+                  </p>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="2fa-code">Enter code from authenticator app</Label>
+                      <Input
+                        id="2fa-code"
+                        type="text"
+                        placeholder="123456"
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value)}
+                        maxLength={6}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
+                        Show QR Code
+                      </Button>
+                      <Button className="bg-primary hover:bg-primary/90">
+                        Verify Code
+                      </Button>
+                      <Button variant="link" className="text-destructive hover:text-destructive/90 p-0">
+                        Reset 2FA
+                      </Button>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="billing">
+            <TabsContent value="billing" className="space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Billing & Plans</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">Billing information coming soon...</p>
+                <CardContent className="pt-6">
+                  <h2 className="text-2xl font-semibold mb-6">Current Plan</h2>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Left side - Plan details */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">Your Current Plan is</span>
+                        <Badge className="bg-success text-success-foreground text-sm px-3 py-1">
+                          Free Forever
+                        </Badge>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-semibold">Free Forever</h3>
+                        <p className="text-muted-foreground">
+                          Enjoy unlimited events and full access — forever free.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right side - Usage stats */}
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-semibold">Lifetime Events</h3>
+                      <div className="flex items-center gap-3">
+                        <Badge className="bg-[hsl(190,100%,45%)] text-white text-lg px-4 py-2 font-bold">
+                          6,710
+                        </Badge>
+                        <span className="text-base">events used so far</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        since May 8, 2025 (6 months 7 days)
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
