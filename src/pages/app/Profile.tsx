@@ -101,7 +101,7 @@ const Profile = () => {
   };
 
   // Calculate events this month from dashboard stats
-  const eventsThisMonth = dashboardStats?.events?.last_30_days || 0;
+  const eventsThisMonth = billingInfo?.event_count || 0;
 
   // Handle edit website
   const handleEditClick = (website: any) => {
