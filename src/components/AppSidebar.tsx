@@ -44,26 +44,32 @@ export const AppSidebar = () => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {/* Updated: Using Logo component with square variant */}
+      <div className="p-4 border-b flex items-center justify-between overflow-hidden">
+        <div className="flex items-center gap-3 min-w-0">
           <Logo 
             variant="square" 
             size="md" 
             showBeta={false}
+            className="shrink-0"
           />
-          <span className={cn("text-xl font-bold", !isExpanded && "lg:hidden")}>Modovisa</span>
+          <span className={cn(
+            "text-xl font-bold whitespace-nowrap transition-all duration-300",
+            isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 lg:opacity-0 lg:w-0"
+          )}>
+            Modovisa
+          </span>
         </div>
-        {isExpanded && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleLock}
-            className="h-8 w-8 hidden lg:flex"
-          >
-            {isLocked ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleLock}
+          className={cn(
+            "h-8 w-8 shrink-0 transition-all duration-300 hidden lg:flex",
+            isExpanded ? "opacity-100 w-8" : "opacity-0 w-0"
+          )}
+        >
+          {isLocked ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </Button>
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
@@ -74,7 +80,7 @@ export const AppSidebar = () => {
               key={item.name}
               to={item.href}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all min-h-[44px]",
+                "flex items-center gap-3 px-3 py-3 rounded-lg transition-all min-h-[44px]",
                 isActive
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
