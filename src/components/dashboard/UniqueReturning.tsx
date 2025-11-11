@@ -23,9 +23,9 @@ export default function UniqueReturning({
         label: "Unique",
         data: uniques,
         borderColor: "#3b82f6",
-        backgroundColor: "rgba(59,130,246,0.20)",
+        backgroundColor: "#3b82f6",
         fill: true,
-        tension: 0.9,
+        tension: 0.4,
         pointRadius: 2,               // show points
         pointHoverRadius: 3,
         borderWidth: 2,
