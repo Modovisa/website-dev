@@ -1,67 +1,49 @@
 // src/components/dashboard/TimeGroupedVisits.tsx
 
-import { memo } from "react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Legend,
-  Tooltip as ChartTooltip,
-} from "@/lib/recharts-safe";
+import { Bar } from "react-chartjs-2";
+import { chartTheme, ChartCard, useBaseOptions } from "./ChartKit";
 import type { RangeKey, TimeBucket } from "@/types/dashboard";
 
-type Props = {
+export default function TimeGroupedVisits({
+  data,
+  range,
+  loading,
+}: {
   data: TimeBucket[];
   range: RangeKey;
-};
-
-const TITLES: Record<RangeKey, string> = {
-  "24h": "Visits – Today",
-  "7d": "Visits – Last 7 Days",
-  "30d": "Visits – Last 30 Days",
-  "90d": "Visits – Last 90 Days",
-  "12mo": "Visits – Last 12 Months",
-};
-
-function ChartInner({ data, range }: Props) {
-  const hasData = Array.isArray(data) && data.length > 0;
+  loading?: boolean;
+}) {
+  const labels = (data || []).map((d) => d.label);
+  const ds = {
+    labels,
+    datasets: [
+      {
+        label: "Visitors",
+        data: data.map((d) => d.visitors),
+        backgroundColor: chartTheme.primary,
+        borderRadius: 6,
+        barPercentage: 0.7,
+        categoryPercentage: 0.6,
+      },
+      {
+        label: "Views",
+        data: data.map((d) => d.views),
+        backgroundColor: "rgba(99,102,241,0.25)",
+        borderRadius: 6,
+        barPercentage: 0.7,
+        categoryPercentage: 0.6,
+      },
+    ],
+  };
+  const options = useBaseOptions({ stacked: false, yBeginAtZero: true, showLegend: true });
+  const title =
+    { "24h": "Visits – Today", "7d": "Visits – Last 7 Days", "30d": "Visits – Last 30 Days", "90d": "Visits – Last 90 Days", "12mo": "Visits – Last 12 Months" }[
+      range
+    ] || "Visits";
 
   return (
-    <div className="h-[300px]">
-      {!hasData ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-          No data
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data}>
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <ChartTooltip />
-            <Legend />
-            <Bar
-              dataKey="visitors"
-              name="Visitors"
-              radius={[4, 4, 0, 0]}
-              fill="hsl(var(--primary))"
-              fillOpacity={1}
-            />
-            <Bar
-              dataKey="views"
-              name="Views"
-              radius={[4, 4, 0, 0]}
-              fill="hsl(var(--primary))"
-              fillOpacity={0.35}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-      {/* Accessible title for screen readers */}
-      <span className="sr-only">{TITLES[range]}</span>
-    </div>
+    <ChartCard title={title} info="Visitors & page views over the selected period." loading={loading}>
+      <Bar data={ds} options={options} />
+    </ChartCard>
   );
 }
-
-export default memo(ChartInner);

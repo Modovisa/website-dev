@@ -1,41 +1,30 @@
 // src/components/dashboard/EventVolume.tsx
 
-import { memo } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as ChartTooltip,
-} from "@/lib/recharts-safe";
+import { Line } from "react-chartjs-2";
+import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 import type { LabelCount } from "@/types/dashboard";
 
-export default memo(function EventVolume({ data }: { data: LabelCount[] }) {
-  const hasData = Array.isArray(data) && data.length > 0;
-
+export default function EventVolume({ data, loading }: { data: LabelCount[]; loading?: boolean }) {
+  const labels = (data || []).map((d) => d.label);
+  const ds = {
+    labels,
+    datasets: [
+      {
+        label: "Events",
+        data: data.map((d) => d.count),
+        borderColor: chartTheme.info,
+        backgroundColor: "rgba(59,130,246,0.18)",
+        fill: true,
+        tension: 0.35,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+    ],
+  };
+  const options = useBaseOptions({ yBeginAtZero: true, showLegend: true });
   return (
-    <div className="h-[300px]">
-      {!hasData ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-          No data
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <ChartTooltip />
-            <Line
-              type="monotone"
-              dataKey="count"
-              dot={false}
-              stroke="hsl(var(--primary))"
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </div>
+    <ChartCard title="Event Volume" info="Total tracked events per time bucket." loading={loading}>
+      <Line data={ds} options={options} />
+    </ChartCard>
   );
-});
+}

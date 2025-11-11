@@ -1,69 +1,58 @@
 // src/components/dashboard/PerformanceLine.tsx
 
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as ChartTooltip,
-} from "@/lib/recharts-safe";
-import {
-  ChartContainer,
-  ChartGrid,
-  ChartXAxis,
-  ChartYAxis,
-  PrettyTooltip,
-  ChartLegend,           // ✅ use styled legend
-  chartTheme,
-} from "./ChartKit";
-import type { LabelCount } from "@/types/dashboard";
+import { Line } from "react-chartjs-2";
+import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
+type Row = { label: string; count: number };
 
 export default function PerformanceLine({
   title,
   current,
   previous,
-  color = "#5c6ac4",
+  color = chartTheme.info,
+  loading,
 }: {
   title: string;
-  current: LabelCount[];
-  previous?: LabelCount[];
+  current: Row[];
+  previous?: Row[];
   color?: string;
+  loading?: boolean;
 }) {
-  const has = Array.isArray(current) && current.length > 0;
-  const data = has
-    ? current.map((c, i) => ({
-        label: c.label,
-        current: c.count,
-        previous: previous?.[i]?.count ?? null,
-      }))
-    : [];
+  const labels = (current || previous || []).map((d) => d.label);
+  const prevMap = new Map((previous || []).map((r) => [r.label, r.count]));
+  const dsCurrent = labels.map((l) => (current.find((c) => c.label === l)?.count ?? null));
+  const dsPrev = labels.map((l) => prevMap.get(l) ?? null);
+
+  const ds = {
+    labels,
+    datasets: [
+      {
+        label: title,
+        data: dsCurrent,
+        borderColor: color,
+        backgroundColor: "transparent",
+        fill: false,
+        tension: 0.35,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+      {
+        label: "Previous",
+        data: dsPrev,
+        borderColor: chartTheme.gray,
+        borderDash: [5, 5],
+        backgroundColor: "transparent",
+        fill: false,
+        tension: 0.35,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+    ],
+  };
+  const options = useBaseOptions({ yBeginAtZero: true, showLegend: true });
 
   return (
-    <ChartContainer>
-      {!has ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">No data</div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <ChartGrid />
-            <ChartXAxis dataKey="label" />
-            <ChartYAxis />
-            <PrettyTooltip />
-            <ChartLegend /> {/* ✅ */}
-            <Line type="monotone" dataKey="current" name={title} stroke={color} strokeWidth={2} dot={false} />
-            <Line
-              type="monotone"
-              dataKey="previous"
-              name="Previous"
-              stroke={chartTheme.colors.gray}
-              strokeWidth={2}
-              dot={false}
-              strokeDasharray="5 5"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </ChartContainer>
+    <ChartCard title={title} loading={loading}>
+      <Line data={ds} options={options} />
+    </ChartCard>
   );
 }

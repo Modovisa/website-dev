@@ -1,0 +1,1 @@
+// src/components/dashboard/VisitorsHeatmap.tsx

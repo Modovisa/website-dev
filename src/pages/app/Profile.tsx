@@ -1,15 +1,38 @@
 // src/pages/app/Profile.tsx
 
+import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Calendar, FileText } from "lucide-react";
+import { FileText, MoreVertical, Pencil, Trash2, X } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const Profile = () => {
-  const websites = [
+  const [websites, setWebsites] = useState([
     {
       name: "Koshmart",
       domain: "koshmart.com",
@@ -24,7 +47,38 @@ const Profile = () => {
       timezone: "Europe/London",
       initial: "KD",
     },
-  ];
+  ]);
+  
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingWebsite, setEditingWebsite] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", timezone: "" });
+
+  const handleEditClick = (index: number) => {
+    setEditingWebsite(index);
+    setEditForm({
+      name: websites[index].name,
+      timezone: websites[index].timezone,
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleSaveChanges = () => {
+    if (editingWebsite !== null) {
+      const updatedWebsites = [...websites];
+      updatedWebsites[editingWebsite] = {
+        ...updatedWebsites[editingWebsite],
+        name: editForm.name,
+        timezone: editForm.timezone,
+      };
+      setWebsites(updatedWebsites);
+    }
+    setEditModalOpen(false);
+  };
+
+  const handleDeleteClick = (index: number) => {
+    const updatedWebsites = websites.filter((_, i) => i !== index);
+    setWebsites(updatedWebsites);
+  };
 
   return (
     <DashboardLayout>
@@ -135,9 +189,26 @@ const Profile = () => {
                               <Badge variant="secondary">{site.timezone}</Badge>
                             </td>
                             <td className="px-6 py-4">
-                              <Button variant="ghost" size="sm">
-                                ⋮
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-40">
+                                  <DropdownMenuItem onClick={() => handleEditClick(index)} className="cursor-pointer">
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteClick(index)} 
+                                    className="cursor-pointer text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         ))}
@@ -235,6 +306,67 @@ const Profile = () => {
           </Tabs>
         </div>
       </div>
+
+      {/* Edit Website Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Edit Website</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="website-name" className="text-base">
+                Website Name
+              </Label>
+              <Input
+                id="website-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="h-12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="timezone" className="text-base font-semibold">
+                Timezone
+              </Label>
+              <Select
+                value={editForm.timezone}
+                onValueChange={(value) => setEditForm({ ...editForm, timezone: value })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Asia/Calcutta">(GMT+05:30) Asia/Calcutta</SelectItem>
+                  <SelectItem value="Europe/London">(GMT+00:00) Europe/London</SelectItem>
+                  <SelectItem value="America/New_York">(GMT-05:00) America/New_York</SelectItem>
+                  <SelectItem value="America/Los_Angeles">(GMT-08:00) America/Los_Angeles</SelectItem>
+                  <SelectItem value="Asia/Tokyo">(GMT+09:00) Asia/Tokyo</SelectItem>
+                  <SelectItem value="Australia/Sydney">(GMT+11:00) Australia/Sydney</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground pt-2">
+                Date ranges, time ranges, and visitor activity times will follow this timezone. You can change it later if needed.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => setEditModalOpen(false)}
+              className="bg-muted hover:bg-muted/80"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
