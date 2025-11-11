@@ -2,74 +2,77 @@
 
 import { useMemo } from "react";
 
-type Country = { country: string; iso_code?: string; count: number };
+type CountryRow = {
+  country: string;
+  count: number;
+  iso_code?: string | null; // e.g. "US", "JP"
+};
 
 type Props = {
-  countries: Country[];
-  limit?: number;
+  countries: CountryRow[];
+  limit?: number; // optional, defaults to 10
 };
 
 export default function CountryVisits({ countries = [], limit = 10 }: Props) {
   const rows = useMemo(() => {
-    const sorted = (countries || [])
-      .filter((r) => (r?.count ?? 0) > 0)
-      .sort((a, b) => (b.count || 0) - (a.count || 0))
-      .slice(0, limit);
-
-    const total = sorted.reduce((s, r) => s + (r.count || 0), 0);
-    return { sorted, total };
+    const filtered = (countries || []).filter((r) => (r?.count ?? 0) > 0);
+    const sorted = filtered.sort((a, b) => (b.count || 0) - (a.count || 0));
+    return sorted.slice(0, limit);
   }, [countries, limit]);
 
+  const total = rows.reduce((s, r) => s + (r.count || 0), 0);
+
+  if (!rows.length) {
+    return <div className="text-sm text-muted-foreground">No country data yet.</div>;
+  }
+
   return (
-    <table className="w-full">
+    <table className="w-full text-sm">
       <thead>
-        <tr className="text-muted-foreground text-sm">
-          <th className="text-left ps-2">Country</th>
+        <tr className="text-muted-foreground">
+          <th className="text-left ps-4">Country</th>
           <th className="text-right">Visitors</th>
-          <th className="text-right pe-2">Share</th>
+          <th className="text-right pe-6">Share</th>
         </tr>
       </thead>
       <tbody>
-        {rows.sorted.map((r, idx) => {
-          const pct = rows.total ? ((r.count / rows.total) * 100) : 0;
+        {rows.map((r) => {
+          const name = r.country || "Unknown";
           const iso = (r.iso_code || "").toLowerCase();
+          const count = r.count || 0;
+          const pct = total ? (count / total) * 100 : 0;
+
           return (
-            <tr key={`${r.country}-${idx}`} className="hover:bg-muted/40">
-              <td className="py-2 ps-2">
-                <div className="flex items-center gap-2">
+            <tr key={`${name}-${iso}`} className="group hover:bg-muted/40">
+              <td className="py-2 ps-4">
+                <div className="flex items-center gap-2 font-medium">
                   {iso ? (
                     <img
-                      src={`/assets/vendor/fonts/flags/4x3/${iso}.svg`}
+                      src={`/assets/flags/4x3/${iso}.svg`}
+                      alt={name}
                       width={20}
                       height={15}
                       className="rounded-sm"
-                      onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                     />
                   ) : null}
-                  <span className="font-medium">{r.country || "Unknown"}</span>
+                  <span>{name}</span>
                 </div>
               </td>
-              <td className="text-right font-semibold">{(r.count || 0).toLocaleString()}</td>
-              <td className="text-right pe-2">
-                <div className="relative inline-block w-24 align-middle">
-                  <div
-                    className="absolute top-1/2 left-0 -translate-y-1/2 h-5 rounded-r bg-primary/15"
-                    style={{ width: `${pct.toFixed(1)}%` }}
-                  />
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-5 w-px bg-muted-foreground/60" />
-                  <span className="relative text-sm">{pct.toFixed(1)}%</span>
-                </div>
+              <td className="py-2 text-right font-semibold whitespace-nowrap">
+                {count.toLocaleString()}
+              </td>
+              <td className="py-2 pe-6 text-right relative w-[110px]">
+                <div
+                  className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r"
+                  style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "rgba(99,91,255,0.15)" }}
+                />
+                <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-muted-foreground/60" />
+                <span className="relative z-10">{pct.toFixed(1)}%</span>
               </td>
             </tr>
           );
         })}
-        {rows.sorted.length === 0 && (
-          <tr>
-            <td colSpan={3} className="text-center py-6 text-muted-foreground text-sm">
-              No country data
-            </td>
-          </tr>
-        )}
       </tbody>
     </table>
   );

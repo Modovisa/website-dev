@@ -242,7 +242,7 @@ export default function Dashboard() {
         {/* Geographic Insights */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Card className="h-[600px]">
+            <Card className="h-[620px]">
               <CardHeader>
                 <CardTitle>World Visitors</CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -269,7 +269,7 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <Card className="h-[600px]">
+            <Card className="h-[620px]">
               <CardHeader>
                 <CardTitle>Visits by Country</CardTitle>
               </CardHeader>
