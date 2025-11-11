@@ -6,18 +6,14 @@ import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 type Row = { label: string; count: number };
 
 function hexToRgba(hex: string, alpha: number) {
-  // supports #RGB, #RRGGBB, #RRGGBBAA; falls back to hex with added alpha if valid
   const h = hex.replace("#", "");
-  const parse = (s: string) => parseInt(s, 16);
+  const to = (s: string) => parseInt(s, 16);
   if (h.length === 3) {
-    const r = parse(h[0] + h[0]), g = parse(h[1] + h[1]), b = parse(h[2] + h[2]);
+    const r = to(h[0] + h[0]), g = to(h[1] + h[1]), b = to(h[2] + h[2]);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  if (h.length >= 6) {
-    const r = parse(h.slice(0, 2)), g = parse(h.slice(2, 4)), b = parse(h.slice(4, 6));
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  return hex;
+    }
+  const r = to(h.slice(0, 2)), g = to(h.slice(2, 4)), b = to(h.slice(4, 6));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 export default function PerformanceLine({
@@ -40,7 +36,7 @@ export default function PerformanceLine({
   const dsCurrent = labels.map((l) => current.find((c) => c.label === l)?.count ?? null);
   const dsPrev = labels.map((l) => prevMap.get(l) ?? null);
 
-  const bg = filled ? hexToRgba(color, 0.18) : "transparent";
+  const background = filled ? hexToRgba(color, 0.18) : "transparent";
 
   const ds = {
     labels,
@@ -49,12 +45,17 @@ export default function PerformanceLine({
         label: title,
         data: dsCurrent,
         borderColor: color,
-        backgroundColor: bg,   // translucent area for current series
-        fill: filled,
+        backgroundColor: background,
+        fill: filled ? { target: "origin" } : false, // <<< ensures visible area
         tension: 0.35,
-        pointRadius: 0,
+        pointRadius: filled ? 3 : 0,
+        pointHoverRadius: filled ? 5 : 0,
+        pointBorderWidth: filled ? 2 : 0,
+        pointBackgroundColor: color,
+        pointBorderColor: "#fff",
         borderWidth: 2,
         spanGaps: true,
+        clip: false,
       },
       {
         label: "Previous Period",
@@ -73,6 +74,7 @@ export default function PerformanceLine({
 
   const options = {
     ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
+    interaction: { mode: "index" as const, intersect: false },
     scales: {
       x: { grid: { display: false } },
       y: { beginAtZero: true, grid: { color: chartTheme.grid } },
@@ -81,6 +83,7 @@ export default function PerformanceLine({
       legend: { position: "bottom" as const, labels: { usePointStyle: true } },
       tooltip: { mode: "index" as const, intersect: false },
     },
+    maintainAspectRatio: false,
   } as const;
 
   return (
