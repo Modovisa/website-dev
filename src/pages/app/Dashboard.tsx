@@ -242,8 +242,8 @@ export default function Dashboard() {
         {/* Geographic Insights */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Card className="h-[620px]">
-              <CardHeader>
+            <Card className="h-[660px]">
+              <CardHeader className="px-6 pt-6 pb-0">
                 <CardTitle>World Visitors</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {range === "24h" ? "Past 24 hours" :
@@ -269,7 +269,7 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <Card className="h-[620px]">
+            <Card className="h-[660px]">
               <CardHeader>
                 <CardTitle>Visits by Country</CardTitle>
               </CardHeader>

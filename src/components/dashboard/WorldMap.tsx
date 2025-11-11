@@ -77,7 +77,7 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
         geo: {
           map: "world",
           roam: true,
-          zoom: 1.0,
+          zoom: 1.3,
           aspectScale: 0.9,
           label: { show: false },
           itemStyle: { areaColor: "#f5f5f5", borderColor: "#999" },
