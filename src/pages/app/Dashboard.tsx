@@ -8,8 +8,10 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
-import { useDashboardData } from "@/hooks/useDashboardData";
-import { useLiveVisitorsWS } from "@/hooks/useLiveVisitorsWS";
+
+import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
+
+
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -21,10 +23,12 @@ import UTMCampaignsTable from "@/components/dashboard/UTMCampaignsTable";
 import UTMSourcesTable from "@/components/dashboard/UTMSourcesTable";
 import TopPagesTable from "@/components/dashboard/TopPagesTable";
 import ReferrersTable from "@/components/dashboard/ReferrersTable";
+import WorldMap from "@/components/dashboard/WorldMap";
+import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
+import CountryVisits from "@/components/dashboard/CountryVisits";
 
-import { nf, pct, truncateMiddle } from "@/lib/format";
+import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { secureFetch } from "@/lib/auth";
 
 type Website = { id: number; website_name: string; domain: string };
 
@@ -37,76 +41,46 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  const [websites, setWebsites] = useState<Website[]>([]);
-  const [sitesLoading, setSitesLoading] = useState<boolean>(true);
+  // Websites
+  const { data: websitesRaw = [], isLoading: sitesLoading } = useTrackingWebsites();
+  const websites: Website[] = (websitesRaw || []).map((p: any) => ({
+    id: Number(p.id),
+    website_name: String(p.website_name || p.name || `Site ${p.id}`),
+    domain: String(p.domain || ""),
+  }));
 
-  const { data, isLoading, refetch } = useDashboardData({ siteId: siteId ?? undefined, range });
-  const qc = useQueryClient();
-
-  const [liveCount, setLiveCount] = useState<number | null>(null);
-  useLiveVisitorsWS({
-    siteId: siteId ?? undefined,
-    onLiveCount: (n) => setLiveCount(n),
-    onDashboardSnapshot: (payload: DashboardPayload) => {
-      if (payload?.range === range) {
-        qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...payload }));
-      }
-    },
-    getTicket: async (sid) => {
-      const res = await secureFetch("https://api.modovisa.com/api/ws-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site_id: sid }),
-      });
-      if (!res.ok) throw new Error("ticket");
-      const j = await res.json();
-      return j.ticket as string;
-    },
-  });
-
+  // Local cache + auto-select first site
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setSitesLoading(true);
-        const res = await secureFetch("https://api.modovisa.com/api/tracking-websites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (!res.ok) throw new Error("tracking-websites failed");
-        const j = await res.json();
-        const arr: Website[] = (j?.projects || []).map((p: any) => ({
-          id: Number(p.id),
-          website_name: String(p.website_name || p.name || `Site ${p.id}`),
-          domain: String(p.domain || ""),
-        }));
+    if (websites.length) {
+      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
+    }
+    if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
+      setSiteId(websites[0].id);
+      localStorage.setItem("current_website_id", String(websites[0].id));
+    }
+  }, [websites, siteId]);
 
-        if (cancelled) return;
+  // Baseline REST snapshot (skeletons + Refresh)
+  const { data: restData, isLoading, refetch } =
+    useDashboardData({ siteId: siteId ?? undefined, range });
 
-        setWebsites(arr);
-        localStorage.setItem("mv.sites", JSON.stringify(arr));
+  // Realtime stream (payload + live count + liveCities)
+  const { data: rtData, liveCount, liveCities } =
+    useDashboardRealtime(siteId ?? undefined, range);
 
-        if ((siteId == null || Number.isNaN(siteId)) && arr[0]) {
-          setSiteId(arr[0].id);
-          localStorage.setItem("current_website_id", String(arr[0].id));
-        }
-      } catch (err) {
-        console.error("❌ /api/tracking-websites", err);
-        try {
-          const cached = JSON.parse(localStorage.getItem("mv.sites") || "[]") as Website[];
-          setWebsites(cached);
-          if ((siteId == null || Number.isNaN(siteId)) && cached[0]) {
-            setSiteId(cached[0].id);
-            localStorage.setItem("current_website_id", String(cached[0].id));
-          }
-        } catch {}
-      } finally {
-        if (!cancelled) setSitesLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Prefer realtime payload when available
+  const data: DashboardPayload | undefined = rtData ?? restData;
+
+  // REST geo fallback until live cities arrive
+  const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
+  const cityPoints = (liveCities && liveCities.length > 0) ? liveCities : geoCities;
+
+  // Warm react-query cache when fresh data arrives
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!data || siteId == null) return;
+    qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...data }));
+  }, [data, siteId, range, qc]);
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
@@ -114,10 +88,10 @@ export default function Dashboard() {
   );
 
   const topCards = [
-    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
-    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
-    { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
-    { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null },
+    { key: "live",   name: "Live Visitors", value: (liveCount ?? data?.live_visitors ?? 0), icon: Users,            change: null },
+    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0,      icon: Eye,              change: data?.unique_visitors?.delta ?? null },
+    { key: "avg",    name: "Avg. Session",   value: data?.avg_duration ?? "--",             icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
+    { key: "bounce", name: "Bounce Rate",    value: `${data?.bounce_rate ?? 0}%`,           icon: TrendingUp,       change: data?.bounce_rate_delta ?? null },
   ];
 
   if (authLoading) {
@@ -150,7 +124,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                refetch();
+                refetch(); // immediate REST refresh on site switch
               }}
               disabled={sitesLoading || siteOptions.length === 0}
             >
@@ -162,14 +136,18 @@ export default function Dashboard() {
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
                 ) : (
                   siteOptions.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
 
             <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
-              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="24h">Today</SelectItem>
                 <SelectItem value="7d">Last 7 Days</SelectItem>
@@ -179,7 +157,9 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>Refresh</Button>
+            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
+              Refresh
+            </Button>
           </div>
         </div>
 
@@ -192,7 +172,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {isLoading ? (
+                {isLoading && !rtData ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-24" />
                     <div className="flex gap-2 justify-start">
@@ -220,19 +200,21 @@ export default function Dashboard() {
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2">
-            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={isLoading} />
+            <TimeGroupedVisits
+              data={data?.time_grouped_visits ?? []}
+              range={range}
+              loading={isLoading && !rtData}
+            />
           </div>
-          <EventVolume data={data?.events_timeline ?? []} loading={isLoading} />
+          <EventVolume data={data?.events_timeline ?? []} loading={isLoading && !rtData} />
         </div>
 
         {/* Tables Row */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Top Pages</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading && !rtData ? (
                 <div className="space-y-3">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
@@ -245,11 +227,9 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Referrers</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading && !rtData ? (
                 <div className="space-y-3">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
@@ -262,33 +242,120 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Geographic Insights */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Card className="h-[660px]">
+              <CardHeader className="px-6 pt-6 pb-0">
+                <CardTitle>World Visitors</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {range === "24h" ? "Past 24 hours" :
+                   range === "7d"  ? "Past 7 days"   :
+                   range === "30d" ? "Past 30 days"  :
+                   range === "90d" ? "Past 90 days"  :
+                   range === "12mo"? "Past 12 months": ""}
+                </p>
+              </CardHeader>
+              <CardContent className="pt-2 h-[540px]">
+                {isLoading && !rtData ? (
+                  <Skeleton className="h-full w-full" />
+                ) : (
+                  <WorldMap
+                    countries={data?.countries ?? []}
+                    cities={cityPoints}   // ✅ liveCities if present, else REST geo fallback
+                    height={540}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div>
+            <Card className="h-[660px]">
+              <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
+              <CardContent className="h-[540px] overflow-auto">
+                {isLoading && !rtData ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <CountryVisits countries={data?.countries ?? []} />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Visitor Density Calendar */}
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Visitor Density Calendar</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading && !rtData ? (
+              <Skeleton className="h-[220px] w-full" />
+            ) : (
+              <VisitorsHeatmap data={data?.calendar_density ?? []} height={220} />
+            )}
+          </CardContent>
+        </Card>
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
-          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading} />
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading && !rtData} />
           <PerformanceLine
             title="Conversions"
             current={data?.conversions_timeline ?? []}
             previous={data?.conversions_previous_timeline ?? []}
             color="#8b5cf6"
             filled
-            loading={isLoading}
+            loading={isLoading && !rtData}
           />
         </div>
 
         {/* Charts Row 3 */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <PerformanceLine title="Impressions" current={data?.impressions_timeline ?? []} previous={data?.impressions_previous_timeline ?? []} color="#22c55e" loading={isLoading} />
-          <PerformanceLine title="Clicks" current={data?.clicks_timeline ?? []} previous={data?.clicks_previous_timeline ?? []} color="#3b82f6" loading={isLoading} />
-          <PerformanceLine title="Visitors from Search" current={data?.search_visitors_timeline ?? []} previous={data?.search_visitors_previous_timeline ?? []} color="#f97316" loading={isLoading} />
-          <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" loading={isLoading} />
+          <PerformanceLine
+            title="Impressions"
+            current={data?.impressions_timeline ?? []}
+            previous={data?.impressions_previous_timeline ?? []}
+            color="#22c55e"
+            filled
+            loading={isLoading && !rtData}
+          />
+          <PerformanceLine
+            title="Clicks"
+            current={data?.clicks_timeline ?? []}
+            previous={data?.clicks_previous_timeline ?? []}
+            color="#3b82f6"
+            filled
+            loading={isLoading && !rtData}
+          />
+          <PerformanceLine
+            title="Visitors from Search"
+            current={data?.search_visitors_timeline ?? []}
+            previous={data?.search_visitors_previous_timeline ?? []}
+            color="#f59e0b"
+            filled
+            loading={isLoading && !rtData}
+          />
+          <PerformanceLine
+            title="All Visitors"
+            current={(data as any)?.unique_visitors_timeline ?? []}
+            previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+            color="#0ea5e9"
+            filled
+            loading={isLoading && !rtData}
+          />
         </div>
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading} />
-          <Donut title="Devices" data={data?.devices ?? []} nameKey="type" valueKey="count" loading={isLoading} />
-          <Donut title="OS" data={data?.os ?? []} nameKey="name" valueKey="count" loading={isLoading} />
+          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="Devices"  data={data?.devices ?? []}  nameKey="type" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="OS"       data={data?.os ?? []}       nameKey="name" valueKey="count" loading={isLoading && !rtData} />
         </div>
 
         {/* UTM tables */}
@@ -296,8 +363,12 @@ export default function Dashboard() {
           <Card className="md:col-span-2">
             <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+              {isLoading && !rtData ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
               ) : (
                 <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
               )}
@@ -306,8 +377,12 @@ export default function Dashboard() {
           <Card>
             <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+              {isLoading && !rtData ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
               ) : (
                 <UTMSourcesTable rows={data?.utm_sources ?? []} />
               )}
