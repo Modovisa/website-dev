@@ -1,7 +1,6 @@
 // src/pages/app/Dashboard.tsx
 
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
@@ -9,10 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
 
-import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
+import { useTrackingWebsites } from "@/hooks/useDashboardData"; // keep this for sites list
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
-import { useGeoEvents } from "@/hooks/useGeoEvents";
-
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -53,9 +50,7 @@ export default function Dashboard() {
   // Local cache + auto-select first site
   useEffect(() => {
     if (websites.length) {
-      try {
-        localStorage.setItem("mv.sites", JSON.stringify(websites));
-      } catch {}
+      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
     }
     if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
       setSiteId(websites[0].id);
@@ -63,31 +58,11 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // Baseline REST snapshot (skeletons + Refresh)
-  const { data: restData, isLoading, refetch } = useDashboardData({
-    siteId: siteId ?? undefined,
-    range,
-  });
+  // Realtime stream (WS-only)
+  const { data: wsData, liveCount, liveCities } = useDashboardRealtime(siteId ?? undefined, range);
+  const data: DashboardPayload | null = wsData;
 
-  // Realtime stream (payload + live count + liveCities)
-  const { data: rtData, liveCount, liveCities } = useDashboardRealtime(
-    siteId ?? undefined,
-    range
-  );
-
-  // Prefer realtime payload when available
-  const data: DashboardPayload | undefined = rtData ?? restData;
-
-  // REST geo fallback until live cities arrive
-  const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
-  const cityPoints = (liveCities && liveCities.length > 0) ? liveCities : geoCities;
-
-  // Warm react-query cache when fresh data arrives
-  const qc = useQueryClient();
-  useEffect(() => {
-    if (!data || siteId == null) return;
-    qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...data }));
-  }, [data, siteId, range, qc]);
+  const loading = !data; // skeletons until first WS frame for the selected range
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
@@ -95,10 +70,10 @@ export default function Dashboard() {
   );
 
   const topCards = [
-    { key: "live",   name: "Live Visitors", value: (liveCount ?? data?.live_visitors ?? 0), icon: Users,            change: null },
-    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0,      icon: Eye,              change: data?.unique_visitors?.delta ?? null },
-    { key: "avg",    name: "Avg. Session",   value: data?.avg_duration ?? "--",             icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
-    { key: "bounce", name: "Bounce Rate",    value: `${data?.bounce_rate ?? 0}%`,           icon: TrendingUp,       change: data?.bounce_rate_delta ?? null },
+    { key: "live",   name: "Live Visitors",  value: (liveCount ?? data?.live_visitors ?? 0), icon: Users,            change: null },
+    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0,       icon: Eye,              change: data?.unique_visitors?.delta ?? null },
+    { key: "avg",    name: "Avg. Session",   value: data?.avg_duration ?? "--",              icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
+    { key: "bounce", name: "Bounce Rate",    value: `${data?.bounce_rate ?? 0}%`,            icon: TrendingUp,       change: data?.bounce_rate_delta ?? null },
   ];
 
   if (authLoading) {
@@ -131,7 +106,6 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                refetch(); // immediate REST refresh on site switch
               }}
               disabled={sitesLoading || siteOptions.length === 0}
             >
@@ -164,7 +138,15 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // WS-only: bump range to force a clean cycle without network fetch
+                setRange((r) => (r === "24h" ? "7d" : "24h"));
+                setTimeout(() => setRange((r) => (r === "24h" ? "7d" : "24h")), 0);
+              }}
+              disabled={!siteId}
+            >
               Refresh
             </Button>
           </div>
@@ -179,7 +161,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {isLoading && !rtData ? (
+                {loading ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-24" />
                     <div className="flex gap-2 justify-start">
@@ -207,13 +189,9 @@ export default function Dashboard() {
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2">
-            <TimeGroupedVisits
-              data={data?.time_grouped_visits ?? []}
-              range={range}
-              loading={isLoading && !rtData}
-            />
+            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={loading} />
           </div>
-          <EventVolume data={data?.events_timeline ?? []} loading={isLoading && !rtData} />
+          <EventVolume data={data?.events_timeline ?? []} loading={loading} />
         </div>
 
         {/* Tables Row */}
@@ -221,11 +199,9 @@ export default function Dashboard() {
           <Card>
             <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
             <CardContent>
-              {isLoading && !rtData ? (
+              {loading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
                 <TopPagesTable rows={(data?.top_pages ?? []).map((p) => ({ url: p.url, views: p.views }))} />
@@ -236,11 +212,9 @@ export default function Dashboard() {
           <Card>
             <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
             <CardContent>
-              {isLoading && !rtData ? (
+              {loading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
                 <ReferrersTable rows={(data?.referrers ?? []).map((r) => ({ domain: r.domain, visitors: r.visitors }))} />
@@ -264,12 +238,12 @@ export default function Dashboard() {
                 </p>
               </CardHeader>
               <CardContent className="pt-2 h-[540px]">
-                {isLoading && !rtData ? (
+                {loading ? (
                   <Skeleton className="h-full w-full" />
                 ) : (
                   <WorldMap
                     countries={data?.countries ?? []}
-                    cities={cityPoints}   // ✅ liveCities if present, else REST geo fallback
+                    cities={liveCities}   // WS-only live cities
                     height={540}
                   />
                 )}
@@ -281,11 +255,9 @@ export default function Dashboard() {
             <Card className="h-[660px]">
               <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
               <CardContent className="h-[540px] overflow-auto">
-                {isLoading && !rtData ? (
+                {loading ? (
                   <div className="space-y-2">
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <Skeleton key={i} className="h-8 w-full" />
-                    ))}
+                    {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                   </div>
                 ) : (
                   <CountryVisits countries={data?.countries ?? []} />
@@ -301,7 +273,7 @@ export default function Dashboard() {
             <CardTitle>Visitor Density Calendar</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading && !rtData ? (
+            {loading ? (
               <Skeleton className="h-[220px] w-full" />
             ) : (
               <VisitorsHeatmap data={data?.calendar_density ?? []} height={220} />
@@ -311,14 +283,14 @@ export default function Dashboard() {
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
-          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading && !rtData} />
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={loading} />
           <PerformanceLine
             title="Conversions"
             current={data?.conversions_timeline ?? []}
             previous={data?.conversions_previous_timeline ?? []}
             color="#8b5cf6"
             filled
-            loading={isLoading && !rtData}
+            loading={loading}
           />
         </div>
 
@@ -330,7 +302,7 @@ export default function Dashboard() {
             previous={data?.impressions_previous_timeline ?? []}
             color="#22c55e"
             filled
-            loading={isLoading && !rtData}
+            loading={loading}
           />
           <PerformanceLine
             title="Clicks"
@@ -338,7 +310,7 @@ export default function Dashboard() {
             previous={data?.clicks_previous_timeline ?? []}
             color="#3b82f6"
             filled
-            loading={isLoading && !rtData}
+            loading={loading}
           />
           <PerformanceLine
             title="Visitors from Search"
@@ -346,7 +318,7 @@ export default function Dashboard() {
             previous={data?.search_visitors_previous_timeline ?? []}
             color="#f59e0b"
             filled
-            loading={isLoading && !rtData}
+            loading={loading}
           />
           <PerformanceLine
             title="All Visitors"
@@ -354,15 +326,15 @@ export default function Dashboard() {
             previous={(data as any)?.previous_unique_visitors_timeline ?? []}
             color="#0ea5e9"
             filled
-            loading={isLoading && !rtData}
+            loading={loading}
           />
         </div>
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading && !rtData} />
-          <Donut title="Devices"  data={data?.devices ?? []}  nameKey="type" valueKey="count" loading={isLoading && !rtData} />
-          <Donut title="OS"       data={data?.os ?? []}       nameKey="name" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={loading} />
+          <Donut title="Devices"  data={data?.devices ?? []}  nameKey="type" valueKey="count" loading={loading} />
+          <Donut title="OS"       data={data?.os ?? []}       nameKey="count" valueKey="count" loading={loading} />
         </div>
 
         {/* UTM tables */}
@@ -370,11 +342,9 @@ export default function Dashboard() {
           <Card className="md:col-span-2">
             <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
             <CardContent>
-              {isLoading && !rtData ? (
+              {loading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
                 <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
@@ -384,11 +354,9 @@ export default function Dashboard() {
           <Card>
             <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
             <CardContent>
-              {isLoading && !rtData ? (
+              {loading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-8 w-full" />
-                  ))}
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
                 </div>
               ) : (
                 <UTMSourcesTable rows={data?.utm_sources ?? []} />
