@@ -1,6 +1,8 @@
 // src/services/dashboardService.ts
+
 import { http, HttpError } from "./http";
-import type { RangeKey, DashboardPayload } from "@/types/dashboard";
+import { apiBase } from "@/lib/api";               // ← uses your env toggle (api.modovisa.com / dev-api)
+import { secureFetch } from "@/lib/auth";          // ← attaches/refreshes Authorization automatically
 
 /* ---------- Websites (keep as-is REST) ---------- */
 export type TrackingWebsite = { id: number; website_name: string; domain: string };
@@ -24,6 +26,8 @@ const lastTicketAt = new Map<number, number>();
 export async function getWSTicket(siteId: number): Promise<string> {
   const now = Date.now();
   const last = lastTicketAt.get(siteId) ?? 0;
+
+  // small dedupe window to avoid 429s if callers stampede
   if (now - last < 5000) {
     const existing = inflightTickets.get(siteId);
     if (existing) return existing;
@@ -31,15 +35,25 @@ export async function getWSTicket(siteId: number): Promise<string> {
 
   const p = (async () => {
     try {
-      const res = await fetch("https://api.modovisa.com/api/ws-ticket", {
+      const url = `${apiBase()}/api/ws-ticket`;
+
+      // Use secureFetch → ensures Authorization, refreshes if needed
+      const res = await secureFetch(url, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ site_id: siteId }),
       });
 
+      // NOTE: secureFetch already retries once on 401 by refreshing.
+      // If it still returns 401 here, treat it as a hard auth failure.
+      if (res.status === 401) {
+        throw new HttpError(401, "Unauthorized");
+      }
+
       if (res.status === 429) {
         const ra = Number(res.headers.get("retry-after") || "10");
+        // brief courtesy wait then surface as error so caller backoff runs
         await new Promise((r) => setTimeout(r, Math.max(3, ra) * 1000));
         throw new HttpError(429, "Too Many Requests");
       }
@@ -52,6 +66,13 @@ export async function getWSTicket(siteId: number): Promise<string> {
       const j = (await res.json()) as WSTicketAPI;
       if (!j?.ticket) throw new Error("no_ticket");
       return j.ticket;
+    } catch (e: any) {
+      // secureFetch may throw plain "unauthorized" on refresh failure — normalize to HttpError(401)
+      const msg = String(e?.message || "");
+      if (e?.status === 401 || msg === "unauthorized" || /unauthor/i.test(msg)) {
+        throw new HttpError(401, "Unauthorized");
+      }
+      throw e;
     } finally {
       lastTicketAt.set(siteId, Date.now());
       inflightTickets.delete(siteId);
