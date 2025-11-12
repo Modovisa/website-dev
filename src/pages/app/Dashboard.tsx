@@ -8,8 +8,11 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
+
 import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
-import { useLiveVisitorsWS } from "@/hooks/useLiveVisitorsWS";
+import { useDashboardRealtime } from "@/hooks/useDashboardRealtime"; // ✅ realtime
+import { useGeoEvents } from "@/hooks/useGeoEvents";                // ✅ REST fallback for cities
+
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -24,11 +27,9 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
-import { useGeoEvents } from "@/hooks/useGeoEvents";
 
 import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { getWSTicket } from "@/services/dashboardService";
 
 type Website = { id: number; website_name: string; domain: string };
 
@@ -41,7 +42,7 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Websites via service-layer hook
+  // Websites
   const { data: websitesRaw = [], isLoading: sitesLoading } = useTrackingWebsites();
   const websites: Website[] = (websitesRaw || []).map((p: any) => ({
     id: Number(p.id),
@@ -49,12 +50,10 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // Keep a tiny local cache + auto-select first site if none chosen
+  // Cache sites locally + auto-select first site
   useEffect(() => {
     if (websites.length) {
-      try {
-        localStorage.setItem("mv.sites", JSON.stringify(websites));
-      } catch {}
+      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
     }
     if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
       setSiteId(websites[0].id);
@@ -62,22 +61,27 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  const { data, isLoading, refetch } = useDashboardData({ siteId: siteId ?? undefined, range });
-  const qc = useQueryClient();
+  // Baseline REST snapshot (skeletons + Refresh)
+  const { data: restData, isLoading, refetch } =
+    useDashboardData({ siteId: siteId ?? undefined, range });
 
-  const [liveCount, setLiveCount] = useState<number | null>(null);
-  useLiveVisitorsWS({
-    siteId: siteId ?? undefined,
-    onLiveCount: (n) => setLiveCount(n),
-    onDashboardSnapshot: (payload: DashboardPayload) => {
-      if (payload?.range === range) {
-        qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...payload }));
-      }
-    },
-    getTicket: async (sid) => getWSTicket(sid),
-  });
+  // Realtime stream (snapshots + live count + live city points)
+  const { data: rtData, liveCount, liveCities } =
+    useDashboardRealtime(siteId ?? undefined, range);
 
+  // Prefer realtime payload when available
+  const data: DashboardPayload | undefined = rtData ?? restData;
+
+  // REST geo fallback until live cities arrive
   const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
+  const cityPoints = (liveCities && liveCities.length > 0) ? liveCities : geoCities;
+
+  // Warm the query cache when rtData lands
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!data || siteId == null) return;
+    qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...data }));
+  }, [data, siteId, range, qc]);
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
@@ -85,10 +89,10 @@ export default function Dashboard() {
   );
 
   const topCards = [
-    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
-    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
-    { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
-    { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null },
+    { key: "live",   name: "Live Visitors", value: (liveCount ?? data?.live_visitors ?? 0), icon: Users,            change: null },
+    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0,      icon: Eye,              change: data?.unique_visitors?.delta ?? null },
+    { key: "avg",    name: "Avg. Session",   value: data?.avg_duration ?? "--",             icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
+    { key: "bounce", name: "Bounce Rate",    value: `${data?.bounce_rate ?? 0}%`,           icon: TrendingUp,       change: data?.bounce_rate_delta ?? null },
   ];
 
   if (authLoading) {
@@ -121,7 +125,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                refetch();
+                refetch(); // ensures immediate REST refresh on site switch
               }}
               disabled={sitesLoading || siteOptions.length === 0}
             >
@@ -169,7 +173,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {isLoading ? (
+                {isLoading && !rtData ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-24" />
                     <div className="flex gap-2 justify-start">
@@ -197,19 +201,21 @@ export default function Dashboard() {
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2">
-            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={isLoading} />
+            <TimeGroupedVisits
+              data={data?.time_grouped_visits ?? []}
+              range={range}
+              loading={isLoading && !rtData}
+            />
           </div>
-          <EventVolume data={data?.events_timeline ?? []} loading={isLoading} />
+          <EventVolume data={data?.events_timeline ?? []} loading={isLoading && !rtData} />
         </div>
 
         {/* Tables Row */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Top Pages</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading && !rtData ? (
                 <div className="space-y-3">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
@@ -222,11 +228,9 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Referrers</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading && !rtData ? (
                 <div className="space-y-3">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
@@ -247,20 +251,19 @@ export default function Dashboard() {
                 <CardTitle>World Visitors</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {range === "24h" ? "Past 24 hours" :
-                  range === "7d"  ? "Past 7 days"   :
-                  range === "30d" ? "Past 30 days"  :
-                  range === "90d" ? "Past 90 days"  :
-                  range === "12mo"? "Past 12 months": ""}
+                   range === "7d"  ? "Past 7 days"   :
+                   range === "30d" ? "Past 30 days"  :
+                   range === "90d" ? "Past 90 days"  :
+                   range === "12mo"? "Past 12 months": ""}
                 </p>
               </CardHeader>
-              <CardContent className="pt-2 h-[540px]"> {/* map area height */}
-                {isLoading ? (
+              <CardContent className="pt-2 h-[540px]">
+                {isLoading && !rtData ? (
                   <Skeleton className="h-full w-full" />
                 ) : (
                   <WorldMap
                     countries={data?.countries ?? []}
-                    cities={geoCities}
-                    rangeLabel={undefined}
+                    cities={cityPoints}      // ✅ live if present, else REST fallback
                     height={540}
                   />
                 )}
@@ -270,11 +273,9 @@ export default function Dashboard() {
 
           <div>
             <Card className="h-[660px]">
-              <CardHeader>
-                <CardTitle>Visits by Country</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[540px] overflow-auto"> {/* scroll inside */}
-                {isLoading ? (
+              <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
+              <CardContent className="h-[540px] overflow-auto">
+                {isLoading && !rtData ? (
                   <div className="space-y-2">
                     {Array.from({ length: 10 }).map((_, i) => (
                       <Skeleton key={i} className="h-8 w-full" />
@@ -288,15 +289,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-
         {/* Visitor Density Calendar */}
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle>Visitor Density Calendar</CardTitle>
-            {/* If you want a year picker later, lift state to Dashboard and pass as prop */}
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {isLoading && !rtData ? (
               <Skeleton className="h-[220px] w-full" />
             ) : (
               <VisitorsHeatmap data={data?.calendar_density ?? []} height={220} />
@@ -306,18 +305,18 @@ export default function Dashboard() {
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
-          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading} />
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading && !rtData} />
           <PerformanceLine
             title="Conversions"
             current={data?.conversions_timeline ?? []}
             previous={data?.conversions_previous_timeline ?? []}
             color="#8b5cf6"
             filled
-            loading={isLoading}
+            loading={isLoading && !rtData}
           />
         </div>
 
-        {/* Charts Row 3 (translucent fills) */}
+        {/* Charts Row 3 */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <PerformanceLine
             title="Impressions"
@@ -325,7 +324,7 @@ export default function Dashboard() {
             previous={data?.impressions_previous_timeline ?? []}
             color="#22c55e"
             filled
-            loading={isLoading}
+            loading={isLoading && !rtData}
           />
           <PerformanceLine
             title="Clicks"
@@ -333,7 +332,7 @@ export default function Dashboard() {
             previous={data?.clicks_previous_timeline ?? []}
             color="#3b82f6"
             filled
-            loading={isLoading}
+            loading={isLoading && !rtData}
           />
           <PerformanceLine
             title="Visitors from Search"
@@ -341,7 +340,7 @@ export default function Dashboard() {
             previous={data?.search_visitors_previous_timeline ?? []}
             color="#f59e0b"
             filled
-            loading={isLoading}
+            loading={isLoading && !rtData}
           />
           <PerformanceLine
             title="All Visitors"
@@ -349,25 +348,23 @@ export default function Dashboard() {
             previous={(data as any)?.previous_unique_visitors_timeline ?? []}
             color="#0ea5e9"
             filled
-            loading={isLoading}
+            loading={isLoading && !rtData}
           />
         </div>
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading} />
-          <Donut title="Devices" data={data?.devices ?? []} nameKey="type" valueKey="count" loading={isLoading} />
-          <Donut title="OS" data={data?.os ?? []} nameKey="name" valueKey="count" loading={isLoading} />
+          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="Devices"  data={data?.devices ?? []}  nameKey="type" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="OS"       data={data?.os ?? []}       nameKey="name" valueKey="count" loading={isLoading && !rtData} />
         </div>
 
         {/* UTM tables */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>UTM Campaign URLs</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading && !rtData ? (
                 <div className="space-y-3">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
@@ -379,11 +376,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader>
-              <CardTitle>UTM Sources</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoading && !rtData ? (
                 <div className="space-y-3">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
