@@ -10,8 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
 
 import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
-import { useDashboardRealtime } from "@/hooks/useDashboardRealtime"; // ✅ realtime
-import { useGeoEvents } from "@/hooks/useGeoEvents";                // ✅ REST fallback for cities
+import { useDashboardRealtime } from "@/hooks/useDashboardRealtime"; // ✅ realtime snapshots + live count + liveCities
+import { useGeoEvents } from "@/hooks/useGeoEvents";                  // ✅ REST geo fallback
 
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
@@ -50,7 +50,7 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // Cache sites locally + auto-select first site
+  // Local cache + auto-select first site
   useEffect(() => {
     if (websites.length) {
       try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
@@ -65,7 +65,7 @@ export default function Dashboard() {
   const { data: restData, isLoading, refetch } =
     useDashboardData({ siteId: siteId ?? undefined, range });
 
-  // Realtime stream (snapshots + live count + live city points)
+  // Realtime stream (payload + live count + liveCities)
   const { data: rtData, liveCount, liveCities } =
     useDashboardRealtime(siteId ?? undefined, range);
 
@@ -76,7 +76,7 @@ export default function Dashboard() {
   const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
   const cityPoints = (liveCities && liveCities.length > 0) ? liveCities : geoCities;
 
-  // Warm the query cache when rtData lands
+  // Warm react-query cache when fresh data arrives
   const qc = useQueryClient();
   useEffect(() => {
     if (!data || siteId == null) return;
@@ -125,7 +125,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                refetch(); // ensures immediate REST refresh on site switch
+                refetch(); // immediate REST refresh on site switch
               }}
               disabled={sitesLoading || siteOptions.length === 0}
             >
@@ -263,7 +263,7 @@ export default function Dashboard() {
                 ) : (
                   <WorldMap
                     countries={data?.countries ?? []}
-                    cities={cityPoints}      // ✅ live if present, else REST fallback
+                    cities={cityPoints}   // ✅ liveCities if present, else REST geo fallback
                     height={540}
                   />
                 )}
