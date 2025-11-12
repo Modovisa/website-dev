@@ -21,14 +21,12 @@ type State = {
 
 type Options = {
   stopRetryOn401?: boolean;
-  wsSilentTimeoutMs?: number;
-  analyticsFailoverMs?: number; // how long after open before we declare “no analytics frames”
+  wsSilentTimeoutMs?: number;      // how long to wait for WS open before priming REST (first mount only)
 };
 
 const DEFAULTS: Required<Options> = {
   stopRetryOn401: true,
   wsSilentTimeoutMs: 6000,
-  analyticsFailoverMs: 7000,
 };
 
 export function useDashboardRealtime(
@@ -36,10 +34,7 @@ export function useDashboardRealtime(
   range: RangeKey,
   opts?: Options
 ) {
-  const { stopRetryOn401, wsSilentTimeoutMs, analyticsFailoverMs } = {
-    ...DEFAULTS,
-    ...(opts || {}),
-  };
+  const { stopRetryOn401, wsSilentTimeoutMs } = { ...DEFAULTS, ...(opts || {}) };
 
   const [state, setState] = useState<State>({
     data: null,
@@ -49,70 +44,54 @@ export function useDashboardRealtime(
     error: null,
   });
 
+  // --- refs (lifecycle + guards) ---
   const socketRef = useRef<WebSocket | null>(null);
   const pingRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
+
   const hardStopRef = useRef<boolean>(false);
   const currentSiteRef = useRef<number | null>(null);
   const lastRangeRef = useRef<RangeKey>(range);
-  const backoffRef = useRef<number>(1000);
 
-  // track whether we’ve seen frames after open
-  const seenAnalyticsRef = useRef(false);
-  const seenCitiesRef = useRef(false);
-  const failoverTimerRef = useRef<number | null>(null);
+  // prevent overlapping connects (the “double connect” → 1006 loop)
+  const connectingRef = useRef<boolean>(false);
+
+  // whether we’ve primed REST once on initial mount/open wait
+  const didInitialPrimeRef = useRef<boolean>(false);
+
+  const log = (...a: any[]) => { if (DEBUG) console.log("[DashboardWS]", ...a); };
+  const warn = (...a: any[]) => { if (DEBUG) console.warn("[DashboardWS]", ...a); };
 
   const setLoading = (v: boolean) => setState((s) => ({ ...s, isLoading: v }));
-  const setError = (msg: string | null) => setState((s) => ({ ...s, error: msg }));
-
-  const log = (...a: any[]) => {
-    if (DEBUG) console.log("[DashboardWS]", ...a);
-  };
-  const warn = (...a: any[]) => {
-    if (DEBUG) console.warn("[DashboardWS]", ...a);
-  };
+  const setError   = (msg: string | null) => setState((s) => ({ ...s, error: msg }));
 
   const clearSocket = useCallback(() => {
-    try {
-      socketRef.current?.close();
-    } catch {}
+    try { socketRef.current?.close(); } catch {}
     socketRef.current = null;
-    if (pingRef.current) {
-      window.clearInterval(pingRef.current);
-      pingRef.current = null;
-    }
+    if (pingRef.current) { window.clearInterval(pingRef.current); pingRef.current = null; }
   }, []);
 
-  const resetBackoff = () => {
-    backoffRef.current = 1000;
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
+  const resetReconnect = () => {
+    if (reconnectTimerRef.current) { window.clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
   };
 
-  const scheduleReconnect = (sid: number) => {
+  const scheduleReconnect = (sid: number, wait = 1200) => {
     if (hardStopRef.current) return;
-    if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-    const wait = backoffRef.current + Math.floor(Math.random() * 500);
+    if (connectingRef.current) return;
+    resetReconnect();
     reconnectTimerRef.current = window.setTimeout(() => {
-      backoffRef.current = Math.min(backoffRef.current * 2, 15000);
-      log(`Reconnecting in ${wait}ms (site ${sid})…`);
       connectWS(sid);
     }, wait) as unknown as number;
   };
 
+  // REST snapshot (no navigation, no reload – pure state set)
   const primeREST = useCallback(
     async (sid: number) => {
       setLoading(true);
       log("REST snapshot…", { siteId: sid, range });
       try {
-        const snap = await getDashboardSnapshot({
-          siteId: sid,
-          range,
-          tzOffset: new Date().getTimezoneOffset(),
-        });
-        setState((s) => ({ ...s, data: snap, isLoading: false, error: null }));
+        const snap = await getDashboardSnapshot({ siteId: sid, range, tzOffset: new Date().getTimezoneOffset() });
+        setState((s) => ({ ...s, data: mergeForRealtime(s.data, snap), isLoading: false, error: null }));
         log("Snapshot OK.");
       } catch (e: any) {
         setLoading(false);
@@ -130,54 +109,48 @@ export function useDashboardRealtime(
     [range, stopRetryOn401]
   );
 
+  // normalize live city payloads from WS
   const normalizeCityPoints = (payload: any): GeoCityPoint[] => {
-    const arr = Array.isArray(payload?.points)
-      ? payload.points
-      : Array.isArray(payload?.clusters)
-      ? payload.clusters
-      : Array.isArray(payload)
-      ? payload
-      : [];
-    return arr
-      .map((v: any) => {
-        const lat = Number(v.lat ?? v.location?.lat ?? 0);
-        const lng = Number(v.lng ?? v.location?.lng ?? 0);
-        const count = Number(v.count ?? v.visitors ?? v.value ?? 0);
-        return {
-          city: String(v.city ?? v.city_name ?? v.name ?? "Unknown"),
-          country: String(v.country ?? v.country_name ?? v.cc ?? "Unknown"),
-          lat: Number.isFinite(lat) ? lat : 0,
-          lng: Number.isFinite(lng) ? lng : 0,
-          count: Number.isFinite(count) ? count : 0,
-          debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
-        };
-      })
-      .filter((p: GeoCityPoint) => p.lat !== 0 || p.lng !== 0);
-  };
-
-  const startFailoverTimer = (sid: number) => {
-    if (failoverTimerRef.current) window.clearTimeout(failoverTimerRef.current);
-    failoverTimerRef.current = window.setTimeout(async () => {
-      if (!seenAnalyticsRef.current) {
-        warn("No analytics frame after open → REST prime.");
-        primeREST(sid);
-      }
-      // no REST cities fallback (Bootstrap-exact flow)
-    }, analyticsFailoverMs) as unknown as number;
+    const arr = Array.isArray(payload?.points) ? payload.points
+            : Array.isArray(payload?.clusters) ? payload.clusters
+            : Array.isArray(payload) ? payload
+            : [];
+    return arr.map((v: any) => {
+      const lat = Number(v.lat ?? v.location?.lat ?? 0);
+      const lng = Number(v.lng ?? v.location?.lng ?? 0);
+      const count = Number(v.count ?? v.visitors ?? v.value ?? 0);
+      return {
+        city: String(v.city ?? v.city_name ?? v.name ?? "Unknown"),
+        country: String(v.country ?? v.country_name ?? v.cc ?? "Unknown"),
+        lat: Number.isFinite(lat) ? lat : 0,
+        lng: Number.isFinite(lng) ? lng : 0,
+        count: Number.isFinite(count) ? count : 0,
+        debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
+      };
+    }).filter((p: GeoCityPoint) => p.lat !== 0 || p.lng !== 0);
   };
 
   const connectWS = useCallback(
     async (sid: number, forceTicket = false) => {
       if (hardStopRef.current) return;
+      if (connectingRef.current) return;
+      connectingRef.current = true;
 
-      seenAnalyticsRef.current = false;
-      seenCitiesRef.current = false;
+      // do not clear/close existing WS if it’s already OPEN to avoid churn
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && !forceTicket) {
+        connectingRef.current = false;
+        return;
+      }
+
+      // always close any half-open sockets
+      clearSocket();
 
       let ticket: string;
       try {
         ticket = await getWSTicket(sid, { force: forceTicket });
         log(forceTicket ? "Ticket (forced) OK." : "Ticket OK (cached/ok).");
       } catch (e: any) {
+        connectingRef.current = false;
         if (e instanceof UnauthorizedError) {
           setError("unauthorized");
           (window as any).logoutAndRedirect?.("401");
@@ -190,66 +163,43 @@ export function useDashboardRealtime(
         return;
       }
 
-      clearSocket();
-      const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(
-        ticket
-      )}`;
+      const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
       const ws = new WebSocket(url);
       socketRef.current = ws;
       log("WS connecting…", url);
 
+      // One-time open wait: if server is slow to accept, prime a snapshot ONCE.
       const openFallback = window.setTimeout(() => {
-        if (socketRef.current === ws && ws.readyState !== WebSocket.OPEN) {
-          warn("WS open timeout → REST prime.");
+        if (!didInitialPrimeRef.current && socketRef.current === ws && ws.readyState !== WebSocket.OPEN) {
+          log("WS open timeout → one-time REST prime.");
+          didInitialPrimeRef.current = true;
           primeREST(sid);
         }
       }, wsSilentTimeoutMs);
 
       ws.onopen = () => {
         window.clearTimeout(openFallback);
+        connectingRef.current = false;
         log("WS open.");
 
-        // --- Bootstrap-exact handshake ---
-        // 1) subscribe to frames
-        // 2) request dashboard snapshot
-        // 3) request live city clusters
+        // Subscribe + request snapshot+live cities (Bootstrap handshake)
         const payload = { site_id: sid, range: lastRangeRef.current };
         try {
-          ws.send(
-            JSON.stringify({
-              type: "subscribe",
-              channels: ["dashboard_analytics", "live_visitor_location_grouped"],
-              ...payload,
-            })
-          );
+          ws.send(JSON.stringify({ type: "subscribe", channels: ["dashboard_analytics", "live_visitor_location_grouped"], ...payload }));
           ws.send(JSON.stringify({ type: "request_dashboard_snapshot", ...payload }));
           ws.send(JSON.stringify({ type: "request_live_cities", ...payload }));
-        } catch (e) {
-          warn("WS send failed:", e);
-        }
-        // --- end Bootstrap-exact ---
+        } catch (e) { warn("WS send failed:", e); }
 
         // keepalive
         pingRef.current = window.setInterval(() => {
-          try {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "ping" }));
-            }
-          } catch {}
+          try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); } catch {}
         }, 25000) as unknown as number;
-
-        // start failover clock (if frames don’t arrive)
-        startFailoverTimer(sid);
       };
 
       ws.onmessage = (ev) => {
         if (ws.readyState !== WebSocket.OPEN) return;
         let msg: any;
-        try {
-          msg = JSON.parse(ev.data);
-        } catch {
-          return;
-        }
+        try { msg = JSON.parse(ev.data); } catch { return; }
 
         const msgSiteId = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
         if (msgSiteId && String(msgSiteId) !== String(currentSiteRef.current)) return;
@@ -257,12 +207,7 @@ export function useDashboardRealtime(
         if (msg.type === "dashboard_analytics" && msg.payload) {
           const incoming = msg.payload as DashboardPayload;
           if (incoming.range && incoming.range !== lastRangeRef.current) return;
-          seenAnalyticsRef.current = true;
-          setState((s) => ({
-            ...s,
-            data: mergeForRealtime(s.data, incoming),
-            error: null,
-          }));
+          setState((s) => ({ ...s, data: mergeForRealtime(s.data, incoming), error: null }));
           log("Frame: dashboard_analytics");
         }
 
@@ -273,11 +218,8 @@ export function useDashboardRealtime(
           msg.type === "city_groups" ||
           msg.type === "live_visitors_clustered"
         ) {
-          const points = normalizeCityPoints(
-            msg.payload ?? msg.data ?? msg.points ?? msg.clusters ?? []
-          );
+          const points = normalizeCityPoints(msg.payload ?? msg.data ?? msg.points ?? msg.clusters ?? []);
           const total = points.reduce((sum, p) => sum + (p.count || 0), 0);
-          seenCitiesRef.current = true;
           setState((s) => ({ ...s, liveCities: points, liveCount: total }));
           log(`Frame: live cities (${points.length} clusters, total=${total}).`);
         }
@@ -291,10 +233,11 @@ export function useDashboardRealtime(
 
       ws.onerror = (ev) => {
         warn("WS error", ev);
-        scheduleReconnect(sid);
       };
 
       ws.onclose = (ev) => {
+        connectingRef.current = false;
+        // Policy closes → stop. Otherwise, single mild reconnect.
         if ([4001, 4003, 4401].includes(ev.code)) {
           warn(`WS closed (policy ${ev.code}) → stop.`);
           if (stopRetryOn401) hardStopRef.current = true;
@@ -310,42 +253,28 @@ export function useDashboardRealtime(
   // lifecycle
   useEffect(() => {
     if (!siteId) return;
+
     hardStopRef.current = false;
-    if (failoverTimerRef.current) {
-      window.clearTimeout(failoverTimerRef.current);
-      failoverTimerRef.current = null;
-    }
-    resetBackoff();
     currentSiteRef.current = siteId;
     lastRangeRef.current = range;
 
-    primeREST(siteId).then(() => connectWS(siteId));
+    // One initial snapshot (Bootstrap parity), then WS
+    didInitialPrimeRef.current = false;
+    primeREST(siteId).finally(() => connectWS(siteId));
 
-    const vis = () => {
-      if (document.visibilityState === "visible") {
-        if (!hardStopRef.current) {
-          resetBackoff();
-          connectWS(siteId);
-        }
-      } else {
-        log("Hidden → closing WS.");
-        clearSocket();
-      }
-    };
-    document.addEventListener("visibilitychange", vis);
+    // IMPORTANT: no visibilitychange handler.
+    // Bootstrap code doesn’t auto-close WS on tab hide; React shouldn’t either.
 
     return () => {
-      document.removeEventListener("visibilitychange", vis);
+      // cleanup on unmount/unroute
+      resetReconnect();
       clearSocket();
-      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-      if (failoverTimerRef.current) window.clearTimeout(failoverTimerRef.current);
     };
   }, [siteId, range, connectWS, clearSocket, primeREST]);
 
   // public API
   const reconnectWS = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
-    resetBackoff();
     connectWS(siteId);
   }, [siteId, connectWS]);
 
@@ -356,16 +285,15 @@ export function useDashboardRealtime(
 
   const restart = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
-    resetBackoff();
-    connectWS(siteId, true); // force a brand new ticket
+    clearSocket();
+    connectWS(siteId, true); // force new ticket
     primeREST(siteId);
-  }, [siteId, connectWS, primeREST]);
+  }, [siteId, connectWS, primeREST, clearSocket]);
 
   const disconnect = useCallback(() => {
     hardStopRef.current = true;
+    resetReconnect();
     clearSocket();
-    if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-    if (failoverTimerRef.current) window.clearTimeout(failoverTimerRef.current);
   }, [clearSocket]);
 
   return {
