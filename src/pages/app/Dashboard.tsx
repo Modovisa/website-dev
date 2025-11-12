@@ -63,17 +63,13 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // REST snapshot first, then WS refine
-  const { data, liveCount, liveCities, isLoading, error, reconnect } = useDashboardRealtime(
-    siteId ?? null,
-    range,
-    { stopRetryOn401: true }
-  );
+  // REST first, then WS refine
+  const { data, liveCount, liveCities, isLoading, error, refreshSnapshot, reconnectWS, restart } =
+    useDashboardRealtime(siteId ?? null, range, { stopRetryOn401: true });
 
-  // KPI skeletons should show until we have the FIRST snapshot
-  const kpiLoading = !data;
-  // Page-level loading (charts/table skeletons during first paint)
-  const pageLoading = isLoading || (!data && !error);
+  // Skeleton policy
+  const kpiLoading = !data;                     // show KPI skeletons until first snapshot lands
+  const pageLoading = isLoading || (!data && !error); // big blocks skeleton until first snapshot or hard error
 
   const topCards = [
     { key: "live",   name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users,            change: null },
@@ -112,6 +108,8 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
+                // when switching sites: fast snapshot; WS will reconnect via hook effect
+                refreshSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
             >
@@ -126,7 +124,10 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
+            <Select value={range} onValueChange={(v: RangeKey) => {
+              setRange(v);
+              refreshSnapshot(); // immediate REST repaint on range change
+            }}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -141,10 +142,14 @@ export default function Dashboard() {
 
             <Button
               variant="outline"
-              onClick={() => reconnect()}
+              onClick={() => {
+                // Always refresh data instantly; try to restart WS politely
+                refreshSnapshot();
+                reconnectWS();
+              }}
               disabled={!siteId}
               className="gap-2"
-              title="Refresh snapshot + keep live stream"
+              title="Refresh snapshot and retry live stream"
             >
               <RefreshCcw className="h-4 w-4" />
               Refresh
@@ -159,6 +164,11 @@ export default function Dashboard() {
             <div className="text-sm">
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
+              <div className="mt-2">
+                <Button variant="secondary" size="sm" onClick={() => restart()} disabled={!siteId}>
+                  Try again
+                </Button>
+              </div>
             </div>
           </div>
         )}

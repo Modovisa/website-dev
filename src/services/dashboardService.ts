@@ -1,7 +1,7 @@
 // src/services/dashboardService.ts
+
 // Single source of truth for dashboard REST + WS ticket
-// - No dependency on src/lib/api (build-safe)
-// - Dedupe + throttle WS ticket requests
+// - Ticket caching + dedupe + Retry-After aware
 // - Friendly HttpError + Unauthorized handling
 
 import { secureFetch } from "@/lib/auth";
@@ -24,7 +24,7 @@ export type GeoCityPoint = {
   debug_ids?: string[];
 };
 
-/* ---------- Small error class ---------- */
+/* ---------- Errors ---------- */
 export class HttpError extends Error {
   status: number;
   body?: string;
@@ -78,22 +78,42 @@ export async function getDashboardSnapshot(args: {
   return (await res.json()) as DashboardPayload;
 }
 
-/* ---------- WS ticket (dedupe + throttle + 429 backoff) ---------- */
-const inflightTickets = new Map<number, Promise<string>>();
+/* ---------- WS Ticket: cache + dedupe + 429-aware ---------- */
+const inflight = new Map<number, Promise<string>>();
+const ticketCache = new Map<number, { ticket: string; exp: number }>(); // per siteId
+let globalGateUntil = 0; // 429 Retry-After gate for ALL tickets
+
+const TICKET_TTL_MS = 60_000;     // reuse a ticket for 60s (adjust to your server validity)
+const MIN_TICKET_MS = 1500;       // fast dedupe window for repeat calls
 const lastTicketAt = new Map<number, number>();
-const MIN_TICKET_MS = 1500;
 
-export async function getWSTicket(siteId: number): Promise<string> {
+export async function getWSTicket(siteId: number, opts?: { force?: boolean }): Promise<string> {
   const now = Date.now();
-  const last = lastTicketAt.get(siteId) ?? 0;
 
-  if (now - last < MIN_TICKET_MS) {
-    const existing = inflightTickets.get(siteId);
+  // Global 429 gate
+  if (now < globalGateUntil) {
+    const wait = Math.max(0, globalGateUntil - now);
+    console.warn(`[WS] Ticket gated by 429. Waiting ${wait}ms (site ${siteId}).`);
+    throw new HttpError(429, "too_many_requests_gated");
+  }
+
+  // Per-site cached ticket
+  const cached = ticketCache.get(siteId);
+  if (!opts?.force && cached && cached.exp > now) {
+    console.debug(`[WS] Reusing cached ticket (site ${siteId}, ttl ${cached.exp - now}ms).`);
+    return cached.ticket;
+  }
+
+  // Dedupe: if a recent request is still inflight or MIN_TICKET_MS since last
+  const last = lastTicketAt.get(siteId) ?? 0;
+  if (!opts?.force && now - last < MIN_TICKET_MS) {
+    const existing = inflight.get(siteId);
     if (existing) return existing;
   }
 
   const p = (async () => {
     try {
+      console.debug(`[WS] Fetching new ticket (site ${siteId})...`);
       const res = await secureFetch("https://api.modovisa.com/api/ws-ticket", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,8 +126,9 @@ export async function getWSTicket(siteId: number): Promise<string> {
 
       if (res.status === 429) {
         const ra = Number(res.headers.get("retry-after") || "10");
-        const wait = Math.max(3, ra) * 1000;
-        await new Promise((r) => setTimeout(r, wait));
+        const waitSec = Number.isFinite(ra) ? Math.max(3, ra) : 10;
+        globalGateUntil = Date.now() + waitSec * 1000;
+        console.warn(`[WS] /ws-ticket 429. Gating all ticket requests for ~${waitSec}s.`);
         throw new HttpError(429, "too_many_requests");
       }
 
@@ -118,13 +139,18 @@ export async function getWSTicket(siteId: number): Promise<string> {
 
       const j = (await res.json()) as WSTicketAPI;
       if (!j?.ticket) throw new HttpError(500, "no_ticket");
+
+      // Cache ticket
+      const exp = Date.now() + TICKET_TTL_MS;
+      ticketCache.set(siteId, { ticket: j.ticket, exp });
+      console.debug(`[WS] Ticket OK (site ${siteId}); cached for ${TICKET_TTL_MS}ms.`);
       return j.ticket;
     } finally {
       lastTicketAt.set(siteId, Date.now());
-      inflightTickets.delete(siteId);
+      inflight.delete(siteId);
     }
   })();
 
-  inflightTickets.set(siteId, p);
+  inflight.set(siteId, p);
   return p;
 }

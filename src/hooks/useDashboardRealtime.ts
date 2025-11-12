@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getDashboardSnapshot, getWSTicket, UnauthorizedError, GeoCityPoint } from "@/services/dashboardService";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
+const DEBUG = true; // set false to silence logs
+
 type State = {
   data: DashboardPayload | null;
   liveCities: GeoCityPoint[];
@@ -44,6 +46,9 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   const setLoading = (v: boolean) => setState((s) => ({ ...s, isLoading: v }));
   const setError = (msg: string | null) => setState((s) => ({ ...s, error: msg }));
 
+  const log = (...a: any[]) => { if (DEBUG) console.log("[DashboardWS]", ...a); };
+  const warn = (...a: any[]) => { if (DEBUG) console.warn("[DashboardWS]", ...a); };
+
   const clearSocket = useCallback(() => {
     try { socketRef.current?.close(); } catch {}
     socketRef.current = null;
@@ -64,6 +69,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     const wait = backoffRef.current + Math.floor(Math.random() * 500);
     reconnectTimerRef.current = window.setTimeout(() => {
       backoffRef.current = Math.min(backoffRef.current * 2, 15000);
+      log(`Reconnecting WS in ${wait}ms (site ${sid})...`);
       connectWS(sid);
     }, wait) as unknown as number;
   };
@@ -71,34 +77,32 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   const primeREST = useCallback(
     async (sid: number) => {
       setLoading(true);
+      log("Fetching REST snapshot...", { siteId: sid, range });
       try {
         const snap = await getDashboardSnapshot({ siteId: sid, range, tzOffset: new Date().getTimezoneOffset() });
         setState((s) => ({ ...s, data: snap, isLoading: false, error: null }));
+        log("Snapshot OK.", { siteId: sid, range });
       } catch (e: any) {
         setLoading(false);
         if (e instanceof UnauthorizedError) {
           setError("unauthorized");
           (window as any).logoutAndRedirect?.("401");
           if (stopRetryOn401) hardStopRef.current = true;
+          warn("Snapshot unauthorized → stopping retries.");
           return;
         }
         setError(e?.message || "snapshot_failed");
+        warn("Snapshot failed:", e?.message || e);
       }
     },
     [range, stopRetryOn401]
   );
 
   const normalizeCityPoints = (payload: any): GeoCityPoint[] => {
-    // Accept several shapes:
-    // [{city,country,lat,lng,count,debug_ids?}]
-    // {points:[{...}]}
-    // [{location:{lat,lng}, city, country, visitors}]
-    // clustered: {clusters:[{lng,lat,count}]}
     const arr = Array.isArray(payload?.points) ? payload.points
               : Array.isArray(payload?.clusters) ? payload.clusters
               : Array.isArray(payload) ? payload
               : [];
-
     return arr.map((v: any) => {
       const lat = Number(v.lat ?? v.location?.lat ?? 0);
       const lng = Number(v.lng ?? v.location?.lng ?? 0);
@@ -115,19 +119,23 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   };
 
   const connectWS = useCallback(
-    async (sid: number) => {
+    async (sid: number, forceTicket = false) => {
       if (hardStopRef.current) return;
 
       let ticket: string;
       try {
-        ticket = await getWSTicket(sid);
+        ticket = await getWSTicket(sid, { force: forceTicket });
+        log(forceTicket ? "Ticket (forced) OK." : "Ticket OK (maybe cached).");
       } catch (e: any) {
         if (e instanceof UnauthorizedError) {
           setError("unauthorized");
           (window as any).logoutAndRedirect?.("401");
           if (stopRetryOn401) hardStopRef.current = true;
+          warn("Ticket unauthorized → stopping retries.");
           return;
         }
+        // 429 gate or other failure
+        warn("Ticket error:", e?.message || e);
         scheduleReconnect(sid);
         return;
       }
@@ -136,15 +144,18 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
       const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
       const ws = new WebSocket(url);
       socketRef.current = ws;
+      log("WS connecting...", url);
 
       const openFallback = window.setTimeout(() => {
         if (socketRef.current === ws && ws.readyState !== WebSocket.OPEN) {
+          warn("WS open timeout → re-prime REST (non-blocking).");
           primeREST(sid);
         }
       }, wsSilentTimeoutMs);
 
       ws.onopen = () => {
         window.clearTimeout(openFallback);
+        log("WS open.");
         pingRef.current = window.setInterval(() => {
           try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); } catch {}
         }, 25000) as unknown as number;
@@ -155,18 +166,18 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
         let msg: any;
         try { msg = JSON.parse(ev.data); } catch { return; }
 
-        // Some servers send site_id as number/string or nested; accept all
         const msgSiteId = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
         if (msgSiteId && String(msgSiteId) !== String(currentSiteRef.current)) return;
 
-        // 1) Analytics frames
+        // Analytics frames
         if (msg.type === "dashboard_analytics" && msg.payload) {
           const incoming = msg.payload as DashboardPayload;
           if (incoming.range && incoming.range !== lastRangeRef.current) return;
           setState((s) => ({ ...s, data: mergeForRealtime(s.data, incoming), error: null }));
+          log("Frame: dashboard_analytics");
         }
 
-        // 2) Live city clusters (support multiple event names)
+        // Live city clusters
         if (
           msg.type === "live_visitor_location_grouped" ||
           msg.type === "live_city_groups" ||
@@ -177,27 +188,36 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
           const points = normalizeCityPoints(msg.payload ?? msg.data ?? msg.points ?? msg.clusters ?? []);
           const total = points.reduce((sum, p) => sum + (p.count || 0), 0);
           setState((s) => ({ ...s, liveCities: points, liveCount: total }));
+          log(`Frame: live cities (${points.length} clusters, total=${total}).`);
         }
 
-        // 3) Simple live count
+        // Simple live count
         if (msg.type === "live_visitor_update" || msg.type === "live_count") {
           const c = Number(msg?.payload?.count ?? msg?.count ?? 0) || 0;
           setState((s) => ({ ...s, liveCount: c }));
+          log(`Frame: live count = ${c}.`);
         }
       };
 
-      ws.onerror = () => scheduleReconnect(sid);
+      ws.onerror = (ev) => {
+        warn("WS error", ev);
+        scheduleReconnect(sid);
+      };
+
       ws.onclose = (ev) => {
         if ([4001, 4003, 4401].includes(ev.code)) {
+          warn(`WS closed (policy ${ev.code}) → stopping retries.`);
           if (stopRetryOn401) hardStopRef.current = true;
           return;
         }
+        warn(`WS closed (${ev.code}) → reconnecting.`);
         scheduleReconnect(sid);
       };
     },
     [clearSocket, primeREST, stopRetryOn401, wsSilentTimeoutMs]
   );
 
+  // lifecycle
   useEffect(() => {
     if (!siteId) return;
     hardStopRef.current = false;
@@ -214,6 +234,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
           connectWS(siteId);
         }
       } else {
+        log("Page hidden → closing WS.");
         clearSocket();
       }
     };
@@ -226,11 +247,24 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     };
   }, [siteId, range, connectWS, clearSocket, primeREST]);
 
-  const reconnect = useCallback(() => {
+  // public API
+  const reconnectWS = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
     resetBackoff();
     connectWS(siteId);
   }, [siteId, connectWS]);
+
+  const refreshSnapshot = useCallback(() => {
+    if (!siteId) return;
+    primeREST(siteId);
+  }, [siteId, primeREST]);
+
+  const restart = useCallback(() => {
+    if (!siteId || hardStopRef.current) return;
+    resetBackoff();
+    connectWS(siteId, true); // force new ticket if needed
+    primeREST(siteId);
+  }, [siteId, connectWS, primeREST]);
 
   const disconnect = useCallback(() => {
     hardStopRef.current = true;
@@ -244,7 +278,9 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     liveCount: state.liveCount,
     isLoading: state.isLoading,
     error: state.error,
-    reconnect,
+    refreshSnapshot,
+    reconnectWS,
+    restart,
     disconnect,
   };
 }
