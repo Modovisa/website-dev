@@ -1,11 +1,7 @@
 // src/hooks/useDashboardRealtime.ts
-// Hook that:
-// 1) Immediately loads a REST snapshot so the dashboard renders fast.
-// 2) Opens a WS to refine live metrics (cities, counts, streaming analytics).
-// 3) Optionally stops retry spam on hard 401.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getDashboardSnapshot, getWSTicket, HttpError, UnauthorizedError, GeoCityPoint } from "@/services/dashboardService";
+import { getDashboardSnapshot, getWSTicket, UnauthorizedError, GeoCityPoint } from "@/services/dashboardService";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 type State = {
@@ -17,8 +13,8 @@ type State = {
 };
 
 type Options = {
-  stopRetryOn401?: boolean;   // default true
-  wsSilentTimeoutMs?: number; // if WS doesn’t open in this time, do a refresh (default 6000)
+  stopRetryOn401?: boolean;
+  wsSilentTimeoutMs?: number;
 };
 
 const DEFAULTS: Required<Options> = {
@@ -43,39 +39,45 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   const hardStopRef = useRef<boolean>(false);
   const currentSiteRef = useRef<number | null>(null);
   const lastRangeRef = useRef<RangeKey>(range);
-
-  /* ---------- helpers ---------- */
-  const clearSocket = useCallback(() => {
-    try {
-      socketRef.current?.close();
-    } catch {}
-    socketRef.current = null;
-
-    if (pingRef.current) {
-      window.clearInterval(pingRef.current);
-      pingRef.current = null;
-    }
-  }, []);
+  const backoffRef = useRef<number>(1000);
 
   const setLoading = (v: boolean) => setState((s) => ({ ...s, isLoading: v }));
   const setError = (msg: string | null) => setState((s) => ({ ...s, error: msg }));
+
+  const clearSocket = useCallback(() => {
+    try { socketRef.current?.close(); } catch {}
+    socketRef.current = null;
+    if (pingRef.current) { window.clearInterval(pingRef.current); pingRef.current = null; }
+  }, []);
+
+  const resetBackoff = () => {
+    backoffRef.current = 1000;
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  };
+
+  const scheduleReconnect = (sid: number) => {
+    if (hardStopRef.current) return;
+    if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+    const wait = backoffRef.current + Math.floor(Math.random() * 500);
+    reconnectTimerRef.current = window.setTimeout(() => {
+      backoffRef.current = Math.min(backoffRef.current * 2, 15000);
+      connectWS(sid);
+    }, wait) as unknown as number;
+  };
 
   const primeREST = useCallback(
     async (sid: number) => {
       setLoading(true);
       try {
         const snap = await getDashboardSnapshot({ siteId: sid, range, tzOffset: new Date().getTimezoneOffset() });
-        setState((s) => ({
-          ...s,
-          data: snap,
-          isLoading: false,
-          error: null,
-        }));
+        setState((s) => ({ ...s, data: snap, isLoading: false, error: null }));
       } catch (e: any) {
         setLoading(false);
         if (e instanceof UnauthorizedError) {
           setError("unauthorized");
-          // hand off to global handler if present
           (window as any).logoutAndRedirect?.("401");
           if (stopRetryOn401) hardStopRef.current = true;
           return;
@@ -86,11 +88,36 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     [range, stopRetryOn401]
   );
 
+  const normalizeCityPoints = (payload: any): GeoCityPoint[] => {
+    // Accept several shapes:
+    // [{city,country,lat,lng,count,debug_ids?}]
+    // {points:[{...}]}
+    // [{location:{lat,lng}, city, country, visitors}]
+    // clustered: {clusters:[{lng,lat,count}]}
+    const arr = Array.isArray(payload?.points) ? payload.points
+              : Array.isArray(payload?.clusters) ? payload.clusters
+              : Array.isArray(payload) ? payload
+              : [];
+
+    return arr.map((v: any) => {
+      const lat = Number(v.lat ?? v.location?.lat ?? 0);
+      const lng = Number(v.lng ?? v.location?.lng ?? 0);
+      const count = Number(v.count ?? v.visitors ?? v.value ?? 0);
+      return {
+        city: String(v.city ?? v.city_name ?? v.name ?? "Unknown"),
+        country: String(v.country ?? v.country_name ?? v.cc ?? "Unknown"),
+        lat: Number.isFinite(lat) ? lat : 0,
+        lng: Number.isFinite(lng) ? lng : 0,
+        count: Number.isFinite(count) ? count : 0,
+        debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
+      };
+    }).filter((p: GeoCityPoint) => p.lat !== 0 || p.lng !== 0);
+  };
+
   const connectWS = useCallback(
     async (sid: number) => {
       if (hardStopRef.current) return;
 
-      // get ticket
       let ticket: string;
       try {
         ticket = await getWSTicket(sid);
@@ -101,88 +128,66 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
           if (stopRetryOn401) hardStopRef.current = true;
           return;
         }
-        // 429 or other -> schedule reconnect
         scheduleReconnect(sid);
         return;
       }
 
-      // open socket
-      const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
       clearSocket();
+      const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
       const ws = new WebSocket(url);
       socketRef.current = ws;
 
-      // fallback refresh if ws doesn’t open in time
       const openFallback = window.setTimeout(() => {
         if (socketRef.current === ws && ws.readyState !== WebSocket.OPEN) {
-          primeREST(sid); // no skeleton; the UI is already showing data
+          primeREST(sid);
         }
       }, wsSilentTimeoutMs);
 
       ws.onopen = () => {
         window.clearTimeout(openFallback);
-        // keep alive
         pingRef.current = window.setInterval(() => {
-          try {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
-          } catch {}
+          try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); } catch {}
         }, 25000) as unknown as number;
       };
 
       ws.onmessage = (ev) => {
         if (ws.readyState !== WebSocket.OPEN) return;
         let msg: any;
-        try {
-          msg = JSON.parse(ev.data);
-        } catch {
-          return;
-        }
+        try { msg = JSON.parse(ev.data); } catch { return; }
 
-        // Site guard
-        if (!msg?.site_id || String(msg.site_id) !== String(currentSiteRef.current)) return;
+        // Some servers send site_id as number/string or nested; accept all
+        const msgSiteId = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
+        if (msgSiteId && String(msgSiteId) !== String(currentSiteRef.current)) return;
 
-        // Streamed analytics
+        // 1) Analytics frames
         if (msg.type === "dashboard_analytics" && msg.payload) {
-          const data = msg.payload as DashboardPayload;
-          // ignore mismatched range (e.g., server computed old range)
-          if (data.range && data.range !== lastRangeRef.current) return;
-
-          setState((s) => ({
-            ...s,
-            data: mergeForRealtime(s.data, data),
-            error: null,
-          }));
+          const incoming = msg.payload as DashboardPayload;
+          if (incoming.range && incoming.range !== lastRangeRef.current) return;
+          setState((s) => ({ ...s, data: mergeForRealtime(s.data, incoming), error: null }));
         }
 
-        // Live city clusters
-        if (msg.type === "live_visitor_location_grouped" && Array.isArray(msg.payload)) {
-          const points: GeoCityPoint[] = msg.payload.map((v: any) => ({
-            city: v.city || "Unknown",
-            country: v.country || "Unknown",
-            lat: Number(v.lat) || 0,
-            lng: Number(v.lng) || 0,
-            count: Number(v.count) || 0,
-            debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
-          }));
-          setState((s) => ({ ...s, liveCities: points }));
+        // 2) Live city clusters (support multiple event names)
+        if (
+          msg.type === "live_visitor_location_grouped" ||
+          msg.type === "live_city_groups" ||
+          msg.type === "live_visitor_cities" ||
+          msg.type === "city_groups" ||
+          msg.type === "live_visitors_clustered"
+        ) {
+          const points = normalizeCityPoints(msg.payload ?? msg.data ?? msg.points ?? msg.clusters ?? []);
           const total = points.reduce((sum, p) => sum + (p.count || 0), 0);
-          setState((s) => ({ ...s, liveCount: total }));
+          setState((s) => ({ ...s, liveCities: points, liveCount: total }));
         }
 
-        // Simple live count
-        if (msg.type === "live_visitor_update") {
-          const c = Number(msg?.payload?.count) || 0;
+        // 3) Simple live count
+        if (msg.type === "live_visitor_update" || msg.type === "live_count") {
+          const c = Number(msg?.payload?.count ?? msg?.count ?? 0) || 0;
           setState((s) => ({ ...s, liveCount: c }));
         }
       };
 
-      ws.onerror = () => {
-        // soft error -> reconnect
-        scheduleReconnect(sid);
-      };
-
+      ws.onerror = () => scheduleReconnect(sid);
       ws.onclose = (ev) => {
-        // policy/unauth close codes: stop reconnecting
         if ([4001, 4003, 4401].includes(ev.code)) {
           if (stopRetryOn401) hardStopRef.current = true;
           return;
@@ -193,27 +198,6 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     [clearSocket, primeREST, stopRetryOn401, wsSilentTimeoutMs]
   );
 
-  const backoffRef = useRef<number>(1000); // start 1s
-  const scheduleReconnect = (sid: number) => {
-    if (hardStopRef.current) return;
-    if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-
-    const wait = backoffRef.current + Math.floor(Math.random() * 500);
-    reconnectTimerRef.current = window.setTimeout(() => {
-      backoffRef.current = Math.min(backoffRef.current * 2, 15000); // cap 15s
-      connectWS(sid);
-    }, wait) as unknown as number;
-  };
-
-  const resetBackoff = () => {
-    backoffRef.current = 1000;
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-  };
-
-  /* ---------- lifecycle ---------- */
   useEffect(() => {
     if (!siteId) return;
     hardStopRef.current = false;
@@ -221,13 +205,8 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     currentSiteRef.current = siteId;
     lastRangeRef.current = range;
 
-    // Always show a fresh REST snapshot first
-    primeREST(siteId).then(() => {
-      // Then open WS
-      connectWS(siteId);
-    });
+    primeREST(siteId).then(() => connectWS(siteId));
 
-    // visibility handler: reconnect on focus, close on hide
     const vis = () => {
       if (document.visibilityState === "visible") {
         if (!hardStopRef.current) {
@@ -245,9 +224,8 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
       clearSocket();
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
     };
-  }, [siteId, range, connectWS, primeREST, clearSocket]);
+  }, [siteId, range, connectWS, clearSocket, primeREST]);
 
-  /* ---------- public API ---------- */
   const reconnect = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
     resetBackoff();
@@ -271,14 +249,11 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   };
 }
 
-/* ---------- tiny merge helper so realtime data doesn’t flicker ---------- */
 function mergeForRealtime(prev: DashboardPayload | null, next: DashboardPayload): DashboardPayload {
   if (!prev) return next;
-
   return {
     ...prev,
     ...next,
-    // Prefer freshest arrays if present, otherwise keep previous to avoid blanking charts
     time_grouped_visits: next.time_grouped_visits ?? prev.time_grouped_visits,
     unique_vs_returning: next.unique_vs_returning ?? prev.unique_vs_returning,
     funnel: next.funnel ?? prev.funnel,

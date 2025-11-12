@@ -7,12 +7,12 @@ import type { GeoCityPoint } from "@/services/dashboardService";
 type CountryRow = { country: string; count: number };
 type Props = {
   countries: CountryRow[];
-  cities?: GeoCityPoint[]; // live city groups [{lng,lat,count,city,country,debug_ids?}]
+  cities?: GeoCityPoint[];
   rangeLabel?: string;
   height?: number;
 };
 
-let WORLD_JSON_LOADED = false; // cache across mounts
+let WORLD_JSON_LOADED = false;
 
 export default function WorldMap({ countries = [], cities = [], rangeLabel, height = 540 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -33,15 +33,13 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
     [cities]
   );
 
-  // init once
   useEffect(() => {
     let chart: echarts.ECharts | null = null;
-    let disposed = false;
 
     (async () => {
       try {
         if (!WORLD_JSON_LOADED) {
-          const res = await fetch("/assets/maps/world.json");
+          const res = await fetch("/assets/maps/world.json", { cache: "force-cache" });
           const worldJson = await res.json();
           echarts.registerMap("world", worldJson);
           WORLD_JSON_LOADED = true;
@@ -62,7 +60,7 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
             if (typeof p.value === "number") return `${p.name}: ${p.value.toLocaleString()} visitors`;
             if (Array.isArray(p.value)) {
               const ids = p.data?.debug_ids;
-              return `${p.name}<br/>Live Visitors: ${p.value?.[2] ?? 0}${Array.isArray(ids) ? `<br/>IDs: ${ids.join(", ")}` : ""}`;
+              return `${p.name}<br/>Live Visitors: ${p.value?.[2] ?? 0}${Array.isArray(ids) && ids.length ? `<br/>IDs: ${ids.join(", ")}` : ""}`;
             }
             return `${p.name}: 0`;
           },
@@ -105,19 +103,13 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
       const onResize = () => chart?.resize();
       window.addEventListener("resize", onResize);
       return () => {
-        disposed = true;
         window.removeEventListener("resize", onResize);
         chart?.dispose();
       };
     })();
+  }, []); // mount
 
-    return () => {
-      // noop; cleanup above
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // mount once
-
-  // patch datasets without re-init
+  // Update datasets without re-init
   useEffect(() => {
     if (!ready || !ref.current) return;
     const chart = echarts.getInstanceByDom(ref.current);

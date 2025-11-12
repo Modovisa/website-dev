@@ -55,9 +55,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (websites.length) {
-      try {
-        localStorage.setItem("mv.sites", JSON.stringify(websites));
-      } catch {}
+      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
     }
     if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
       setSiteId(websites[0].id);
@@ -65,14 +63,17 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // ✅ REST snapshot first, then WS refine
+  // REST snapshot first, then WS refine
   const { data, liveCount, liveCities, isLoading, error, reconnect } = useDashboardRealtime(
     siteId ?? null,
     range,
     { stopRetryOn401: true }
   );
 
-  const loading = isLoading || (!data && !error); // first paint skeletons until we have the snapshot or a hard error
+  // KPI skeletons should show until we have the FIRST snapshot
+  const kpiLoading = !data;
+  // Page-level loading (charts/table skeletons during first paint)
+  const pageLoading = isLoading || (!data && !error);
 
   const topCards = [
     { key: "live",   name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users,            change: null },
@@ -151,15 +152,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Error banner (includes WS hard/soft errors and 401 from REST inside the hook) */}
+        {/* Error banner */}
         {error && error !== "unauthorized" && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
             <div className="text-sm">
               <div className="font-semibold text-destructive">Live stream error.</div>
-              <div className="text-muted-foreground mt-1">
-                {error}
-              </div>
+              <div className="text-muted-foreground mt-1">{error}</div>
             </div>
           </div>
         )}
@@ -173,9 +172,9 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {kpiLoading ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-8 w-24" />
+                    <Skeleton className="h-8 w-28" />
                     <div className="flex gap-2 justify-start">
                       <Skeleton className="h-3 w-16" />
                       <Skeleton className="h-3 w-10" />
@@ -198,8 +197,8 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* First paint skeletons while REST snapshot is loading */}
-        {loading ? (
+        {/* First paint skeletons for charts/tables */}
+        {pageLoading ? (
           <div className="space-y-6">
             <Skeleton className="h-[300px] w-full" />
             <div className="grid gap-6 md:grid-cols-2">
@@ -250,7 +249,7 @@ export default function Dashboard() {
                          range === "7d"  ? "Past 7 days"   :
                          range === "30d" ? "Past 30 days"  :
                          range === "90d" ? "Past 90 days"  :
-                         range === "12mo"? "Past 12 months": ""}
+                         "Past 12 months"}
                       </p>
                     </CardHeader>
                     <CardContent className="pt-2 h-[540px]">
