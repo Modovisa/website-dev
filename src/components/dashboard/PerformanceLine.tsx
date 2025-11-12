@@ -1,5 +1,6 @@
 // src/components/dashboard/PerformanceLine.tsx
 
+import { useMemo } from "react";
 import { Line } from "react-chartjs-2";
 import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 
@@ -28,63 +29,69 @@ export default function PerformanceLine({
   filled?: boolean;
   loading?: boolean;
 }) {
-  const labels = (current || previous || []).map((d) => d.label);
-  const prevMap = new Map((previous || []).map((r) => [r.label, r.count]));
-  const dsCurrent = labels.map((l) => current.find((c) => c.label === l)?.count ?? null);
-  const dsPrev = labels.map((l) => prevMap.get(l) ?? null);
+  const labels = useMemo(() => (current || previous || []).map((d) => d.label), [current, previous]);
+  const prevMap = useMemo(() => new Map((previous || []).map((r) => [r.label, r.count])), [previous]);
+  const dsCurrent = useMemo(() => labels.map((l) => current.find((c) => c.label === l)?.count ?? null), [labels, current]);
+  const dsPrev = useMemo(() => labels.map((l) => prevMap.get(l) ?? null), [labels, prevMap]);
 
   const bg = filled ? withAlphaHex(color, 0.18) : "transparent";
 
-  const ds = {
-    labels,
-    datasets: [
-      {
-        label: title,
-        data: dsCurrent,
-        borderColor: color,
-        backgroundColor: bg,
-        fill: filled ? true : false,
-        tension: 0.35,
-        pointRadius: filled ? 3 : 0,
-        pointHoverRadius: filled ? 5 : 0,
-        pointBorderWidth: filled ? 2 : 0,
-        pointBackgroundColor: color,
-        pointBorderColor: "#fff",
-        borderWidth: 2,
-        spanGaps: true,
-      },
-      {
-        label: "Previous Period",
-        data: dsPrev,
-        borderColor: chartTheme.gray,
-        borderDash: [5, 5],
-        backgroundColor: "transparent",
-        fill: false,
-        tension: 0.35,
-        pointRadius: 0,
-        borderWidth: 2,
-        spanGaps: true,
-      },
-    ],
-  };
+  const ds = useMemo(
+    () => ({
+      labels,
+      datasets: [
+        {
+          label: title,
+          data: dsCurrent,
+          borderColor: color,
+          backgroundColor: bg,
+          fill: filled ? true : false,
+          tension: 0.35,
+          pointRadius: filled ? 3 : 0,
+          pointHoverRadius: filled ? 5 : 0,
+          pointBorderWidth: filled ? 2 : 0,
+          pointBackgroundColor: color,
+          pointBorderColor: "#fff",
+          borderWidth: 2,
+          spanGaps: true,
+        },
+        {
+          label: "Previous Period",
+          data: dsPrev,
+          borderColor: chartTheme.gray,
+          borderDash: [5, 5],
+          backgroundColor: "transparent",
+          fill: false,
+          tension: 0.35,
+          pointRadius: 0,
+          borderWidth: 2,
+          spanGaps: true,
+        },
+      ],
+    }),
+    [labels, dsCurrent, dsPrev, color, bg, filled, title]
+  );
 
-  const options = {
-    ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
-    interaction: { mode: "index" as const, intersect: false },
-    scales: {
-      x: { grid: { display: false } },
-      y: { beginAtZero: true, grid: { color: chartTheme.grid } },
-    },
-    plugins: {
-      legend: { position: "bottom" as const, labels: { usePointStyle: true } },
-      tooltip: { mode: "index" as const, intersect: false },
-      filler: { propagate: false },
-    },
-  } as const;
+  const options = useMemo(
+    () => ({
+      ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
+      interaction: { mode: "index" as const, intersect: false },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: chartTheme.grid } },
+      },
+      plugins: {
+        legend: { position: "bottom" as const, labels: { usePointStyle: true } },
+        tooltip: { mode: "index" as const, intersect: false },
+        filler: { propagate: false },
+      },
+    }),
+    [] // base options are stable
+  );
 
   return (
     <ChartCard title={title} loading={loading} height={260}>
-      <Line data={ds} options={options} />
+      <Line data={ds} options={options} updateMode="none" redraw={false} />
     </ChartCard>
   );
 }

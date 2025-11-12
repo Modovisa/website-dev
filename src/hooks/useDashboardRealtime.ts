@@ -3,17 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { DashboardPayload } from "@/types/dashboard";
 import type { GeoCityPoint } from "@/services/dashboardService";
-import { API_BASE } from "@/services/http"; // optional, used for base URL
+import { API_BASE } from "@/services/http";
 import { secureFetch } from "@/lib/auth";
 
 function redirectOn401(res: Response) {
   if (res.status === 401) {
-    // Hard redirect is safest for blank screens
     window.location.replace("/login");
     throw new Error("unauthorized");
   }
 }
 
+/**
+ * Bootstrap-like model:
+ * - Take one REST snapshot (per siteId+range) for first paint.
+ * - After that, WebSocket drives live updates.
+ * - Ignore WS frames for a different `range`.
+ * - No periodic refetch; charts never blank.
+ */
 export function useDashboardRealtime(siteId?: number | string, range: string = "24h") {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [liveCount, setLiveCount] = useState<number>(0);
@@ -22,10 +28,13 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
   const wsRef = useRef<WebSocket | null>(null);
   const pingRef = useRef<number | null>(null);
   const reconnectRef = useRef<number | null>(null);
+  const currentRangeRef = useRef<string>(range);
+  currentRangeRef.current = range;
 
-  // initial REST snapshot via secureFetch
+  // One-time REST snapshot for first paint (per site+range)
   useEffect(() => {
     if (!siteId) return;
+    let aborted = false;
     (async () => {
       try {
         const tz = new Date().getTimezoneOffset();
@@ -36,14 +45,15 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
         redirectOn401(res);
         if (!res.ok) return;
         const j = (await res.json()) as DashboardPayload;
-        setData(j);
-      } catch (e) {
-        // swallow; auth handler above will redirect on 401
+        if (!aborted) setData(j);
+      } catch {
+        /* noop: 401 handler above already redirected */
       }
     })();
+    return () => { aborted = true; };
   }, [siteId, range]);
 
-  // websocket live stream (ticket via secureFetch)
+  // WebSocket stream (ticket via secureFetch)
   useEffect(() => {
     if (!siteId) return;
 
@@ -51,7 +61,7 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
 
     const connect = async () => {
       try {
-        // 1) fetch ticket securely
+        // 1) fetch short-lived WS ticket
         const tRes = await secureFetch(`${API_BASE}/api/ws-ticket`, {
           method: "POST",
           credentials: "include",
@@ -84,11 +94,15 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
           try { msg = JSON.parse(ev.data); } catch { return; }
           if (String(msg.site_id) !== String(siteId)) return;
 
+          // dashboard analytics stream (range-gated like Bootstrap)
           if (msg.type === "dashboard_analytics" && msg.payload) {
-            if (msg.payload?.range && msg.payload.range !== range) return;
-            setData(msg.payload as DashboardPayload);
+            const want = String(currentRangeRef.current || "24h");
+            if (!msg.payload.range || msg.payload.range === want) {
+              setData(msg.payload as DashboardPayload);
+            }
           }
 
+          // grouped live visitor positions (also compute total)
           if (msg.type === "live_visitor_location_grouped") {
             const incoming: GeoCityPoint[] = Array.isArray(msg.payload)
               ? msg.payload.map((v: any) => ({
@@ -105,6 +119,7 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
             setLiveCount(total);
           }
 
+          // single live count update
           if (msg.type === "live_visitor_update") {
             setLiveCount(Number(msg.payload?.count) || 0);
           }
@@ -113,7 +128,10 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
         ws.onclose = () => {
           if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null; }
           if (!closed) {
-            reconnectRef.current = window.setTimeout(connect, 4000 + Math.floor(Math.random() * 1500));
+            reconnectRef.current = window.setTimeout(
+              connect,
+              4000 + Math.floor(Math.random() * 1500)
+            );
           }
         };
 
@@ -121,7 +139,10 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
           try { ws.close(); } catch {}
         };
       } catch {
-        reconnectRef.current = window.setTimeout(connect, 5000);
+        // retry ticket after a short backoff
+        reconnectRef.current = window.setTimeout(() => {
+          if (!closed) connect();
+        }, 5000);
       }
     };
 
@@ -133,25 +154,6 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
       if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
       try { wsRef.current?.close(); } catch {}
     };
-  }, [siteId, range]);
-
-  // polling safety net via secureFetch (in case WS drops)
-  useEffect(() => {
-    if (!siteId) return;
-    const id = window.setInterval(async () => {
-      try {
-        const tz = new Date().getTimezoneOffset();
-        const r = await secureFetch(
-          `${API_BASE}/api/user-dashboard-analytics?site_id=${siteId}&range=${range}&tz_offset=${tz}`,
-          { method: "GET", credentials: "include" }
-        );
-        redirectOn401(r);
-        if (!r.ok) return;
-        const snap = (await r.json()) as DashboardPayload;
-        setData(snap);
-      } catch {}
-    }, 25000);
-    return () => clearInterval(id);
   }, [siteId, range]);
 
   return { data, liveCount, liveCities };

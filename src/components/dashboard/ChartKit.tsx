@@ -1,6 +1,6 @@
 // src/components/dashboard/ChartKit.tsx
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -8,38 +8,17 @@ import { Info } from "lucide-react";
 
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  ArcElement,
-  TimeScale,
-  Filler,
-  Tooltip,
-  Legend,
+  CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, TimeScale, Filler, Tooltip, Legend,
 } from "chart.js";
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, TimeScale, Filler, Tooltip, Legend
 );
 
-/* ---- Global chart defaults (no flicker, no reflow) ---- */
+/* ---- Global chart defaults ---- */
 ChartJS.defaults.responsive = true;
 ChartJS.defaults.maintainAspectRatio = false;
-ChartJS.defaults.animation = false;                         // <- instant updates
-// extra safety: kill transition durations
-// #@ts-expect-error - optional in some builds
-if (ChartJS.defaults.transitions?.active?.animation) {
-  // #@ts-expect-error
-  ChartJS.defaults.transitions.active.animation.duration = 0;
-}
-// #@ts-expect-error
-if (ChartJS.defaults.transitions?.resize?.animation) {
-  // #@ts-expect-error
-  ChartJS.defaults.transitions.resize.animation.duration = 0;
-}
-
+ChartJS.defaults.animation = false;
 ChartJS.defaults.font.family = "'Modovisa', system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
 ChartJS.defaults.color = "#1f2937";
 ChartJS.defaults.plugins.legend.labels.boxWidth = 12;
@@ -73,6 +52,7 @@ export function useBaseOptions(opts: BaseOpts = {}) {
     () => ({
       responsive: true,
       maintainAspectRatio: false,
+      parsing: false,
       normalized: true,
       interaction: { mode: "index" as const, intersect: false },
       plugins: {
@@ -114,7 +94,11 @@ export function InfoTip({ text }: { text: string }) {
   );
 }
 
-/* Overlay-style skeleton: chart stays mounted to avoid reflow/jumps */
+/**
+ * ChartCard:
+ * - Keeps chart mounted always.
+ * - Skeleton shows only until first successful render (no overlay on WS ticks).
+ */
 export function ChartCard({
   title,
   info,
@@ -130,6 +114,14 @@ export function ChartCard({
   className?: string;
   height?: number;
 }) {
+  const [seenDataOnce, setSeenDataOnce] = useState(false);
+
+  useEffect(() => {
+    if (!loading) setSeenDataOnce(true);
+  }, [loading]);
+
+  const showOverlay = !seenDataOnce && !!loading;
+
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -138,13 +130,11 @@ export function ChartCard({
       </CardHeader>
       <CardContent>
         <div style={{ height }} className="relative">
-          {/* Chart always mounted */}
-          <div className="absolute inset-0">
-            {children}
-          </div>
+          {/* Chart stays mounted */}
+          <div className="absolute inset-0">{children}</div>
 
-          {/* Loading overlay on top (no unmount) */}
-          {loading ? (
+          {/* First-load overlay only */}
+          {showOverlay ? (
             <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[1px] flex flex-col p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Skeleton className="h-4 w-24" />

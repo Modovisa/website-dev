@@ -9,6 +9,11 @@ export function useDashboardData({ siteId, range }: { siteId?: number; range: Ra
     queryKey: ["dashboard", siteId, range],
     enabled: !!siteId,
     queryFn: () => getDashboardData({ siteId: siteId!, range }),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
   });
 }
 
