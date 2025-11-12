@@ -41,7 +41,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
 
   return (
     <DocsLayout>
-      <div className="container max-w-10xl mx-auto py-12 px-6">
+      <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">

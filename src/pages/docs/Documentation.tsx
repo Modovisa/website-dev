@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 const Documentation = () => {
   return (
     <DocsLayout>
-      <div className="container max-w-6xl mx-auto py-12 px-6">
+      <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
