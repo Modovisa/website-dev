@@ -36,15 +36,18 @@ export default function EventVolume({
     [labels, values]
   );
 
+  // ✅ Hook at top level
+  const base = useBaseOptions({ yBeginAtZero: true, showLegend: false });
+
   const options = useMemo(
     () => ({
-      ...useBaseOptions({ yBeginAtZero: true, showLegend: false }),
+      ...base,
       scales: {
         x: { grid: { display: true, color: "rgba(0,0,0,0.03)" } },
         y: { beginAtZero: true, grid: { color: chartTheme.grid } },
       },
     }),
-    []
+    [base]
   );
 
   return (

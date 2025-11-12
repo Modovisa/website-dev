@@ -52,9 +52,12 @@ export default function TimeGroupedVisits({
     [labels, visitors, views, barPct]
   );
 
+  // ✅ Hook at top level
+  const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
+
   const options = useMemo(
     () => ({
-      ...useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true }),
+      ...base,
       scales: {
         x: {
           ticks: { color: chartTheme.axis, maxRotation: 45, minRotation: 0 },
@@ -70,12 +73,10 @@ export default function TimeGroupedVisits({
       },
       plugins: {
         legend: { position: "bottom" as const },
-        tooltip: {
-          callbacks: { label: (ctx: any) => `${ctx.dataset.label}: ${ctx.raw}` },
-        },
+        tooltip: { callbacks: { label: (ctx: any) => `${ctx.dataset.label}: ${ctx.raw}` } },
       },
     }),
-    [stepSize]
+    [base, stepSize]
   );
 
   const titleMap: Record<string, string> = {

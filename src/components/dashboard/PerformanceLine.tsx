@@ -72,9 +72,12 @@ export default function PerformanceLine({
     [labels, dsCurrent, dsPrev, color, bg, filled, title]
   );
 
+  // ✅ Call hook at top level, not inside useMemo
+  const base = useBaseOptions({ yBeginAtZero: true, showLegend: true });
+
   const options = useMemo(
     () => ({
-      ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
+      ...base,
       interaction: { mode: "index" as const, intersect: false },
       scales: {
         x: { grid: { display: false } },
@@ -86,7 +89,7 @@ export default function PerformanceLine({
         filler: { propagate: false },
       },
     }),
-    [] // base options are stable
+    [base]
   );
 
   return (
