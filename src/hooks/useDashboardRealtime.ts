@@ -1,10 +1,20 @@
 // src/hooks/useDashboardRealtime.ts
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getDashboardSnapshot, getWSTicket, UnauthorizedError, GeoCityPoint } from "@/services/dashboardService";
+iimport { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getDashboardSnapshot,
+  getWSTicket,
+  UnauthorizedError,
+  GeoCityPoint,
+  // ✅ optional REST fallback to fetch clustered cities if WS never sends them
+  // (implement getGeoEvents below in dashboardService.ts)
+  // remove if you don’t want REST fallback
+  // @ts-ignore
+  getGeoEvents,
+} from "@/services/dashboardService";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
-const DEBUG = true; // set false to silence logs
+const DEBUG = true;
 
 type State = {
   data: DashboardPayload | null;
@@ -17,15 +27,24 @@ type State = {
 type Options = {
   stopRetryOn401?: boolean;
   wsSilentTimeoutMs?: number;
+  // how long after open before we declare “no analytics frames”
+  analyticsFailoverMs?: number;
+  // try REST city points if WS never sends them
+  enableCitiesRestFallback?: boolean;
 };
 
 const DEFAULTS: Required<Options> = {
   stopRetryOn401: true,
   wsSilentTimeoutMs: 6000,
+  analyticsFailoverMs: 7000,
+  enableCitiesRestFallback: true,
 };
 
 export function useDashboardRealtime(siteId: number | null | undefined, range: RangeKey, opts?: Options) {
-  const { stopRetryOn401, wsSilentTimeoutMs } = { ...DEFAULTS, ...(opts || {}) };
+  const { stopRetryOn401, wsSilentTimeoutMs, analyticsFailoverMs, enableCitiesRestFallback } = {
+    ...DEFAULTS,
+    ...(opts || {}),
+  };
 
   const [state, setState] = useState<State>({
     data: null,
@@ -43,10 +62,15 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   const lastRangeRef = useRef<RangeKey>(range);
   const backoffRef = useRef<number>(1000);
 
-  const setLoading = (v: boolean) => setState((s) => ({ ...s, isLoading: v }));
-  const setError = (msg: string | null) => setState((s) => ({ ...s, error: msg }));
+  // track whether we’ve seen frames after open
+  const seenAnalyticsRef = useRef(false);
+  const seenCitiesRef = useRef(false);
+  const failoverTimerRef = useRef<number | null>(null);
 
-  const log = (...a: any[]) => { if (DEBUG) console.log("[DashboardWS]", ...a); };
+  const setLoading = (v: boolean) => setState((s) => ({ ...s, isLoading: v }));
+  const setError   = (msg: string | null) => setState((s) => ({ ...s, error: msg }));
+
+  const log  = (...a: any[]) => { if (DEBUG) console.log("[DashboardWS]", ...a); };
   const warn = (...a: any[]) => { if (DEBUG) console.warn("[DashboardWS]", ...a); };
 
   const clearSocket = useCallback(() => {
@@ -57,10 +81,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
 
   const resetBackoff = () => {
     backoffRef.current = 1000;
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
+    if (reconnectTimerRef.current) { window.clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
   };
 
   const scheduleReconnect = (sid: number) => {
@@ -69,7 +90,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     const wait = backoffRef.current + Math.floor(Math.random() * 500);
     reconnectTimerRef.current = window.setTimeout(() => {
       backoffRef.current = Math.min(backoffRef.current * 2, 15000);
-      log(`Reconnecting WS in ${wait}ms (site ${sid})...`);
+      log(`Reconnecting in ${wait}ms (site ${sid})…`);
       connectWS(sid);
     }, wait) as unknown as number;
   };
@@ -77,18 +98,18 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   const primeREST = useCallback(
     async (sid: number) => {
       setLoading(true);
-      log("Fetching REST snapshot...", { siteId: sid, range });
+      log("REST snapshot…", { siteId: sid, range });
       try {
         const snap = await getDashboardSnapshot({ siteId: sid, range, tzOffset: new Date().getTimezoneOffset() });
         setState((s) => ({ ...s, data: snap, isLoading: false, error: null }));
-        log("Snapshot OK.", { siteId: sid, range });
+        log("Snapshot OK.");
       } catch (e: any) {
         setLoading(false);
         if (e instanceof UnauthorizedError) {
           setError("unauthorized");
           (window as any).logoutAndRedirect?.("401");
           if (stopRetryOn401) hardStopRef.current = true;
-          warn("Snapshot unauthorized → stopping retries.");
+          warn("Snapshot unauthorized → stop.");
           return;
         }
         setError(e?.message || "snapshot_failed");
@@ -118,23 +139,48 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     }).filter((p: GeoCityPoint) => p.lat !== 0 || p.lng !== 0);
   };
 
+  const startFailoverTimer = (sid: number) => {
+    if (failoverTimerRef.current) window.clearTimeout(failoverTimerRef.current);
+    failoverTimerRef.current = window.setTimeout(async () => {
+      if (!seenAnalyticsRef.current) {
+        warn("No analytics frame after open → REST prime.");
+        primeREST(sid);
+      }
+      if (!seenCitiesRef.current && enableCitiesRestFallback) {
+        try {
+          log("No city clusters via WS → REST fallback for live cities.");
+          const pts = await getGeoEvents?.(sid);
+          if (Array.isArray(pts) && pts.length) {
+            const total = pts.reduce((s: number, p: GeoCityPoint) => s + (p.count || 0), 0);
+            setState((s) => ({ ...s, liveCities: pts, liveCount: total }));
+            log(`REST cities fallback: ${pts.length} clusters, total=${total}.`);
+          }
+        } catch (e) {
+          warn("REST cities fallback failed:", e);
+        }
+      }
+    }, analyticsFailoverMs) as unknown as number;
+  };
+
   const connectWS = useCallback(
     async (sid: number, forceTicket = false) => {
       if (hardStopRef.current) return;
 
+      seenAnalyticsRef.current = false;
+      seenCitiesRef.current = false;
+
       let ticket: string;
       try {
         ticket = await getWSTicket(sid, { force: forceTicket });
-        log(forceTicket ? "Ticket (forced) OK." : "Ticket OK (maybe cached).");
+        log(forceTicket ? "Ticket (forced) OK." : "Ticket OK (cached/ok).");
       } catch (e: any) {
         if (e instanceof UnauthorizedError) {
           setError("unauthorized");
           (window as any).logoutAndRedirect?.("401");
           if (stopRetryOn401) hardStopRef.current = true;
-          warn("Ticket unauthorized → stopping retries.");
+          warn("Ticket unauthorized → stop.");
           return;
         }
-        // 429 gate or other failure
         warn("Ticket error:", e?.message || e);
         scheduleReconnect(sid);
         return;
@@ -144,11 +190,11 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
       const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
       const ws = new WebSocket(url);
       socketRef.current = ws;
-      log("WS connecting...", url);
+      log("WS connecting…", url);
 
       const openFallback = window.setTimeout(() => {
         if (socketRef.current === ws && ws.readyState !== WebSocket.OPEN) {
-          warn("WS open timeout → re-prime REST (non-blocking).");
+          warn("WS open timeout → REST prime.");
           primeREST(sid);
         }
       }, wsSilentTimeoutMs);
@@ -156,9 +202,36 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
       ws.onopen = () => {
         window.clearTimeout(openFallback);
         log("WS open.");
+
+        // --- Bootstrap-exact handshake ---
+        // 1) subscribe to frames
+        // 2) request dashboard snapshot
+        // 3) request live city clusters
+        const payload = { site_id: sid, range: lastRangeRef.current };
+        try {
+          ws.send(JSON.stringify({
+            type: "subscribe",
+            channels: ["dashboard_analytics", "live_visitor_location_grouped"],
+            ...payload,
+          }));
+          ws.send(JSON.stringify({ type: "request_dashboard_snapshot", ...payload }));
+          ws.send(JSON.stringify({ type: "request_live_cities", ...payload }));
+        } catch (e) {
+          warn("WS send failed:", e);
+        }
+        // --- end Bootstrap-exact ---
+
+        // keepalive (unchanged)
         pingRef.current = window.setInterval(() => {
-          try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); } catch {}
+          try {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "ping" }));
+            }
+          } catch {}
         }, 25000) as unknown as number;
+
+        // optional: your existing failover timer call if present
+        startFailoverTimer?.(sid);
       };
 
       ws.onmessage = (ev) => {
@@ -169,15 +242,14 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
         const msgSiteId = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
         if (msgSiteId && String(msgSiteId) !== String(currentSiteRef.current)) return;
 
-        // Analytics frames
         if (msg.type === "dashboard_analytics" && msg.payload) {
           const incoming = msg.payload as DashboardPayload;
           if (incoming.range && incoming.range !== lastRangeRef.current) return;
+          seenAnalyticsRef.current = true;
           setState((s) => ({ ...s, data: mergeForRealtime(s.data, incoming), error: null }));
           log("Frame: dashboard_analytics");
         }
 
-        // Live city clusters
         if (
           msg.type === "live_visitor_location_grouped" ||
           msg.type === "live_city_groups" ||
@@ -187,11 +259,11 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
         ) {
           const points = normalizeCityPoints(msg.payload ?? msg.data ?? msg.points ?? msg.clusters ?? []);
           const total = points.reduce((sum, p) => sum + (p.count || 0), 0);
+          seenCitiesRef.current = true;
           setState((s) => ({ ...s, liveCities: points, liveCount: total }));
           log(`Frame: live cities (${points.length} clusters, total=${total}).`);
         }
 
-        // Simple live count
         if (msg.type === "live_visitor_update" || msg.type === "live_count") {
           const c = Number(msg?.payload?.count ?? msg?.count ?? 0) || 0;
           setState((s) => ({ ...s, liveCount: c }));
@@ -206,11 +278,11 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
 
       ws.onclose = (ev) => {
         if ([4001, 4003, 4401].includes(ev.code)) {
-          warn(`WS closed (policy ${ev.code}) → stopping retries.`);
+          warn(`WS closed (policy ${ev.code}) → stop.`);
           if (stopRetryOn401) hardStopRef.current = true;
           return;
         }
-        warn(`WS closed (${ev.code}) → reconnecting.`);
+        warn(`WS closed (${ev.code}) → reconnect.`);
         scheduleReconnect(sid);
       };
     },
@@ -221,6 +293,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   useEffect(() => {
     if (!siteId) return;
     hardStopRef.current = false;
+    if (failoverTimerRef.current) { window.clearTimeout(failoverTimerRef.current); failoverTimerRef.current = null; }
     resetBackoff();
     currentSiteRef.current = siteId;
     lastRangeRef.current = range;
@@ -234,7 +307,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
           connectWS(siteId);
         }
       } else {
-        log("Page hidden → closing WS.");
+        log("Hidden → closing WS.");
         clearSocket();
       }
     };
@@ -244,6 +317,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
       document.removeEventListener("visibilitychange", vis);
       clearSocket();
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      if (failoverTimerRef.current) window.clearTimeout(failoverTimerRef.current);
     };
   }, [siteId, range, connectWS, clearSocket, primeREST]);
 
@@ -262,7 +336,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
   const restart = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
     resetBackoff();
-    connectWS(siteId, true); // force new ticket if needed
+    connectWS(siteId, true); // force a brand new ticket
     primeREST(siteId);
   }, [siteId, connectWS, primeREST]);
 
@@ -270,6 +344,7 @@ export function useDashboardRealtime(siteId: number | null | undefined, range: R
     hardStopRef.current = true;
     clearSocket();
     if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+    if (failoverTimerRef.current) window.clearTimeout(failoverTimerRef.current);
   }, [clearSocket]);
 
   return {
