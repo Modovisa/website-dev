@@ -1,5 +1,4 @@
 // src/pages/app/Dashboard.tsx
-
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getTrackingWebsites } from "@/services/dashboardService";
@@ -9,7 +8,6 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw } from "lucide-react";
-
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import type { RangeKey } from "@/types/dashboard";
 
@@ -40,7 +38,6 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Websites list (REST)
   const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
@@ -63,13 +60,12 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // REST first, then WS refine
-  const { data, liveCount, liveCities, isLoading, error, refreshSnapshot, reconnectWS, restart } =
+  // ⬇️ pulls analyticsVersion so charts can update every WS frame
+  const { data, liveCount, liveCities, isLoading, error, analyticsVersion, refreshSnapshot, reconnectWS, restart } =
     useDashboardRealtime(siteId ?? null, range, { stopRetryOn401: true });
 
-  // Skeleton policy
-  const kpiLoading = !data;                     // show KPI skeletons until first snapshot lands
-  const pageLoading = isLoading || (!data && !error); // big blocks skeleton until first snapshot or hard error
+  const kpiLoading = !data;
+  const pageLoading = isLoading || (!data && !error);
 
   const topCards = [
     { key: "live",   name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users,            change: null },
@@ -108,7 +104,6 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                // when switching sites: fast snapshot; WS will reconnect via hook effect
                 refreshSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
@@ -126,7 +121,7 @@ export default function Dashboard() {
 
             <Select value={range} onValueChange={(v: RangeKey) => {
               setRange(v);
-              refreshSnapshot(); // immediate REST repaint on range change
+              refreshSnapshot();
             }}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
@@ -143,7 +138,6 @@ export default function Dashboard() {
             <Button
               variant="outline"
               onClick={() => {
-                // Always refresh data instantly; try to restart WS politely
                 refreshSnapshot();
                 reconnectWS();
               }}
@@ -207,7 +201,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* First paint skeletons for charts/tables */}
+        {/* First paint skeletons */}
         {pageLoading ? (
           <div className="space-y-6">
             <Skeleton className="h-[300px] w-full" />
@@ -227,7 +221,12 @@ export default function Dashboard() {
               {/* Charts Row 1 */}
               <div className="grid gap-6 md:grid-cols-3">
                 <div className="md:col-span-2">
-                  <TimeGroupedVisits data={data.time_grouped_visits ?? []} range={range} loading={false} />
+                  <TimeGroupedVisits
+                    data={data.time_grouped_visits ?? []}
+                    range={range}
+                    loading={false}
+                    version={analyticsVersion} // 🔁 force rebuild on every frame
+                  />
                 </div>
                 <EventVolume data={data.events_timeline ?? []} loading={false} />
               </div>

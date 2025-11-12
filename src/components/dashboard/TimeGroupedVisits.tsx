@@ -8,20 +8,19 @@ export default function TimeGroupedVisits({
   data,
   range,
   loading,
+  version, // 🔁 bump = rebuild dataset/options
 }: {
   data: TimeBucket[];
   range: RangeKey;
   loading?: boolean;
+  version?: number;
 }) {
-  // ---- derive series arrays (memo) ----
-  const labels = useMemo(() => (data || []).map((d) => d.label), [data]);
-  const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data]);
-  const views = useMemo(() => (data || []).map((d) => d.views || 0), [data]);
-
-  // ❗ call hooks at top level, not inside other callbacks
   const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
 
-  // ---- build chart data + options (memo) ----
+  const labels = useMemo(() => (data || []).map((d) => d.label), [data, version]);
+  const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data, version]);
+  const views = useMemo(() => (data || []).map((d) => d.views || 0), [data, version]);
+
   const { ds, options } = useMemo(() => {
     const maxValue = Math.max(0, ...visitors, ...views);
     const approxStep = Math.ceil(maxValue / 5 || 1);
@@ -32,9 +31,9 @@ export default function TimeGroupedVisits({
 
     const datasets = [
       {
-        datasetIdKey: "visitors", // keep ids stable for realtime patching
+        datasetIdKey: "visitors",
         label: "Visitors",
-        data: visitors,
+        data: visitors.slice(), // new array identity
         backgroundColor: chartTheme.primary,
         borderRadius: 4,
         stack: "stack1",
@@ -44,7 +43,7 @@ export default function TimeGroupedVisits({
       {
         datasetIdKey: "views",
         label: "Views",
-        data: views,
+        data: views.slice(),
         backgroundColor: chartTheme.primarySoft,
         borderRadius: 4,
         stack: "stack1",
@@ -82,8 +81,8 @@ export default function TimeGroupedVisits({
       maintainAspectRatio: false,
     } as const;
 
-    return { ds: { labels, datasets }, options };
-  }, [labels, visitors, views, base]);
+    return { ds: { labels: labels.slice(), datasets }, options };
+  }, [labels, visitors, views, base, version]);
 
   const titleMap: Record<string, string> = {
     "24h": "Visits — Today",
