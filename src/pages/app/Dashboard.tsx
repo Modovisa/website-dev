@@ -249,7 +249,7 @@ export default function Dashboard() {
                   <CardContent className="pt-2 h-[540px]">
                     <WorldMap
                       countries={data.countries ?? []}
-                      cities={liveCities}             {/* ← pure WS dots */}
+                      cities={liveCities}
                       height={540}
                     />
                   </CardContent>
