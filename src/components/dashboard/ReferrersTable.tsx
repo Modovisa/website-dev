@@ -16,28 +16,31 @@ export default memo(function ReferrersTable({ rows }: { rows: ReferrerRow[] }) {
 
   return (
     <div className="h-full flex flex-col text-sm">
-      {/* Header */}
-      <div className="grid grid-cols-[1fr,200px] px-4 pb-2 text-muted-foreground text-lg font-semibold">
+      {/* Header — “Referrer” | “Visitors” */}
+      <div className="grid grid-cols-[1fr,200px] px-6 pb-3 text-muted-foreground text-xs font-semibold uppercase tracking-wide">
         <div>Referrer</div>
         <div className="text-right">Visitors</div>
       </div>
 
-      {/* Rows */}
-      <div className="flex-1 divide-y divide-border rounded-xl border bg-card">
+      {/* Rows — stretch to fill card height */}
+      <div
+        className="flex-1 grid"
+        style={{ gridTemplateRows: `repeat(${rows.length}, minmax(0, 1fr))` }}
+      >
         {rows.map((r) => {
           const domain = (r.domain || "").toLowerCase();
           const pct = total ? Math.max(0, Math.min(100, (r.visitors / total) * 100)) : 0;
           const icon = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 
           return (
-            <div key={domain} className="group grid grid-cols-[1fr,200px] items-center px-4 py-3 hover:bg-muted/50">
+            <div key={domain} className="group grid grid-cols-[1fr,200px] items-center px-6 py-1 hover:bg-muted/40">
               {/* Left: referrer + icon */}
               <div className="min-w-0 pr-3">
                 <a
                   href={`https://${domain}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-foreground truncate max-w-full"
+                  className="inline-flex items-center gap-2 text-md font-medium text-foreground truncate max-w-full"
                   title={domain}
                 >
                   <img
@@ -59,15 +62,15 @@ export default memo(function ReferrersTable({ rows }: { rows: ReferrerRow[] }) {
               </div>
 
               {/* Right: number + bar with clean gap */}
-              <div className="flex items-center justify-end gap-4">
+              <div className="flex items-center justify-end gap-5">
                 <span className="font-semibold tabular-nums">{r.visitors.toLocaleString()}</span>
-                <div className="relative w-[110px] h-6">
+                <div className="relative w-[120px] h-6">
                   <div
-                    className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r-[4px] z-0"
-                    style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "#635bff", opacity: 0.15 }}
+                    className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r-[4px]"
+                    style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "rgba(99,91,255,0.15)" }}
                   />
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-[#8e8e8e] z-10" />
-                  <span className="absolute inset-0 z-20 flex items-center justify-end tabular-nums">
+                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-[#8e8e8e]" />
+                  <span className="absolute inset-0 flex items-center justify-end tabular-nums">
                     {pct.toFixed(1)}%
                   </span>
                 </div>

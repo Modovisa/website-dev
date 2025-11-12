@@ -16,27 +16,33 @@ export default memo(function TopPagesTable({ rows }: { rows: TopPageRow[] }) {
 
   return (
     <div className="h-full flex flex-col text-sm">
-      {/* Header */}
-      <div className="grid grid-cols-[1fr,200px] px-4 pb-2 text-muted-foreground text-lg font-semibold">
+      {/* Header — “Pages” | “Views” */}
+      <div className="grid grid-cols-[1fr,200px] px-6 pb-3 text-muted-foreground text-xs font-semibold uppercase tracking-wide">
         <div>Pages</div>
         <div className="text-right">Views</div>
       </div>
 
-      {/* Rows */}
-      <div className="flex-1 divide-y divide-border rounded-xl border bg-card">
+      {/* Rows — stretch to fill card height */}
+      <div
+        className="flex-1 grid"
+        style={{ gridTemplateRows: `repeat(${rows.length}, minmax(0, 1fr))` }}
+      >
         {rows.map((r) => {
           const rel = (r.url || "/").replace(/^https?:\/\/[^/]+/i, "") || "/";
           const pct = total ? Math.max(0, Math.min(100, (r.views / total) * 100)) : 0;
 
           return (
-            <div key={r.url} className="group grid grid-cols-[1fr,200px] items-center px-4 py-3 hover:bg-muted/50">
+            <div
+              key={r.url}
+              className="group grid grid-cols-[1fr,200px] items-center px-6 py-1 hover:bg-muted/40"
+            >
               {/* Left: page link */}
               <div className="min-w-0 pr-3">
                 <a
                   href={r.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-sm font-medium text-foreground truncate max-w-full"
+                  className="inline-flex items-center gap-1 text-md font-medium text-foreground truncate max-w-full"
                   title={rel}
                 >
                   <span className="truncate">{rel}</span>
@@ -50,19 +56,19 @@ export default memo(function TopPagesTable({ rows }: { rows: TopPageRow[] }) {
                 </a>
               </div>
 
-              {/* Right: number + bar */}
-              <div className="flex items-center justify-end gap-4">
+              {/* Right: number + bar with clear gap before the baseline */}
+              <div className="flex items-center justify-end gap-5">
                 <span className="font-semibold tabular-nums">{r.views.toLocaleString()}</span>
-                <div className="relative w-[110px] h-6">
-                  {/* bar */}
+                <div className="relative w-[120px] h-6">
+                  {/* fill */}
                   <div
-                    className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r-[4px] z-0"
-                    style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "#635bff", opacity: 0.15 }}
+                    className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r-[4px]"
+                    style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "rgba(99,91,255,0.15)" }}
                   />
                   {/* baseline */}
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-[#8e8e8e] z-10" />
-                  {/* percent */}
-                  <span className="absolute inset-0 z-20 flex items-center justify-end tabular-nums">
+                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-[#8e8e8e]" />
+                  {/* % */}
+                  <span className="absolute inset-0 flex items-center justify-end tabular-nums">
                     {pct.toFixed(1)}%
                   </span>
                 </div>
