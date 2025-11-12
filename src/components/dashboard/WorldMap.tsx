@@ -14,6 +14,9 @@ type Props = {
   worldJsonUrl?: string; // default: "/assets/maps/world.json"
 };
 
+// cache registration across mounts to avoid thrashing on reconnects
+let worldRegistered = false;
+
 export default function WorldMap({
   countries = [],
   cities = [],
@@ -25,13 +28,13 @@ export default function WorldMap({
   const [ready, setReady] = useState(false);
 
   const countrySeries = useMemo(
-    () => (countries || []).map(d => ({ name: d.country, value: d.count || 0 })),
+    () => (countries || []).map((d) => ({ name: d.country, value: d.count || 0 })),
     [countries]
   );
 
   const citySeries = useMemo(
     () =>
-      (cities || []).map(c => ({
+      (cities || []).map((c) => ({
         name: `${c.city || "Unknown"}, ${c.country || "Unknown"}`,
         value: [Number(c.lng), Number(c.lat), Number(c.count || 0)],
         debug_ids: Array.isArray(c.debug_ids) ? c.debug_ids : [],
@@ -39,30 +42,29 @@ export default function WorldMap({
     [cities]
   );
 
-  // One-time init: load world.json, register, init chart, set base option
+  // One-time init: register map (once), init chart, set base option
   useEffect(() => {
     let chart: echarts.ECharts | null = null;
     let disposed = false;
 
     (async () => {
-      // 1) Make sure the map is registered BEFORE setting any option that references it
       try {
-        const res = await fetch(worldJsonUrl, { cache: "force-cache" });
-        if (!res.ok) throw new Error("world.json fetch failed");
-        const worldJson = await res.json();
-        if (disposed) return;
-        echarts.registerMap("world", worldJson);
+        if (!worldRegistered) {
+          const res = await fetch(worldJsonUrl, { cache: "force-cache" });
+          if (!res.ok) throw new Error("world.json fetch failed");
+          const worldJson = await res.json();
+          if (disposed) return;
+          echarts.registerMap("world", worldJson);
+          worldRegistered = true;
+        }
       } catch (e) {
         console.error("Failed to load world.json:", e);
-        // We can still render the scatter without a base map if needed,
-        // but leave 'map: "world"' in place only if registration succeeded.
       }
 
-      // 2) Init chart
       if (!ref.current) return;
       chart = echarts.init(ref.current);
 
-      const maxVal = Math.max(10, ...countrySeries.map(d => d.value || 0));
+      const maxVal = Math.max(10, ...countrySeries.map((d) => d.value || 0));
 
       chart.setOption({
         tooltip: {
@@ -90,7 +92,6 @@ export default function WorldMap({
           inRange: { color: ["#e0f3ff", "#007bff"] },
         },
         geo: {
-          // safe: only set a map name that we attempted to register
           map: "world",
           roam: true,
           zoom: 1.2,
@@ -101,6 +102,7 @@ export default function WorldMap({
         },
         series: [
           {
+            id: "country-heat", // stable ID
             name: "Visitors",
             type: "map",
             map: "world",
@@ -108,7 +110,7 @@ export default function WorldMap({
             data: countrySeries,
           },
           {
-            id: "live-scatter",
+            id: "live-scatter", // stable ID for live updates
             name: "Live Visitors",
             type: "effectScatter",
             coordinateSystem: "geo",
@@ -141,31 +143,26 @@ export default function WorldMap({
     })();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // mount once
+  }, []); // mount once (no re-init → no flicker)
 
-  // Lightweight updates when data changes (no re-init)
+  // Incremental updates when props change (no re-init)
   useEffect(() => {
     if (!ready || !ref.current) return;
     const chart = echarts.getInstanceByDom(ref.current);
     if (!chart) return;
-    const maxVal = Math.max(10, ...countrySeries.map(d => d.value || 0));
+
+    const maxVal = Math.max(10, ...countrySeries.map((d) => d.value || 0));
 
     chart.setOption(
       {
         visualMap: { max: maxVal },
         series: [
-          { // map layer
-            type: "map",
-            map: "world",
-            data: countrySeries,
-          },
-          { // live scatter
-            id: "live-scatter",
-            data: citySeries,
-          },
+          { id: "country-heat", data: countrySeries },
+          { id: "live-scatter", data: citySeries },
         ],
       },
-      false
+      false, // notMerge
+      true   // lazyUpdate
     );
   }, [ready, countrySeries, citySeries]);
 
