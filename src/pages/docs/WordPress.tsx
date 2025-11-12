@@ -4,7 +4,7 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ShieldCheck, Download } from "lucide-react";
+import { AlertCircle, ShieldCheck } from "lucide-react";
 
 const WordPress = () => {
   const copyScriptToClipboard = () => {
@@ -71,44 +71,64 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
 
           <hr className="my-8 border-border" />
 
-          {/* Option 1: Plugin */}
+          {/* Option 1: Plugin from WordPress.org */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-6">Option 1 — Official Plugin (Recommended)</h2>
+            <h2 className="text-2xl font-bold mb-6">Option 1 — Modovisa WordPress Plugin (Recommended)</h2>
             
-            <div className="mb-6">
-              <Button asChild className="gap-2">
+            <ol className="space-y-3 list-decimal list-inside text-muted-foreground mb-6">
+              <li>In your WordPress dashboard, go to <span className="font-semibold text-foreground">Plugins → Add New</span>.</li>
+              <li>Search for <span className="font-semibold text-foreground">"Modovisa Analytics"</span> and install the plugin by Modovisa.</li>
+              <li>Activate the plugin and open <span className="font-semibold text-foreground">Settings → Modovisa Analytics</span>.</li>
+              <li>Paste your <span className="font-semibold text-foreground">Tracking Token</span> and click <span className="font-semibold text-foreground">Save</span>.</li>
+            </ol>
+
+            {/* Video Tutorial */}
+            <div className="border border-border rounded-lg overflow-hidden shadow-lg mb-6">
+              <div className="relative" style={{ paddingBottom: '56.25%' }}>
+                <iframe
+                  src="https://www.youtube.com/embed/olSW5JawjzE?si=VMVDmRp1wDDcmtT2"
+                  title="Install Modovisa on WordPress"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  className="absolute top-0 left-0 w-full h-full"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-4 bg-muted rounded-lg">
+              <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                If you manage multiple sites, repeat these steps per site. Each site has its own <span className="font-semibold">Tracking Token</span>.
+              </p>
+            </div>
+          </div>
+
+          <hr className="my-8 border-border" />
+
+          {/* Alternative: ZIP Upload from WordPress.org */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-6">Alternative — Install the plugin by uploading the ZIP</h2>
+            <p className="text-muted-foreground mb-4">
+              If your site can't install plugins directly from the directory, download the plugin ZIP from WordPress.org and upload it in your dashboard.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <Button variant="outline" asChild>
                 <a 
-                  href="https://cdn.modovisa.com/wordpress/releases/modovisa-1.0.1.zip" 
+                  href="https://wordpress.org/plugins/modovisa-analytics/" 
                   target="_blank" 
                   rel="noopener"
                 >
-                  <Download className="h-4 w-4" />
-                  Download Modovisa Plugin (v1.0.1)
+                  Download Modovisa Analytics
                 </a>
               </Button>
-              <p className="text-sm text-muted-foreground mt-2">ZIP file for manual upload</p>
+              <span className="text-sm text-muted-foreground">WordPress.org extension page</span>
             </div>
 
             <ol className="space-y-3 list-decimal list-inside text-muted-foreground mb-4">
-              <li>
-                Sign up at{" "}
-                <a href="https://modovisa.com" target="_blank" rel="noopener" className="text-primary hover:underline">
-                  modovisa.com
-                </a>{" "}
-                to get your <span className="font-semibold text-foreground">Tracking Token</span>.
-              </li>
-              <li>
-                Download the plugin:{" "}
-                <a 
-                  href="https://cdn.modovisa.com/wordpress/releases/modovisa-1.0.1.zip" 
-                  target="_blank" 
-                  rel="noopener"
-                  className="text-primary hover:underline"
-                >
-                  modovisa-1.0.1.zip
-                </a>
-                .
-              </li>
+              <li>Download the ZIP from the button above (it will be named like <code className="px-2 py-1 bg-muted rounded text-foreground">modovisa-analytics.zip</code>).</li>
               <li>In your WP Admin, go to <span className="font-semibold text-foreground">Plugins → Add New → Upload Plugin</span>.</li>
               <li>Choose the ZIP file and click <span className="font-semibold text-foreground">Install Now</span>, then <span className="font-semibold text-foreground">Activate</span>.</li>
               <li>Open <span className="font-semibold text-foreground">Settings → Modovisa Analytics</span>, paste your <span className="font-semibold text-foreground">Tracking Token</span>, and <span className="font-semibold text-foreground">Save</span>.</li>
