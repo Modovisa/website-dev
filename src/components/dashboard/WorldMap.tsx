@@ -7,11 +7,12 @@ import type { GeoCityPoint } from "@/services/dashboardService";
 type CountryRow = { country: string; count: number };
 type Props = {
   countries: CountryRow[];
-  cities?: GeoCityPoint[]; // optional; can pass live city data later
-  siteId?: number;         // used only for live updates if you want later
-  rangeLabel?: string;     // e.g., 'Past 7 days'
-  height?: number;         // px
+  cities?: GeoCityPoint[]; // live city groups [{lng,lat,count,city,country,debug_ids?}]
+  rangeLabel?: string;
+  height?: number;
 };
+
+let WORLD_JSON_LOADED = false; // cache across mounts
 
 export default function WorldMap({ countries = [], cities = [], rangeLabel, height = 540 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -32,17 +33,19 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
     [cities]
   );
 
+  // init once
   useEffect(() => {
     let chart: echarts.ECharts | null = null;
     let disposed = false;
 
     (async () => {
-      // Load world geojson once per mount
       try {
-        const res = await fetch("/assets/maps/world.json");
-        const worldJson = await res.json();
-        if (disposed) return;
-        echarts.registerMap("world", worldJson);
+        if (!WORLD_JSON_LOADED) {
+          const res = await fetch("/assets/maps/world.json");
+          const worldJson = await res.json();
+          echarts.registerMap("world", worldJson);
+          WORLD_JSON_LOADED = true;
+        }
       } catch (e) {
         console.error("Failed to load world.json", e);
       }
@@ -52,7 +55,6 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
       setReady(true);
 
       const maxVal = Math.max(10, ...countrySeries.map((d) => d.value || 0));
-
       chart.setOption({
         tooltip: {
           trigger: "item",
@@ -84,13 +86,7 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
           emphasis: { itemStyle: { areaColor: "#e0f2fe" } },
         },
         series: [
-          {
-            name: "Visitors",
-            type: "map",
-            map: "world",
-            geoIndex: 0,
-            data: countrySeries,
-          },
+          { name: "Visitors", type: "map", map: "world", geoIndex: 0, data: countrySeries },
           {
             id: "live-scatter",
             name: "Live Visitors",
@@ -114,9 +110,14 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
         chart?.dispose();
       };
     })();
+
+    return () => {
+      // noop; cleanup above
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount once
 
-  // Lightweight updates (countries/cities) without full re-init
+  // patch datasets without re-init
   useEffect(() => {
     if (!ready || !ref.current) return;
     const chart = echarts.getInstanceByDom(ref.current);
@@ -125,7 +126,10 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
     chart.setOption(
       {
         visualMap: { max: maxVal },
-        series: [{ type: "map", data: countrySeries }, { id: "live-scatter", data: citySeries }],
+        series: [
+          { type: "map", data: countrySeries },
+          { id: "live-scatter", data: citySeries },
+        ],
       },
       false
     );

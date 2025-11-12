@@ -33,7 +33,7 @@ export default memo(function ReferrersTable({ rows }: { rows: ReferrerRow[] }) {
           const icon = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 
           return (
-            <div key={domain} className="group grid grid-cols-[1fr,200px] items-center px-6 py-1 hover:bg-muted/40">
+            <div key={domain} className="group grid grid-cols-[1fr,200px] items-center px-6 py-3 hover:bg-muted/40">
               {/* Left: referrer + icon */}
               <div className="min-w-0 pr-3">
                 <a

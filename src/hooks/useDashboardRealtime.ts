@@ -104,5 +104,21 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
     };
   }, [siteId, range]);
 
+  // inside useDashboardRealtime(siteId, range)
+  useEffect(() => {
+    if (!siteId) return;
+    // low-frequency safety net in hostile networks
+    const id = window.setInterval(async () => {
+      try {
+        const tz = new Date().getTimezoneOffset();
+        const r = await fetch(`https://api.modovisa.com/api/user-dashboard-analytics?site_id=${siteId}&range=${range}&tz_offset=${tz}`, { credentials: "include" });
+        if (!r.ok) return;
+        const snap = await r.json();
+        setData(snap);
+      } catch {}
+    }, 25000);
+    return () => clearInterval(id);
+  }, [siteId, range]);
+
   return { data, liveCount, livePoints };
 }

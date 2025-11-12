@@ -34,7 +34,7 @@ export default memo(function TopPagesTable({ rows }: { rows: TopPageRow[] }) {
           return (
             <div
               key={r.url}
-              className="group grid grid-cols-[1fr,200px] items-center px-6 py-1 hover:bg-muted/40"
+              className="group grid grid-cols-[1fr,200px] items-center px-6 py-3 hover:bg-muted/40"
             >
               {/* Left: page link */}
               <div className="min-w-0 pr-3">
