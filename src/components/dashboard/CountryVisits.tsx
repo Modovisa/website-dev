@@ -70,13 +70,16 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
               <div className="flex items-center justify-end gap-3">
                 <span className="font-semibold tabular-nums">{count.toLocaleString()}</span>
                 <div className="relative w-[100px] h-6">
+                  {/* bar: #635bff @ 15%, 4px right radius */}
                   <div
-                    className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r"
-                    style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "rgba(99,91,255,0.15)" }}
+                    className="absolute top-1/2 left-0 -translate-y-1/2 h-6 rounded-r-[4px] z-0"
+                    style={{ width: `${pct.toFixed(1)}%`, backgroundColor: "#635bff", opacity: 0.15 }}
                   />
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-muted-foreground/60" />
-                  <span className="absolute inset-0 flex items-center justify-end">
-                    {pctText}
+                  {/* guide line: #8e8e8e, above bar */}
+                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-6 w-px bg-[#8e8e8e] z-10" />
+                  {/* percent text on top */}
+                  <span className="absolute inset-0 flex items-center justify-end z-20">
+                    {pct.toFixed(1)}%
                   </span>
                 </div>
               </div>
