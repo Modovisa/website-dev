@@ -1,6 +1,6 @@
 // src/hooks/useDashboardRealtime.ts
 
-iimport { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getDashboardSnapshot,
   getWSTicket,
