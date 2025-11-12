@@ -1,4 +1,5 @@
 // src/pages/app/Dashboard.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -6,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle } from "lucide-react";
+import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
 
-import { useTrackingWebsites } from "@/hooks/useDashboardData";
-import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
-import { useGeoEvents } from "@/hooks/useGeoEvents";
+import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
+import { useDashboardRealtime } from "@/hooks/useDashboardRealtime"; // ✅ realtime snapshots + live count + liveCities
+import { useGeoEvents } from "@/hooks/useGeoEvents";                  // ✅ REST geo fallback
 
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
@@ -49,7 +50,7 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // Auto-select first site + cache
+  // Local cache + auto-select first site
   useEffect(() => {
     if (websites.length) {
       try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
@@ -60,24 +61,32 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // 🔴 WS-only stream (no REST snapshot)
-  const { status, data: rtData, liveCount, liveCities, lastError } = useDashboardRealtime(
-    siteId ?? undefined,
-    range
-  );
-  const data: DashboardPayload | undefined = rtData ?? undefined;
+  // Baseline REST snapshot (skeletons + Refresh)
+  const { data: restData, isLoading, refetch } =
+    useDashboardData({ siteId: siteId ?? undefined, range });
 
-  // Geo REST fallback for map dots (optional)
+  // Realtime stream (payload + live count + liveCities)
+  const { data: rtData, liveCount, liveCities } =
+    useDashboardRealtime(siteId ?? undefined, range);
+
+  // Prefer realtime payload when available
+  const data: DashboardPayload | undefined = rtData ?? restData;
+
+  // REST geo fallback until live cities arrive
   const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
   const cityPoints = (liveCities && liveCities.length > 0) ? liveCities : geoCities;
+
+  // Warm react-query cache when fresh data arrives
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!data || siteId == null) return;
+    qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...data }));
+  }, [data, siteId, range, qc]);
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
     [websites]
   );
-
-  const loading = status === "idle" || status === "connecting";
-  const errored = status === "error" || status === "handshake-timeout";
 
   const topCards = [
     { key: "live",   name: "Live Visitors", value: (liveCount ?? data?.live_visitors ?? 0), icon: Users,            change: null },
@@ -116,6 +125,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
+                refetch(); // immediate REST refresh on site switch
               }}
               disabled={sitesLoading || siteOptions.length === 0}
             >
@@ -148,35 +158,11 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                // manual nudge: toggle range -> nudge WS -> toggle back (forces set_dashboard_range again)
-                setRange((r) => (r === "24h" ? "7d" : "24h"));
-                setTimeout(() => setRange((r) => (r === "24h" ? "7d" : "24h")), 0);
-              }}
-              disabled={!siteId}
-            >
+            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
               Refresh
             </Button>
           </div>
         </div>
-
-        {/* Error banner (handshake timeout or WS error) */}
-        {errored && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
-            <div className="text-sm">
-              <div className="font-semibold text-destructive">Live stream not available.</div>
-              <div className="text-muted-foreground mt-1">
-                {status === "handshake-timeout"
-                  ? "No dashboard frames received after connecting. Check if the VisitorTracking DO is broadcasting `dashboard_analytics` for this site_id and range."
-                  : "WebSocket error/close encountered. Reconnecting with backoff."}
-                {lastError ? ` (${lastError})` : ""}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* KPI Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -187,7 +173,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {loading && !data ? (
+                {isLoading && !rtData ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-24" />
                     <div className="flex gap-2 justify-start">
@@ -212,159 +198,198 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* If we still have no data (first frame not received), show skeleton grid instead of empty charts */}
-        {!data ? (
-          <div className="space-y-6">
-            <Skeleton className="h-[300px] w-full" />
-            <div className="grid gap-6 md:grid-cols-2">
-              <Skeleton className="h-[260px] w-full" />
-              <Skeleton className="h-[260px] w-full" />
-            </div>
-            <div className="grid gap-6 md:grid-cols-3">
-              <Skeleton className="h-[280px] w-full" />
-              <Skeleton className="h-[280px] w-full" />
-              <Skeleton className="h-[280px] w-full" />
-            </div>
+        {/* Charts Row 1 */}
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <TimeGroupedVisits
+              data={data?.time_grouped_visits ?? []}
+              range={range}
+              loading={isLoading && !rtData}
+            />
           </div>
-        ) : (
-          <>
-            {/* Charts Row 1 */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2">
-                <TimeGroupedVisits data={data.time_grouped_visits ?? []} range={range} loading={false} />
-              </div>
-              <EventVolume data={data.events_timeline ?? []} loading={false} />
-            </div>
+          <EventVolume data={data?.events_timeline ?? []} loading={isLoading && !rtData} />
+        </div>
 
-            {/* Tables Row */}
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
-                <CardContent>
-                  <TopPagesTable rows={(data.top_pages ?? []).map((p) => ({ url: p.url, views: p.views }))} />
-                </CardContent>
-              </Card>
+        {/* Tables Row */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
+            <CardContent>
+              {isLoading && !rtData ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <TopPagesTable rows={(data?.top_pages ?? []).map((p) => ({ url: p.url, views: p.views }))} />
+              )}
+            </CardContent>
+          </Card>
 
-              <Card>
-                <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
-                <CardContent>
-                  <ReferrersTable rows={(data.referrers ?? []).map((r) => ({ domain: r.domain, visitors: r.visitors }))} />
-                </CardContent>
-              </Card>
-            </div>
+          <Card>
+            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
+            <CardContent>
+              {isLoading && !rtData ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <ReferrersTable rows={(data?.referrers ?? []).map((r) => ({ domain: r.domain, visitors: r.visitors }))} />
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-            {/* Geographic Insights */}
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <Card className="h-[660px]">
-                  <CardHeader className="px-6 pt-6 pb-0">
-                    <CardTitle>World Visitors</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {range === "24h" ? "Past 24 hours" :
-                       range === "7d"  ? "Past 7 days"   :
-                       range === "30d" ? "Past 30 days"  :
-                       range === "90d" ? "Past 90 days"  :
-                       range === "12mo"? "Past 12 months": ""}
-                    </p>
-                  </CardHeader>
-                  <CardContent className="pt-2 h-[540px]">
-                    <WorldMap
-                      countries={data.countries ?? []}
-                      cities={cityPoints}
-                      height={540}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div>
-                <Card className="h-[660px]">
-                  <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
-                  <CardContent className="h-[540px] overflow-auto">
-                    <CountryVisits countries={data.countries ?? []} />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Visitor Density Calendar */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle>Visitor Density Calendar</CardTitle>
+        {/* Geographic Insights */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Card className="h-[660px]">
+              <CardHeader className="px-6 pt-6 pb-0">
+                <CardTitle>World Visitors</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {range === "24h" ? "Past 24 hours" :
+                   range === "7d"  ? "Past 7 days"   :
+                   range === "30d" ? "Past 30 days"  :
+                   range === "90d" ? "Past 90 days"  :
+                   range === "12mo"? "Past 12 months": ""}
+                </p>
               </CardHeader>
-              <CardContent>
-                <VisitorsHeatmap data={data.calendar_density ?? []} height={220} />
+              <CardContent className="pt-2 h-[540px]">
+                {isLoading && !rtData ? (
+                  <Skeleton className="h-full w-full" />
+                ) : (
+                  <WorldMap
+                    countries={data?.countries ?? []}
+                    cities={cityPoints}   // ✅ liveCities if present, else REST geo fallback
+                    height={540}
+                  />
+                )}
               </CardContent>
             </Card>
+          </div>
 
-            {/* Charts Row 2 */}
-            <div className="grid gap-6 md:grid-cols-2">
-              <UniqueReturning data={data.unique_vs_returning ?? []} />
-              <PerformanceLine
-                title="Conversions"
-                current={data.conversions_timeline ?? []}
-                previous={data.conversions_previous_timeline ?? []}
-                color="#8b5cf6"
-                filled
-              />
-            </div>
+          <div>
+            <Card className="h-[660px]">
+              <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
+              <CardContent className="h-[540px] overflow-auto">
+                {isLoading && !rtData ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <CountryVisits countries={data?.countries ?? []} />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
-            {/* Charts Row 3 */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <PerformanceLine
-                title="Impressions"
-                current={data.impressions_timeline ?? []}
-                previous={data.impressions_previous_timeline ?? []}
-                color="#22c55e"
-                filled
-              />
-              <PerformanceLine
-                title="Clicks"
-                current={data.clicks_timeline ?? []}
-                previous={data.clicks_previous_timeline ?? []}
-                color="#3b82f6"
-                filled
-              />
-              <PerformanceLine
-                title="Visitors from Search"
-                current={data.search_visitors_timeline ?? []}
-                previous={data.search_visitors_previous_timeline ?? []}
-                color="#f59e0b"
-                filled
-              />
-              <PerformanceLine
-                title="All Visitors"
-                current={(data as any)?.unique_visitors_timeline ?? []}
-                previous={(data as any)?.previous_unique_visitors_timeline ?? []}
-                color="#0ea5e9"
-                filled
-              />
-            </div>
+        {/* Visitor Density Calendar */}
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Visitor Density Calendar</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading && !rtData ? (
+              <Skeleton className="h-[220px] w-full" />
+            ) : (
+              <VisitorsHeatmap data={data?.calendar_density ?? []} height={220} />
+            )}
+          </CardContent>
+        </Card>
 
-            {/* Donuts */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <Donut title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
-              <Donut title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
-              <Donut title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
-            </div>
+        {/* Charts Row 2 */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading && !rtData} />
+          <PerformanceLine
+            title="Conversions"
+            current={data?.conversions_timeline ?? []}
+            previous={data?.conversions_previous_timeline ?? []}
+            color="#8b5cf6"
+            filled
+            loading={isLoading && !rtData}
+          />
+        </div>
 
-            {/* UTM tables */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card className="md:col-span-2">
-                <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
-                <CardContent>
-                  <UTMCampaignsTable rows={data.utm_campaigns ?? []} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
-                <CardContent>
-                  <UTMSourcesTable rows={data.utm_sources ?? []} />
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
+        {/* Charts Row 3 */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <PerformanceLine
+            title="Impressions"
+            current={data?.impressions_timeline ?? []}
+            previous={data?.impressions_previous_timeline ?? []}
+            color="#22c55e"
+            filled
+            loading={isLoading && !rtData}
+          />
+          <PerformanceLine
+            title="Clicks"
+            current={data?.clicks_timeline ?? []}
+            previous={data?.clicks_previous_timeline ?? []}
+            color="#3b82f6"
+            filled
+            loading={isLoading && !rtData}
+          />
+          <PerformanceLine
+            title="Visitors from Search"
+            current={data?.search_visitors_timeline ?? []}
+            previous={data?.search_visitors_previous_timeline ?? []}
+            color="#f59e0b"
+            filled
+            loading={isLoading && !rtData}
+          />
+          <PerformanceLine
+            title="All Visitors"
+            current={(data as any)?.unique_visitors_timeline ?? []}
+            previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+            color="#0ea5e9"
+            filled
+            loading={isLoading && !rtData}
+          />
+        </div>
+
+        {/* Donuts */}
+        <div className="grid gap-6 md:grid-cols-3">
+          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="Devices"  data={data?.devices ?? []}  nameKey="type" valueKey="count" loading={isLoading && !rtData} />
+          <Donut title="OS"       data={data?.os ?? []}       nameKey="name" valueKey="count" loading={isLoading && !rtData} />
+        </div>
+
+        {/* UTM tables */}
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card className="md:col-span-2">
+            <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
+            <CardContent>
+              {isLoading && !rtData ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
+            <CardContent>
+              {isLoading && !rtData ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <UTMSourcesTable rows={data?.utm_sources ?? []} />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </DashboardLayout>
   );
