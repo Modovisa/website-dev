@@ -17,12 +17,10 @@ export default function TimeGroupedVisits({
   const visitors = (data || []).map((d) => d.visitors || 0);
   const views = (data || []).map((d) => d.views || 0);
 
-  // Step sizing like Bootstrap: ~5 ticks
   const maxValue = Math.max(0, ...visitors, ...views);
   const approxStep = Math.ceil(maxValue / 5 || 1);
   const stepSize = Math.pow(10, Math.floor(Math.log10(approxStep)));
 
-  // Dynamic bar width like Bootstrap
   const totalBars = labels.length;
   const barPct = totalBars > 30 ? 0.5 : totalBars > 20 ? 0.6 : totalBars > 10 ? 0.7 : 0.8;
 

@@ -6,14 +6,10 @@ import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 type Row = { label: string; count: number };
 
 function withAlphaHex(hex: string, alpha: number) {
-  // alpha: 0..1 -> 00..FF
   const a = Math.max(0, Math.min(1, alpha));
-  const aa = Math.round(a * 255)
-    .toString(16)
-    .padStart(2, "0");
-  // normalize #RGB -> #RRGGBB
+  const aa = Math.round(a * 255).toString(16).padStart(2, "0");
   const h = hex.replace("#", "");
-  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h.slice(0, 6);
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6);
   return `#${full}${aa}`;
 }
 
@@ -47,7 +43,7 @@ export default function PerformanceLine({
         data: dsCurrent,
         borderColor: color,
         backgroundColor: bg,
-        fill: filled ? true : false, // <-- simple & reliable
+        fill: filled ? true : false,
         tension: 0.35,
         pointRadius: filled ? 3 : 0,
         pointHoverRadius: filled ? 5 : 0,
@@ -82,9 +78,8 @@ export default function PerformanceLine({
     plugins: {
       legend: { position: "bottom" as const, labels: { usePointStyle: true } },
       tooltip: { mode: "index" as const, intersect: false },
-      filler: { propagate: false }, // <-- ensure fill draws under the line
+      filler: { propagate: false },
     },
-    maintainAspectRatio: false,
   } as const;
 
   return (
