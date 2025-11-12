@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle } from "lucide-react";
 
-import { useTrackingWebsites } from "@/hooks/useDashboardData";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
