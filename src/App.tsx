@@ -27,7 +27,20 @@ import Billing from "./pages/admin/Billing";
 import Logs from "./pages/admin/Logs";
 import Permissions from "./pages/admin/Permissions";
 import Settings from "./pages/admin/Settings";
-import Documentation from "./pages/docs/Documentation";
+import Documentation from "@/pages/docs/Documentation";
+import Register from "@/pages/docs/Register";
+import SetupTracking from "@/pages/docs/SetupTracking";
+import WordPress from "@/pages/docs/WordPress";
+import Shopify from "@/pages/docs/Shopify";
+import Magento from "@/pages/docs/Magento";
+import PrestaShop from "@/pages/docs/PrestaShop";
+import BigCommerce from "@/pages/docs/BigCommerce";
+import Joomla from "@/pages/docs/Joomla";
+import Drupal from "@/pages/docs/Drupal";
+import Wix from "@/pages/docs/Wix";
+import Squarespace from "@/pages/docs/Squarespace";
+import Webflow from "@/pages/docs/Webflow";
+import Ghost from "@/pages/docs/Ghost";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +71,21 @@ const App = () => (
 
           {/* Docs Routes */}
           <Route path="/docs" element={<Documentation />} />
+          <Route path="/docs/register" element={<Register />} />
+          <Route path="/docs/setup" element={<SetupTracking />} />
+
+          {/* Installation Guides */}
+          <Route path="/docs/install/wordpress" element={<WordPress />} />
+          <Route path="/docs/install/shopify" element={<Shopify />} />
+          <Route path="/docs/install/magento" element={<Magento />} />
+          <Route path="/docs/install/prestashop" element={<PrestaShop />} />
+          <Route path="/docs/install/bigcommerce" element={<BigCommerce />} />
+          <Route path="/docs/install/joomla" element={<Joomla />} />
+          <Route path="/docs/install/drupal" element={<Drupal />} />
+          <Route path="/docs/install/wix" element={<Wix />} />
+          <Route path="/docs/install/squarespace" element={<Squarespace />} />
+          <Route path="/docs/install/webflow" element={<Webflow />} />
+          <Route path="/docs/install/ghost" element={<Ghost />} />
           
           {/* Admin Routes */}
           <Route path="/mv-admin/dashboard" element={<AdminDashboard />} />
