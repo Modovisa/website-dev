@@ -1,52 +1,95 @@
 // src/components/dashboard/PerformanceLine.tsx
 
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as ChartTooltip,
-  Legend,
-} from "@/lib/recharts-safe";
-import type { LabelCount } from '@/types/dashboard';
+import { Line } from "react-chartjs-2";
+import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
+
+type Row = { label: string; count: number };
+
+function withAlphaHex(hex: string, alpha: number) {
+  // alpha: 0..1 -> 00..FF
+  const a = Math.max(0, Math.min(1, alpha));
+  const aa = Math.round(a * 255)
+    .toString(16)
+    .padStart(2, "0");
+  // normalize #RGB -> #RRGGBB
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h.slice(0, 6);
+  return `#${full}${aa}`;
+}
 
 export default function PerformanceLine({
   title,
   current,
   previous,
-  color = '#5c6ac4',
+  color = chartTheme.info,
+  filled = false,
+  loading,
 }: {
   title: string;
-  current: LabelCount[];
-  previous?: LabelCount[];
+  current: Row[];
+  previous?: Row[];
   color?: string;
+  filled?: boolean;
+  loading?: boolean;
 }) {
-  const has = Array.isArray(current) && current.length > 0;
-  const data = has
-    ? current.map((c, i) => ({
-        label: c.label,
-        current: c.count,
-        previous: previous?.[i]?.count ?? null,
-      }))
-    : [];
+  const labels = (current || previous || []).map((d) => d.label);
+  const prevMap = new Map((previous || []).map((r) => [r.label, r.count]));
+  const dsCurrent = labels.map((l) => current.find((c) => c.label === l)?.count ?? null);
+  const dsPrev = labels.map((l) => prevMap.get(l) ?? null);
+
+  const bg = filled ? withAlphaHex(color, 0.18) : "transparent";
+
+  const ds = {
+    labels,
+    datasets: [
+      {
+        label: title,
+        data: dsCurrent,
+        borderColor: color,
+        backgroundColor: bg,
+        fill: filled ? true : false, // <-- simple & reliable
+        tension: 0.35,
+        pointRadius: filled ? 3 : 0,
+        pointHoverRadius: filled ? 5 : 0,
+        pointBorderWidth: filled ? 2 : 0,
+        pointBackgroundColor: color,
+        pointBorderColor: "#fff",
+        borderWidth: 2,
+        spanGaps: true,
+      },
+      {
+        label: "Previous Period",
+        data: dsPrev,
+        borderColor: chartTheme.gray,
+        borderDash: [5, 5],
+        backgroundColor: "transparent",
+        fill: false,
+        tension: 0.35,
+        pointRadius: 0,
+        borderWidth: 2,
+        spanGaps: true,
+      },
+    ],
+  };
+
+  const options = {
+    ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
+    interaction: { mode: "index" as const, intersect: false },
+    scales: {
+      x: { grid: { display: false } },
+      y: { beginAtZero: true, grid: { color: chartTheme.grid } },
+    },
+    plugins: {
+      legend: { position: "bottom" as const, labels: { usePointStyle: true } },
+      tooltip: { mode: "index" as const, intersect: false },
+      filler: { propagate: false }, // <-- ensure fill draws under the line
+    },
+    maintainAspectRatio: false,
+  } as const;
 
   return (
-    <div className="h-[260px]">
-      {!has ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">No data</div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <ChartTooltip />
-            <Legend />
-            <Line type="monotone" dataKey="current" name={title} stroke={color} dot={false} />
-            <Line type="monotone" dataKey="previous" name="Previous" stroke="#9ca3af" dot={false} strokeDasharray="5 5" />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </div>
+    <ChartCard title={title} loading={loading} height={260}>
+      <Line data={ds} options={options} />
+    </ChartCard>
   );
 }

@@ -1,41 +1,48 @@
 // src/components/dashboard/EventVolume.tsx
 
-import { memo } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as ChartTooltip,
-} from "@/lib/recharts-safe";
-import type { LabelCount } from "@/types/dashboard";
+import { Line } from "react-chartjs-2";
+import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 
-export default memo(function EventVolume({ data }: { data: LabelCount[] }) {
-  const hasData = Array.isArray(data) && data.length > 0;
+type Row = { label: string; count: number };
+
+export default function EventVolume({
+  data,
+  loading,
+}: {
+  data: Row[];
+  loading?: boolean;
+}) {
+  const labels = (data || []).map((d) => d.label);
+  const values = (data || []).map((d) => d.count || 0);
+
+  const ds = {
+    labels,
+    datasets: [
+      {
+        label: "Events",
+        data: values,
+        borderColor: "rgba(54,162,235,1)",
+        backgroundColor: "rgba(54,162,235,0.20)",
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 2,
+        spanGaps: true,
+      },
+    ],
+  };
+
+  const options = {
+    ...useBaseOptions({ yBeginAtZero: true, showLegend: false }),
+    scales: {
+      x: { grid: { display: true, color: "rgba(0,0,0,0.03)" } },
+      y: { beginAtZero: true, grid: { color: chartTheme.grid } },
+    },
+  } as const;
 
   return (
-    <div className="h-[300px]">
-      {!hasData ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-          No data
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <ChartTooltip />
-            <Line
-              type="monotone"
-              dataKey="count"
-              dot={false}
-              stroke="hsl(var(--primary))"
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </div>
+    <ChartCard title="Event Volume" loading={loading} height={300}>
+      <Line data={ds} options={options} />
+    </ChartCard>
   );
-});
+}
