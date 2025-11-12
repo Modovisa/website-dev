@@ -243,7 +243,7 @@ export default function Dashboard() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Card className="h-[660px]">
-              <CardHeader className="h-[660px]">
+              <CardHeader className="px-6 pt-6 pb-0">
                 <CardTitle>World Visitors</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {range === "24h" ? "Past 24 hours" :
@@ -317,7 +317,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Charts Row 3 */}
+        {/* Charts Row 3 (translucent fills) */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <PerformanceLine
             title="Impressions"
@@ -325,7 +325,7 @@ export default function Dashboard() {
             previous={data?.impressions_previous_timeline ?? []}
             color="#22c55e"
             filled
-            loading={isLoading && !rtData}
+            loading={isLoading}
           />
           <PerformanceLine
             title="Clicks"
@@ -333,7 +333,7 @@ export default function Dashboard() {
             previous={data?.clicks_previous_timeline ?? []}
             color="#3b82f6"
             filled
-            loading={isLoading && !rtData}
+            loading={isLoading}
           />
           <PerformanceLine
             title="Visitors from Search"
@@ -341,7 +341,7 @@ export default function Dashboard() {
             previous={data?.search_visitors_previous_timeline ?? []}
             color="#f59e0b"
             filled
-            loading={isLoading && !rtData}
+            loading={isLoading}
           />
           <PerformanceLine
             title="All Visitors"
@@ -349,7 +349,7 @@ export default function Dashboard() {
             previous={(data as any)?.previous_unique_visitors_timeline ?? []}
             color="#0ea5e9"
             filled
-            loading={isLoading && !rtData}
+            loading={isLoading}
           />
         </div>
 
