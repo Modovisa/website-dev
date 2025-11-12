@@ -73,7 +73,6 @@ export function useBaseOptions(opts: BaseOpts = {}) {
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      parsing: false,
       normalized: true,
       interaction: { mode: "index" as const, intersect: false },
       plugins: {
