@@ -1,5 +1,6 @@
 // src/components/dashboard/TimeGroupedVisits.tsx
 
+import { useMemo } from "react";
 import { Bar } from "react-chartjs-2";
 import { chartTheme, ChartCard, useBaseOptions } from "./ChartKit";
 import type { RangeKey, TimeBucket } from "@/types/dashboard";
@@ -13,23 +14,21 @@ export default function TimeGroupedVisits({
   range: RangeKey;
   loading?: boolean;
 }) {
-  const labels = (data || []).map((d) => d.label);
-  const visitors = (data || []).map((d) => d.visitors || 0);
-  const views = (data || []).map((d) => d.views || 0);
+  const labels = useMemo(() => (data || []).map((d) => d.label), [data]);
+  const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data]);
+  const views = useMemo(() => (data || []).map((d) => d.views || 0), [data]);
 
-  // Step sizing like Bootstrap: ~5 ticks
-  const maxValue = Math.max(0, ...visitors, ...views);
-  const approxStep = Math.ceil(maxValue / 5 || 1);
-  const stepSize = Math.pow(10, Math.floor(Math.log10(approxStep)));
+  const { ds, options } = useMemo(() => {
+    const maxValue = Math.max(0, ...visitors, ...views);
+    const approxStep = Math.ceil(maxValue / 5 || 1);
+    const stepSize = Math.pow(10, Math.floor(Math.log10(approxStep)));
 
-  // Dynamic bar width like Bootstrap
-  const totalBars = labels.length;
-  const barPct = totalBars > 30 ? 0.5 : totalBars > 20 ? 0.6 : totalBars > 10 ? 0.7 : 0.8;
+    const totalBars = labels.length;
+    const barPct = totalBars > 30 ? 0.5 : totalBars > 20 ? 0.6 : totalBars > 10 ? 0.7 : 0.8;
 
-  const ds = {
-    labels,
-    datasets: [
+    const datasets = [
       {
+        datasetIdKey: "visitors",
         label: "Visitors",
         data: visitors,
         backgroundColor: chartTheme.primary,
@@ -39,6 +38,7 @@ export default function TimeGroupedVisits({
         categoryPercentage: 0.9,
       },
       {
+        datasetIdKey: "views",
         label: "Views",
         data: views,
         backgroundColor: chartTheme.primarySoft,
@@ -47,33 +47,39 @@ export default function TimeGroupedVisits({
         barPercentage: barPct,
         categoryPercentage: 0.9,
       },
-    ],
-  };
+    ];
 
-  const options = {
-    ...useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true }),
-    scales: {
-      x: {
-        ticks: { color: chartTheme.axis, maxRotation: 45, minRotation: 0 },
-        grid: { display: true, color: "rgba(0,0,0,0.03)" },
-        stacked: true,
-      },
-      y: {
-        beginAtZero: true,
-        stacked: true,
-        ticks: { color: chartTheme.axis, stepSize },
-        grid: { color: chartTheme.grid },
-      },
-    },
-    plugins: {
-      legend: { position: "bottom" as const },
-      tooltip: {
-        callbacks: {
-          label: (ctx: any) => `${ctx.dataset.label}: ${ctx.raw}`,
+    const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
+    const options = {
+      ...base,
+      scales: {
+        x: {
+          ...base.scales.x,
+          ticks: { color: chartTheme.axis, maxRotation: 45, minRotation: 0 },
+          grid: { display: true, color: "rgba(0,0,0,0.03)" },
+        },
+        y: {
+          ...base.scales.y,
+          ticks: { color: chartTheme.axis, stepSize },
+          grid: { color: chartTheme.grid },
         },
       },
-    },
-  } as const;
+      plugins: {
+        ...base.plugins,
+        legend: { position: "bottom" as const },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => `${ctx.dataset.label}: ${ctx.raw}`,
+          },
+        },
+      },
+    } as const;
+
+    return ({
+      ds: { labels, datasets },
+      options,
+    });
+  }, [labels, visitors, views]);
 
   const titleMap: Record<string, string> = {
     "24h": "Visits — Today",
@@ -86,7 +92,7 @@ export default function TimeGroupedVisits({
   return (
     <ChartCard
       title={titleMap[range] || "Visits"}
-      info="Shows the number of visitors and page views over time based on the selected range. Helps spot engagement trends."
+      info="Shows the number of visitors and page views over time based on the selected range."
       loading={loading}
       height={360}
     >

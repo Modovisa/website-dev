@@ -1,5 +1,3 @@
-// src/hooks/useDashboardRealtime.ts
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getDashboardSnapshot,
@@ -21,7 +19,7 @@ type State = {
 
 type Options = {
   stopRetryOn401?: boolean;
-  wsSilentTimeoutMs?: number;      // how long to wait for WS open before priming REST (first mount only)
+  wsSilentTimeoutMs?: number;
 };
 
 const DEFAULTS: Required<Options> = {
@@ -44,7 +42,6 @@ export function useDashboardRealtime(
     error: null,
   });
 
-  // --- refs (lifecycle + guards) ---
   const socketRef = useRef<WebSocket | null>(null);
   const pingRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -53,10 +50,7 @@ export function useDashboardRealtime(
   const currentSiteRef = useRef<number | null>(null);
   const lastRangeRef = useRef<RangeKey>(range);
 
-  // prevent overlapping connects (the “double connect” → 1006 loop)
   const connectingRef = useRef<boolean>(false);
-
-  // whether we’ve primed REST once on initial mount/open wait
   const didInitialPrimeRef = useRef<boolean>(false);
 
   const log = (...a: any[]) => { if (DEBUG) console.log("[DashboardWS]", ...a); };
@@ -84,7 +78,6 @@ export function useDashboardRealtime(
     }, wait) as unknown as number;
   };
 
-  // REST snapshot (no navigation, no reload – pure state set)
   const primeREST = useCallback(
     async (sid: number) => {
       setLoading(true);
@@ -109,7 +102,6 @@ export function useDashboardRealtime(
     [range, stopRetryOn401]
   );
 
-  // normalize live city payloads from WS
   const normalizeCityPoints = (payload: any): GeoCityPoint[] => {
     const arr = Array.isArray(payload?.points) ? payload.points
             : Array.isArray(payload?.clusters) ? payload.clusters
@@ -136,13 +128,11 @@ export function useDashboardRealtime(
       if (connectingRef.current) return;
       connectingRef.current = true;
 
-      // do not clear/close existing WS if it’s already OPEN to avoid churn
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && !forceTicket) {
         connectingRef.current = false;
         return;
       }
 
-      // always close any half-open sockets
       clearSocket();
 
       let ticket: string;
@@ -168,7 +158,6 @@ export function useDashboardRealtime(
       socketRef.current = ws;
       log("WS connecting…", url);
 
-      // One-time open wait: if server is slow to accept, prime a snapshot ONCE.
       const openFallback = window.setTimeout(() => {
         if (!didInitialPrimeRef.current && socketRef.current === ws && ws.readyState !== WebSocket.OPEN) {
           log("WS open timeout → one-time REST prime.");
@@ -182,7 +171,6 @@ export function useDashboardRealtime(
         connectingRef.current = false;
         log("WS open.");
 
-        // Subscribe + request snapshot+live cities (Bootstrap handshake)
         const payload = { site_id: sid, range: lastRangeRef.current };
         try {
           ws.send(JSON.stringify({ type: "subscribe", channels: ["dashboard_analytics", "live_visitor_location_grouped"], ...payload }));
@@ -190,7 +178,6 @@ export function useDashboardRealtime(
           ws.send(JSON.stringify({ type: "request_live_cities", ...payload }));
         } catch (e) { warn("WS send failed:", e); }
 
-        // keepalive
         pingRef.current = window.setInterval(() => {
           try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); } catch {}
         }, 25000) as unknown as number;
@@ -237,7 +224,6 @@ export function useDashboardRealtime(
 
       ws.onclose = (ev) => {
         connectingRef.current = false;
-        // Policy closes → stop. Otherwise, single mild reconnect.
         if ([4001, 4003, 4401].includes(ev.code)) {
           warn(`WS closed (policy ${ev.code}) → stop.`);
           if (stopRetryOn401) hardStopRef.current = true;
@@ -250,7 +236,6 @@ export function useDashboardRealtime(
     [clearSocket, primeREST, stopRetryOn401, wsSilentTimeoutMs]
   );
 
-  // lifecycle
   useEffect(() => {
     if (!siteId) return;
 
@@ -258,21 +243,15 @@ export function useDashboardRealtime(
     currentSiteRef.current = siteId;
     lastRangeRef.current = range;
 
-    // One initial snapshot (Bootstrap parity), then WS
     didInitialPrimeRef.current = false;
     primeREST(siteId).finally(() => connectWS(siteId));
 
-    // IMPORTANT: no visibilitychange handler.
-    // Bootstrap code doesn’t auto-close WS on tab hide; React shouldn’t either.
-
     return () => {
-      // cleanup on unmount/unroute
       resetReconnect();
       clearSocket();
     };
   }, [siteId, range, connectWS, clearSocket, primeREST]);
 
-  // public API
   const reconnectWS = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
     connectWS(siteId);
@@ -286,7 +265,7 @@ export function useDashboardRealtime(
   const restart = useCallback(() => {
     if (!siteId || hardStopRef.current) return;
     clearSocket();
-    connectWS(siteId, true); // force new ticket
+    connectWS(siteId, true);
     primeREST(siteId);
   }, [siteId, connectWS, primeREST, clearSocket]);
 
@@ -309,22 +288,43 @@ export function useDashboardRealtime(
   };
 }
 
+/** IMPORTANT: Deep-copy arrays so React/Chart.js see new references every tick */
+function cloneArr<T>(a?: T[] | null): T[] | undefined {
+  return Array.isArray(a) ? a.map((v) => (Array.isArray(v) ? [...(v as any)] : (typeof v === "object" && v !== null ? { ...(v as any) } : v))) as any : a ?? undefined;
+}
+
 function mergeForRealtime(prev: DashboardPayload | null, next: DashboardPayload): DashboardPayload {
-  if (!prev) return next;
+  if (!prev) {
+    return {
+      ...next,
+      time_grouped_visits: cloneArr(next.time_grouped_visits) || [],
+      unique_vs_returning: cloneArr(next.unique_vs_returning) || [],
+      funnel: cloneArr(next.funnel) || [],
+      referrers: cloneArr(next.referrers) || [],
+      browsers: cloneArr(next.browsers) || [],
+      devices: cloneArr(next.devices) || [],
+      os: cloneArr(next.os) || [],
+      countries: cloneArr(next.countries) || [],
+      events_timeline: cloneArr(next.events_timeline) || [],
+      utm_campaigns: cloneArr(next.utm_campaigns) || [],
+      utm_sources: cloneArr(next.utm_sources) || [],
+      calendar_density: cloneArr(next.calendar_density) || [],
+    } as DashboardPayload;
+  }
   return {
     ...prev,
     ...next,
-    time_grouped_visits: next.time_grouped_visits ?? prev.time_grouped_visits,
-    unique_vs_returning: next.unique_vs_returning ?? prev.unique_vs_returning,
-    funnel: next.funnel ?? prev.funnel,
-    referrers: next.referrers ?? prev.referrers,
-    browsers: next.browsers ?? prev.browsers,
-    devices: next.devices ?? prev.devices,
-    os: next.os ?? prev.os,
-    countries: next.countries ?? prev.countries,
-    events_timeline: next.events_timeline ?? prev.events_timeline,
-    utm_campaigns: next.utm_campaigns ?? prev.utm_campaigns,
-    utm_sources: next.utm_sources ?? prev.utm_sources,
-    calendar_density: next.calendar_density ?? prev.calendar_density,
-  };
+    time_grouped_visits: cloneArr(next.time_grouped_visits) ?? cloneArr(prev.time_grouped_visits) ?? [],
+    unique_vs_returning: cloneArr(next.unique_vs_returning) ?? cloneArr(prev.unique_vs_returning) ?? [],
+    funnel: cloneArr(next.funnel) ?? cloneArr(prev.funnel) ?? [],
+    referrers: cloneArr(next.referrers) ?? cloneArr(prev.referrers) ?? [],
+    browsers: cloneArr(next.browsers) ?? cloneArr(prev.browsers) ?? [],
+    devices: cloneArr(next.devices) ?? cloneArr(prev.devices) ?? [],
+    os: cloneArr(next.os) ?? cloneArr(prev.os) ?? [],
+    countries: cloneArr(next.countries) ?? cloneArr(prev.countries) ?? [],
+    events_timeline: cloneArr(next.events_timeline) ?? cloneArr(prev.events_timeline) ?? [],
+    utm_campaigns: cloneArr(next.utm_campaigns) ?? cloneArr(prev.utm_campaigns) ?? [],
+    utm_sources: cloneArr(next.utm_sources) ?? cloneArr(prev.utm_sources) ?? [],
+    calendar_density: cloneArr(next.calendar_density) ?? cloneArr(prev.calendar_density) ?? [],
+  } as DashboardPayload;
 }
