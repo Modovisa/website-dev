@@ -1,72 +1,67 @@
 // src/components/dashboard/TimeGroupedVisits.tsx
 
-import { useMemo } from "react";
-import { Bar } from "react-chartjs-2";
-import { chartTheme, ChartCard, useBaseOptions } from "./ChartKit";
+import { memo } from "react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Legend,
+  Tooltip as ChartTooltip,
+} from "@/lib/recharts-safe";
 import type { RangeKey, TimeBucket } from "@/types/dashboard";
 
-export default function TimeGroupedVisits({
-  data,
-  range,
-  loading,
-}: {
+type Props = {
   data: TimeBucket[];
   range: RangeKey;
-  loading?: boolean;
-}) {
-  const safe = Array.isArray(data) ? data : [];
-  const labels = useMemo(() => safe.map((d) => String(d.label ?? "")), [safe]);
-  const visitors = useMemo(() => safe.map((d) => Number(d.visitors ?? 0)), [safe]);
-  const views = useMemo(() => safe.map((d) => Number(d.views ?? 0)), [safe]);
+};
 
-  const totalBars = labels.length;
-  const barPct = totalBars > 30 ? 0.5 : totalBars > 20 ? 0.6 : totalBars > 10 ? 0.7 : 0.8;
+const TITLES: Record<RangeKey, string> = {
+  "24h": "Visits – Today",
+  "7d": "Visits – Last 7 Days",
+  "30d": "Visits – Last 30 Days",
+  "90d": "Visits – Last 90 Days",
+  "12mo": "Visits – Last 12 Months",
+};
 
-  const ds = useMemo(
-    () => ({
-      labels,
-      datasets: [
-        {
-          label: "Visitors",
-          data: visitors,
-          backgroundColor: chartTheme.primary,
-          borderRadius: 4,
-          stack: "stack1",
-          barPercentage: barPct,
-          categoryPercentage: 0.9,
-        },
-        {
-          label: "Views",
-          data: views,
-          backgroundColor: chartTheme.primarySoft,
-          borderRadius: 4,
-          stack: "stack1",
-          barPercentage: barPct,
-          categoryPercentage: 0.9,
-        },
-      ],
-    }),
-    [labels, visitors, views, barPct]
-  );
-
-  const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
-
-  const titleMap: Record<string, string> = {
-    "24h": "Visits — Today",
-    "7d": "Visits — Last 7 Days",
-    "30d": "Visits — Last 30 Days",
-    "90d": "Visits — Last 90 Days",
-    "12mo": "Visits — Last 12 Months",
-  };
+function ChartInner({ data, range }: Props) {
+  const hasData = Array.isArray(data) && data.length > 0;
 
   return (
-    <ChartCard
-      title={titleMap[range] || "Visits"}
-      info="Visitors and page views over time."
-      loading={loading}
-      height={360}
-    >
-      <Bar data={ds} options={base} updateMode="none" redraw={false} />
-    </ChartCard>
+    <div className="h-[300px]">
+      {!hasData ? (
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          No data
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data}>
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <ChartTooltip />
+            <Legend />
+            <Bar
+              dataKey="visitors"
+              name="Visitors"
+              radius={[4, 4, 0, 0]}
+              fill="hsl(var(--primary))"
+              fillOpacity={1}
+            />
+            <Bar
+              dataKey="views"
+              name="Views"
+              radius={[4, 4, 0, 0]}
+              fill="hsl(var(--primary))"
+              fillOpacity={0.35}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+      {/* Accessible title for screen readers */}
+      <span className="sr-only">{TITLES[range]}</span>
+    </div>
   );
 }
+
+export default memo(ChartInner);

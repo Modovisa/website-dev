@@ -1,15 +1,15 @@
 // src/pages/app/Dashboard.tsx
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
-
-import { useTrackingWebsites } from "@/hooks/useDashboardData"; // keep this for sites list
-import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
+import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
+import { useLiveVisitorsWS } from "@/hooks/useLiveVisitorsWS";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -24,9 +24,11 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
+import { useGeoEvents } from "@/hooks/useGeoEvents";
 
 import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { getWSTicket } from "@/services/dashboardService";
 
 type Website = { id: number; website_name: string; domain: string };
 
@@ -39,7 +41,7 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Websites
+  // Websites via service-layer hook
   const { data: websitesRaw = [], isLoading: sitesLoading } = useTrackingWebsites();
   const websites: Website[] = (websitesRaw || []).map((p: any) => ({
     id: Number(p.id),
@@ -47,10 +49,12 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // Local cache + auto-select first site
+  // Keep a tiny local cache + auto-select first site if none chosen
   useEffect(() => {
     if (websites.length) {
-      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
+      try {
+        localStorage.setItem("mv.sites", JSON.stringify(websites));
+      } catch {}
     }
     if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
       setSiteId(websites[0].id);
@@ -58,11 +62,22 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // Realtime stream (WS-only)
-  const { data: wsData, liveCount, liveCities } = useDashboardRealtime(siteId ?? undefined, range);
-  const data: DashboardPayload | null = wsData;
+  const { data, isLoading, refetch } = useDashboardData({ siteId: siteId ?? undefined, range });
+  const qc = useQueryClient();
 
-  const loading = !data; // skeletons until first WS frame for the selected range
+  const [liveCount, setLiveCount] = useState<number | null>(null);
+  useLiveVisitorsWS({
+    siteId: siteId ?? undefined,
+    onLiveCount: (n) => setLiveCount(n),
+    onDashboardSnapshot: (payload: DashboardPayload) => {
+      if (payload?.range === range) {
+        qc.setQueryData(["dashboard", siteId, range], (old: any) => ({ ...(old || {}), ...payload }));
+      }
+    },
+    getTicket: async (sid) => getWSTicket(sid),
+  });
+
+  const { data: geoCities = [] } = useGeoEvents(siteId ?? undefined);
 
   const siteOptions = useMemo(
     () => websites.map((w) => ({ value: String(w.id), label: w.website_name })),
@@ -70,10 +85,10 @@ export default function Dashboard() {
   );
 
   const topCards = [
-    { key: "live",   name: "Live Visitors",  value: (liveCount ?? data?.live_visitors ?? 0), icon: Users,            change: null },
-    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0,       icon: Eye,              change: data?.unique_visitors?.delta ?? null },
-    { key: "avg",    name: "Avg. Session",   value: data?.avg_duration ?? "--",              icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
-    { key: "bounce", name: "Bounce Rate",    value: `${data?.bounce_rate ?? 0}%`,            icon: TrendingUp,       change: data?.bounce_rate_delta ?? null },
+    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
+    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
+    { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
+    { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null },
   ];
 
   if (authLoading) {
@@ -106,6 +121,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
+                refetch();
               }}
               disabled={sitesLoading || siteOptions.length === 0}
             >
@@ -138,15 +154,7 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                // WS-only: bump range to force a clean cycle without network fetch
-                setRange((r) => (r === "24h" ? "7d" : "24h"));
-                setTimeout(() => setRange((r) => (r === "24h" ? "7d" : "24h")), 0);
-              }}
-              disabled={!siteId}
-            >
+            <Button variant="outline" onClick={() => refetch()} disabled={!siteId}>
               Refresh
             </Button>
           </div>
@@ -161,7 +169,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {isLoading ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-24" />
                     <div className="flex gap-2 justify-start">
@@ -189,19 +197,23 @@ export default function Dashboard() {
         {/* Charts Row 1 */}
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2">
-            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={loading} />
+            <TimeGroupedVisits data={data?.time_grouped_visits ?? []} range={range} loading={isLoading} />
           </div>
-          <EventVolume data={data?.events_timeline ?? []} loading={loading} />
+          <EventVolume data={data?.events_timeline ?? []} loading={isLoading} />
         </div>
 
         {/* Tables Row */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Top Pages</CardTitle>
+            </CardHeader>
             <CardContent>
-              {loading ? (
+              {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
                 </div>
               ) : (
                 <TopPagesTable rows={(data?.top_pages ?? []).map((p) => ({ url: p.url, views: p.views }))} />
@@ -210,11 +222,15 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Referrers</CardTitle>
+            </CardHeader>
             <CardContent>
-              {loading ? (
+              {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
                 </div>
               ) : (
                 <ReferrersTable rows={(data?.referrers ?? []).map((r) => ({ domain: r.domain, visitors: r.visitors }))} />
@@ -227,23 +243,24 @@ export default function Dashboard() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Card className="h-[660px]">
-              <CardHeader className="px-6 pt-6 pb-0">
+              <CardHeader className="h-[660px]">
                 <CardTitle>World Visitors</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {range === "24h" ? "Past 24 hours" :
-                   range === "7d"  ? "Past 7 days"   :
-                   range === "30d" ? "Past 30 days"  :
-                   range === "90d" ? "Past 90 days"  :
-                   range === "12mo"? "Past 12 months": ""}
+                  range === "7d"  ? "Past 7 days"   :
+                  range === "30d" ? "Past 30 days"  :
+                  range === "90d" ? "Past 90 days"  :
+                  range === "12mo"? "Past 12 months": ""}
                 </p>
               </CardHeader>
-              <CardContent className="pt-2 h-[540px]">
-                {loading ? (
+              <CardContent className="pt-2 h-[540px]"> {/* map area height */}
+                {isLoading ? (
                   <Skeleton className="h-full w-full" />
                 ) : (
                   <WorldMap
                     countries={data?.countries ?? []}
-                    cities={liveCities}   // WS-only live cities
+                    cities={geoCities}
+                    rangeLabel={undefined}
                     height={540}
                   />
                 )}
@@ -253,11 +270,15 @@ export default function Dashboard() {
 
           <div>
             <Card className="h-[660px]">
-              <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
-              <CardContent className="h-[540px] overflow-auto">
-                {loading ? (
+              <CardHeader>
+                <CardTitle>Visits by Country</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[540px] overflow-auto"> {/* scroll inside */}
+                {isLoading ? (
                   <div className="space-y-2">
-                    {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
                   </div>
                 ) : (
                   <CountryVisits countries={data?.countries ?? []} />
@@ -267,13 +288,15 @@ export default function Dashboard() {
           </div>
         </div>
 
+
         {/* Visitor Density Calendar */}
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle>Visitor Density Calendar</CardTitle>
+            {/* If you want a year picker later, lift state to Dashboard and pass as prop */}
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {isLoading ? (
               <Skeleton className="h-[220px] w-full" />
             ) : (
               <VisitorsHeatmap data={data?.calendar_density ?? []} height={220} />
@@ -283,18 +306,18 @@ export default function Dashboard() {
 
         {/* Charts Row 2 */}
         <div className="grid gap-6 md:grid-cols-2">
-          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={loading} />
+          <UniqueReturning data={data?.unique_vs_returning ?? []} loading={isLoading} />
           <PerformanceLine
             title="Conversions"
             current={data?.conversions_timeline ?? []}
             previous={data?.conversions_previous_timeline ?? []}
             color="#8b5cf6"
             filled
-            loading={loading}
+            loading={isLoading}
           />
         </div>
 
-        {/* Charts Row 3 */}
+        {/* Charts Row 3 (translucent fills) */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <PerformanceLine
             title="Impressions"
@@ -302,7 +325,7 @@ export default function Dashboard() {
             previous={data?.impressions_previous_timeline ?? []}
             color="#22c55e"
             filled
-            loading={loading}
+            loading={isLoading}
           />
           <PerformanceLine
             title="Clicks"
@@ -310,7 +333,7 @@ export default function Dashboard() {
             previous={data?.clicks_previous_timeline ?? []}
             color="#3b82f6"
             filled
-            loading={loading}
+            loading={isLoading}
           />
           <PerformanceLine
             title="Visitors from Search"
@@ -318,7 +341,7 @@ export default function Dashboard() {
             previous={data?.search_visitors_previous_timeline ?? []}
             color="#f59e0b"
             filled
-            loading={loading}
+            loading={isLoading}
           />
           <PerformanceLine
             title="All Visitors"
@@ -326,25 +349,29 @@ export default function Dashboard() {
             previous={(data as any)?.previous_unique_visitors_timeline ?? []}
             color="#0ea5e9"
             filled
-            loading={loading}
+            loading={isLoading}
           />
         </div>
 
         {/* Donuts */}
         <div className="grid gap-6 md:grid-cols-3">
-          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={loading} />
-          <Donut title="Devices"  data={data?.devices ?? []}  nameKey="type" valueKey="count" loading={loading} />
-          <Donut title="OS"       data={data?.os ?? []}       nameKey="count" valueKey="count" loading={loading} />
+          <Donut title="Browsers" data={data?.browsers ?? []} nameKey="name" valueKey="count" loading={isLoading} />
+          <Donut title="Devices" data={data?.devices ?? []} nameKey="type" valueKey="count" loading={isLoading} />
+          <Donut title="OS" data={data?.os ?? []} nameKey="name" valueKey="count" loading={isLoading} />
         </div>
 
         {/* UTM tables */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2">
-            <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>UTM Campaign URLs</CardTitle>
+            </CardHeader>
             <CardContent>
-              {loading ? (
+              {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
                 </div>
               ) : (
                 <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
@@ -352,11 +379,15 @@ export default function Dashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>UTM Sources</CardTitle>
+            </CardHeader>
             <CardContent>
-              {loading ? (
+              {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
                 </div>
               ) : (
                 <UTMSourcesTable rows={data?.utm_sources ?? []} />

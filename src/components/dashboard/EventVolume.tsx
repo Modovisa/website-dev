@@ -1,41 +1,41 @@
 // src/components/dashboard/EventVolume.tsx
 
-import { useMemo } from "react";
-import { Line } from "react-chartjs-2";
-import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
+import { memo } from "react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip as ChartTooltip,
+} from "@/lib/recharts-safe";
+import type { LabelCount } from "@/types/dashboard";
 
-type Row = { label: string; count: number };
-
-export default function EventVolume({ data, loading }: { data: Row[]; loading?: boolean }) {
-  const safe = Array.isArray(data) ? data : [];
-  const labels = useMemo(() => safe.map((d) => String(d.label ?? "")), [safe]);
-  const values = useMemo(() => safe.map((d) => Number(d.count ?? 0)), [safe]);
-
-  const ds = useMemo(
-    () => ({
-      labels,
-      datasets: [
-        {
-          label: "Events",
-          data: values,
-          borderColor: "rgba(54,162,235,1)",
-          backgroundColor: "rgba(54,162,235,0.20)",
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          borderWidth: 2,
-          spanGaps: true,
-        },
-      ],
-    }),
-    [labels, values]
-  );
-
-  const options = useBaseOptions({ yBeginAtZero: true, showLegend: false });
+export default memo(function EventVolume({ data }: { data: LabelCount[] }) {
+  const hasData = Array.isArray(data) && data.length > 0;
 
   return (
-    <ChartCard title="Event Volume" loading={loading} height={300}>
-      <Line data={ds} options={options} updateMode="none" redraw={false} />
-    </ChartCard>
+    <div className="h-[300px]">
+      {!hasData ? (
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          No data
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <ChartTooltip />
+            <Line
+              type="monotone"
+              dataKey="count"
+              dot={false}
+              stroke="hsl(var(--primary))"
+              strokeWidth={2}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
   );
-}
+});

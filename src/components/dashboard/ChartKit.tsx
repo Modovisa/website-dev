@@ -1,107 +1,147 @@
 // src/components/dashboard/ChartKit.tsx
-import React from "react";
 
-// ✅ Chart.js v3+ needs explicit registration
+import { useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
+
+/* ---------------- Chart.js registration ---------------- */
 import {
   Chart as ChartJS,
-  registerables,
-  type ChartOptions,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  TimeScale,
+  Filler,
+  Tooltip,
+  Legend,
 } from "chart.js";
-ChartJS.register(...registerables);
 
-// ✅ If you use the funnel chart, load its plugin once
-// (it self-registers its controller/elements on import)
-import "chartjs-chart-funnel";
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  TimeScale,
+  Filler,
+  Tooltip,
+  Legend
+);
 
-// 🔧 Theme tokens
+/* ---------------- Theme tuned to your Bootstrap screenshots ---------------- */
 export const chartTheme = {
-  primary: "#635bff",
-  primarySoft: "rgba(99,91,255,0.30)",
-  info: "#0ea5e9",
-  gray: "#9ca3af",
-  axis: "#1f2937",
   grid: "rgba(0,0,0,0.06)",
+  axis: "rgba(0,0,0,0.35)",
+  primary: "hsl(var(--primary))",
+  info: "#3b82f6",
+  success: "#22c55e",
+  warning: "#f59e0b",
+  gray: "#9ca3af",
 };
 
-// 🌐 Global defaults (safe to set once per bundle)
-ChartJS.defaults.font.family = "'Modovisa', sans-serif";
-ChartJS.defaults.color = "#1f2937";
-ChartJS.defaults.plugins.legend.labels.color = "#1f2937";
-ChartJS.defaults.plugins.tooltip.backgroundColor = "#ffffff";
-ChartJS.defaults.plugins.tooltip.titleColor = "#000";
-ChartJS.defaults.plugins.tooltip.bodyColor = "#000";
-ChartJS.defaults.plugins.tooltip.borderColor = "#e5e7eb";
-ChartJS.defaults.plugins.tooltip.borderWidth = 1;
-ChartJS.defaults.plugins.tooltip.cornerRadius = 4;
-
-/**
- * Base options for line/bar charts (stacking-friendly).
- * Note: in Chart.js v4, `parsing` is typed as `false | object`. Use `{}` to enable.
- */
-export function useBaseOptions(opts?: {
+export type BaseOpts = {
   stacked?: boolean;
   yBeginAtZero?: boolean;
   showLegend?: boolean;
-}): ChartOptions<"line" | "bar"> {
-  const { stacked = false, yBeginAtZero = true, showLegend = true } = opts || {};
+};
 
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    normalized: true,
-    parsing: {}, // ✅ keep parsing ON (object or omit; never `true`)
-    interaction: { mode: "index", intersect: false },
-    scales: {
-      x: {
-        stacked,
-        grid: { color: "rgba(0,0,0,0.03)" },
-        ticks: { color: chartTheme.axis },
+export function useBaseOptions(opts: BaseOpts = {}) {
+  const { stacked = false, yBeginAtZero = true, showLegend = true } = opts;
+  return useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index" as const, intersect: false },
+      plugins: {
+        legend: {
+          display: showLegend,
+          position: "bottom" as const,
+          labels: { color: chartTheme.axis, boxWidth: 10, usePointStyle: true, pointStyle: "circle" },
+        },
+        tooltip: {
+          enabled: true,
+          titleColor: chartTheme.axis,
+          bodyColor: "#111827",
+          backgroundColor: "rgba(255,255,255,0.96)",
+          borderColor: "rgba(0,0,0,0.08)",
+          borderWidth: 1,
+        },
       },
-      y: {
-        stacked,
-        beginAtZero: yBeginAtZero,
-        grid: { color: chartTheme.grid },
-        ticks: { color: chartTheme.axis },
+      scales: {
+        x: {
+          stacked,
+          ticks: { color: chartTheme.axis, font: { size: 12 } },
+          grid: { display: false },
+        },
+        y: {
+          stacked,
+          beginAtZero: yBeginAtZero,
+          ticks: { color: chartTheme.axis, font: { size: 12 } },
+          grid: { color: chartTheme.grid },
+        },
       },
-    },
-    plugins: {
-      legend: {
-        display: showLegend,
-        position: "bottom",
-        labels: { usePointStyle: true },
-      },
-      tooltip: { mode: "index", intersect: false },
-    },
-  };
+    }),
+    [stacked, yBeginAtZero, showLegend]
+  );
 }
 
+/* ---------------- Info icon (bootstrap-like) ---------------- */
+export function InfoTip({ text }: { text: string }) {
+  return (
+    <TooltipProvider>
+      <UITooltip>
+        <TooltipTrigger asChild>
+          <button aria-label="info" className="ml-2 text-muted-foreground hover:text-foreground">
+            <Info className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[280px] text-xs leading-5">
+          {text}
+        </TooltipContent>
+      </UITooltip>
+    </TooltipProvider>
+  );
+}
+
+/* ---------------- Chart Card with skeleton ---------------- */
 export function ChartCard({
   title,
   info,
-  height = 280,
   loading,
   children,
+  className,
 }: {
   title: string;
   info?: string;
-  height?: number;
   loading?: boolean;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <h3 className="text-sm font-medium text-gray-800">{title}</h3>
-        {info ? <span className="text-xs text-gray-500">{info}</span> : null}
-      </div>
-      <div className="p-4" style={{ height }}>
-        {loading ? (
-          <div className="h-full w-full animate-pulse rounded-xl bg-gray-100" />
-        ) : (
-          children
-        )}
-      </div>
-    </div>
+    <Card className={className}>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base font-semibold">{title}</CardTitle>
+        {info ? <InfoTip text={info} /> : null}
+      </CardHeader>
+      <CardContent>
+        <div className="h-[300px] md:h-[340px]">
+          {loading ? (
+            <div className="h-full flex flex-col justify-center gap-3">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-[200px] w-full" />
+              <Skeleton className="h-4 w-24 self-center" />
+            </div>
+          ) : (
+            children
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
