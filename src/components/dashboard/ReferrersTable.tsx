@@ -40,7 +40,7 @@ export default memo(function ReferrersTable({ rows }: { rows: ReferrerRow[] }) {
                   href={`https://${domain}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-md font-medium text-foreground truncate max-w-full"
+                  className="inline-flex items-center gap-2 text-base font-medium text-foreground truncate max-w-full"
                   title={domain}
                 >
                   <img

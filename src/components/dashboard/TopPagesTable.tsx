@@ -42,7 +42,7 @@ export default memo(function TopPagesTable({ rows }: { rows: TopPageRow[] }) {
                   href={r.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-md font-medium text-foreground truncate max-w-full"
+                  className="inline-flex items-center gap-1 text-base font-medium text-foreground truncate max-w-full"
                   title={rel}
                 >
                   <span className="truncate">{rel}</span>
