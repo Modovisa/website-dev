@@ -27,6 +27,7 @@ import Billing from "./pages/admin/Billing";
 import Logs from "./pages/admin/Logs";
 import Permissions from "./pages/admin/Permissions";
 import Settings from "./pages/admin/Settings";
+import Documentation from "./pages/docs/Documentation";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,9 @@ const App = () => (
           <Route path="/app/installation" element={<Installation />} />
           <Route path="/app/tracking-setup" element={<TrackingSetup />} />
           <Route path="/app/profile" element={<Profile />} />
+
+          {/* Docs Routes */}
+          <Route path="/docs" element={<Documentation />} />
           
           {/* Admin Routes */}
           <Route path="/mv-admin/dashboard" element={<AdminDashboard />} />

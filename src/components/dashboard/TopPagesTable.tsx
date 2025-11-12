@@ -17,7 +17,7 @@ export default memo(function TopPagesTable({ rows }: { rows: TopPageRow[] }) {
   return (
     <div className="h-full flex flex-col text-sm">
       {/* Header — “Pages” | “Views” */}
-      <div className="grid grid-cols-[1fr,200px] px-6 pb-3 text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+      <div className="grid grid-cols-[1fr,200px] px-6 pb-3 text-muted-foreground text-md font-bold uppercase tracking-wide">
         <div>Pages</div>
         <div className="text-right">Views</div>
       </div>

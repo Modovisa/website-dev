@@ -1,19 +1,21 @@
 // src/hooks/useDashboardRealtime.ts
 
 import { useEffect, useRef, useState } from "react";
+import type { GeoCityPoint } from "@/services/dashboardService"; // <-- make sure this type is exported from there
 
-type DashboardPayload = any; // shape matches /api/user-dashboard-analytics
+type DashboardPayload = any; // matches /api/user-dashboard-analytics
 type LivePoint = { name: string; value: [number, number, number]; debug_ids?: string[] };
 
 export function useDashboardRealtime(siteId?: number | string, range: string = "24h") {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [liveCount, setLiveCount] = useState<number>(0);
   const [livePoints, setLivePoints] = useState<LivePoint[]>([]);
+  const [liveCities, setLiveCities] = useState<GeoCityPoint[]>([]); // ✅ add this
   const wsRef = useRef<WebSocket | null>(null);
   const pingRef = useRef<number | null>(null);
   const reconnectRef = useRef<number | null>(null);
 
-  // initial REST snapshot (and whenever site/range changes)
+  // initial REST snapshot
   useEffect(() => {
     if (!siteId) return;
     const tz = new Date().getTimezoneOffset();
@@ -44,7 +46,6 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
         wsRef.current = ws;
 
         ws.onopen = () => {
-          // keep-alive
           pingRef.current = window.setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
           }, 25000);
@@ -56,19 +57,31 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
           if (String(msg.site_id) !== String(siteId)) return;
 
           if (msg.type === "dashboard_analytics") {
-            // ignore snapshots for other ranges
             if (msg.payload?.range && msg.payload.range !== range) return;
             setData(msg.payload);
           }
 
           if (msg.type === "live_visitor_location_grouped") {
-            const pts: LivePoint[] = (msg.payload || []).map((v: any) => ({
-              name: `${v.city || "Unknown"}, ${v.country || "Unknown"}`,
-              value: [v.lng, v.lat, v.count],
-              debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : []
+            // Raw points for WorldMap (GeoCityPoint[])
+            const geo: GeoCityPoint[] = (msg.payload || []).map((v: any) => ({
+              city: v.city || "Unknown",
+              country: v.country || "Unknown",
+              lat: Number(v.lat),
+              lng: Number(v.lng),
+              count: Number(v.count) || 0,
+              debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : [],
+            }));
+            setLiveCities(geo); // ✅ expose raw geo points
+
+            // Optional pre-shaped points for other charts if needed
+            const pts: LivePoint[] = geo.map((g) => ({
+              name: `${g.city}, ${g.country}`,
+              value: [g.lng, g.lat, g.count],
+              debug_ids: g.debug_ids,
             }));
             setLivePoints(pts);
-            const total = (msg.payload || []).reduce((s: number, v: any) => s + (Number(v.count) || 0), 0);
+
+            const total = geo.reduce((s, g) => s + (g.count || 0), 0);
             setLiveCount(total);
           }
 
@@ -80,7 +93,6 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
         ws.onclose = () => {
           if (pingRef.current) clearInterval(pingRef.current);
           if (!closed) {
-            // jittered reconnect
             reconnectRef.current = window.setTimeout(connect, 4000 + Math.floor(Math.random() * 800));
           }
         };
@@ -88,8 +100,7 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
         ws.onerror = () => {
           try { ws.close(); } catch {}
         };
-      } catch (e) {
-        // failed to get ticket; backoff
+      } catch {
         reconnectRef.current = window.setTimeout(connect, 5000);
       }
     };
@@ -104,10 +115,9 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
     };
   }, [siteId, range]);
 
-  // inside useDashboardRealtime(siteId, range)
+  // polling fallback (kept)
   useEffect(() => {
     if (!siteId) return;
-    // low-frequency safety net in hostile networks
     const id = window.setInterval(async () => {
       try {
         const tz = new Date().getTimezoneOffset();
@@ -120,5 +130,5 @@ export function useDashboardRealtime(siteId?: number | string, range: string = "
     return () => clearInterval(id);
   }, [siteId, range]);
 
-  return { data, liveCount, livePoints };
+  return { data, liveCount, livePoints, liveCities }; // ✅ return it
 }

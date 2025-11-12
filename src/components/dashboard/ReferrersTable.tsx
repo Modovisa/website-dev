@@ -17,7 +17,7 @@ export default memo(function ReferrersTable({ rows }: { rows: ReferrerRow[] }) {
   return (
     <div className="h-full flex flex-col text-sm">
       {/* Header — “Referrer” | “Visitors” */}
-      <div className="grid grid-cols-[1fr,200px] px-6 pb-3 text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+      <div className="grid grid-cols-[1fr,200px] px-6 pb-3 text-muted-foreground text-md font-bold uppercase tracking-wide">
         <div>Referrer</div>
         <div className="text-right">Visitors</div>
       </div>
