@@ -1,5 +1,6 @@
 // src/pages/app/Dashboard.tsx
-import { useEffect, useMemo, useState } from "react";
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,11 +39,10 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Bootstrap-compat init once
+  // init legacy-compat once
   useEffect(() => {
     initDashboardCompat(range).catch(() => {});
   }, []);
-
   useEffect(() => {
     setCompatRange(range);
   }, [range]);
@@ -78,15 +78,39 @@ export default function Dashboard() {
     restart,
   } = useDashboardRealtime(siteId ?? null, range);
 
-  const hasData = !!data;
-  const kpiLoading = !hasData;
-  const pageLoading = !hasData && (isLoading || (!data && !error));
+  /* ---------- Skeleton gating (no flicker on REST/WS) ---------- */
+  const [firstPaintDone, setFirstPaintDone] = useState(false);
+
+  // mark first paint when any payload arrives
+  useEffect(() => {
+    if (data && !firstPaintDone) setFirstPaintDone(true);
+  }, [data, firstPaintDone]);
+
+  // reset only when site or range actually changes
+  const prevSiteRef = useRef<number | null>(siteId);
+  useEffect(() => {
+    if (prevSiteRef.current !== siteId) {
+      setFirstPaintDone(false);
+      prevSiteRef.current = siteId;
+    }
+  }, [siteId]);
+
+  const prevRangeRef = useRef<RangeKey>(range);
+  useEffect(() => {
+    if (prevRangeRef.current !== range) {
+      setFirstPaintDone(false);
+      prevRangeRef.current = range;
+    }
+  }, [range]);
+
+  const showKpiSkeleton = !firstPaintDone;
+  const showPageSkeleton = !firstPaintDone;
 
   const topCards = [
-    { key: "live",   name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users,            change: null },
-    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0,      icon: Eye,              change: data?.unique_visitors?.delta ?? null },
-    { key: "avg",    name: "Avg. Session",   value: data?.avg_duration ?? "--",             icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
-    { key: "bounce", name: "Bounce Rate",    value: `${data?.bounce_rate ?? 0}%`,           icon: TrendingUp,       change: data?.bounce_rate_delta ?? null },
+    { key: "live",   name: "Live Visitors",   value: liveCount ?? data?.live_visitors ?? 0, icon: Users,       change: null },
+    { key: "unique", name: "Total Visitors",  value: data?.unique_visitors?.total ?? 0,     icon: Eye,         change: data?.unique_visitors?.delta ?? null },
+    { key: "avg",    name: "Avg. Session",    value: data?.avg_duration ?? "--",            icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
+    { key: "bounce", name: "Bounce Rate",     value: `${data?.bounce_rate ?? 0}%`,          icon: TrendingUp,  change: data?.bounce_rate_delta ?? null },
   ];
 
   if (authLoading) {
@@ -119,6 +143,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
+                // do not reset firstPaintDone here; hook takes care when siteId changes
                 refreshSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
@@ -136,6 +161,7 @@ export default function Dashboard() {
 
             <Select value={range} onValueChange={(v: RangeKey) => {
               setRange(v);
+              // hook will reset firstPaintDone and prime snapshot
               refreshSnapshot();
             }}>
               <SelectTrigger className="w-[160px]">
@@ -153,6 +179,7 @@ export default function Dashboard() {
             <Button
               variant="outline"
               onClick={() => {
+                // manual refresh must NOT blank the page
                 refreshSnapshot();
                 reconnectWS();
               }}
@@ -173,10 +200,15 @@ export default function Dashboard() {
             <div className="text-sm">
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
-              <div className="mt-2">
+              <div className="mt-2 flex gap-2">
                 <Button variant="secondary" size="sm" onClick={() => restart()} disabled={!siteId}>
                   Try again
                 </Button>
+                {error === "unauthorized" && (
+                  <Button size="sm" onClick={() => (window as any).logoutAndRedirect?.("401")}>
+                    Sign in again
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -191,7 +223,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {kpiLoading ? (
+                {showKpiSkeleton ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-28" />
                     <div className="flex gap-2 justify-start">
@@ -217,7 +249,7 @@ export default function Dashboard() {
         </div>
 
         {/* First paint skeletons */}
-        {pageLoading ? (
+        {showPageSkeleton ? (
           <div className="space-y-6">
             <Skeleton className="h-[300px] w-full" />
             <div className="grid gap-6 md:grid-cols-2">
@@ -244,7 +276,12 @@ export default function Dashboard() {
                     version={analyticsVersion}
                   />
                 </div>
-                <EventVolume data={data.events_timeline ?? []} loading={false} />
+                <EventVolume
+                  data={data.events_timeline ?? []}
+                  loading={false}
+                  hasData={!!data.events_timeline?.length}
+                  version={analyticsVersion}
+                />
               </div>
 
               {/* Tables */}
@@ -258,7 +295,8 @@ export default function Dashboard() {
                 <Card>
                   <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
                   <CardContent>
-                    <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} />
+                    {/* If you still have ReferrersTable, keep it; otherwise remove */}
+                    {/* <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} /> */}
                   </CardContent>
                 </Card>
               </div>
@@ -277,11 +315,7 @@ export default function Dashboard() {
                       </p>
                     </CardHeader>
                     <CardContent className="pt-2 h-[540px]">
-                      <WorldMap
-                        countries={data.countries ?? []}
-                        cities={liveCities}
-                        height={540}
-                      />
+                      <WorldMap countries={data.countries ?? []} cities={liveCities} height={540} />
                     </CardContent>
                   </Card>
                 </div>
