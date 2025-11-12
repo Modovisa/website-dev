@@ -10,8 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp } from "lucide-react";
 
 import { useDashboardData, useTrackingWebsites } from "@/hooks/useDashboardData";
-import { useDashboardRealtime } from "@/hooks/useDashboardRealtime"; // ✅ realtime snapshots + live count + liveCities
-import { useGeoEvents } from "@/hooks/useGeoEvents";                  // ✅ REST geo fallback
+import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
+import { useGeoEvents } from "@/hooks/useGeoEvents";
 
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
@@ -53,7 +53,9 @@ export default function Dashboard() {
   // Local cache + auto-select first site
   useEffect(() => {
     if (websites.length) {
-      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
+      try {
+        localStorage.setItem("mv.sites", JSON.stringify(websites));
+      } catch {}
     }
     if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
       setSiteId(websites[0].id);
@@ -62,12 +64,16 @@ export default function Dashboard() {
   }, [websites, siteId]);
 
   // Baseline REST snapshot (skeletons + Refresh)
-  const { data: restData, isLoading, refetch } =
-    useDashboardData({ siteId: siteId ?? undefined, range });
+  const { data: restData, isLoading, refetch } = useDashboardData({
+    siteId: siteId ?? undefined,
+    range,
+  });
 
   // Realtime stream (payload + live count + liveCities)
-  const { data: rtData, liveCount, liveCities } =
-    useDashboardRealtime(siteId ?? undefined, range);
+  const { data: rtData, liveCount, liveCities } = useDashboardRealtime(
+    siteId ?? undefined,
+    range
+  );
 
   // Prefer realtime payload when available
   const data: DashboardPayload | undefined = rtData ?? restData;
