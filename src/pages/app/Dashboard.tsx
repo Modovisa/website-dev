@@ -1,5 +1,8 @@
 // src/pages/app/Dashboard.tsx
+
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getTrackingWebsites } from "@/services/dashboardService";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
@@ -38,7 +41,11 @@ export default function Dashboard() {
   const [range, setRange] = useState<RangeKey>("24h");
 
   // Websites list (this is the only REST call on the page)
-  const { data: websitesRaw = [], isLoading: sitesLoading } = useTrackingWebsites();
+  const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
+    queryKey: ["tracking-websites"],
+    queryFn: getTrackingWebsites,
+    staleTime: 5 * 60 * 1000,
+  });
   const websites: Website[] = (websitesRaw || []).map((p: any) => ({
     id: Number(p.id),
     website_name: String(p.website_name || p.name || `Site ${p.id}`),
