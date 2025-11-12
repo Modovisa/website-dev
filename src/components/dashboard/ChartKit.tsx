@@ -7,23 +7,13 @@ import { Info } from "lucide-react";
 
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  ArcElement,
-  TimeScale,
-  Filler,
-  Tooltip,
-  Legend,
+  CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, TimeScale, Filler, Tooltip, Legend,
 } from "chart.js";
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, TimeScale, Filler, Tooltip, Legend
 );
 
-// Global look (Bootstrap-y)
 ChartJS.defaults.font.family = "'Modovisa', system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
 ChartJS.defaults.color = "#1f2937";
 ChartJS.defaults.plugins.legend.labels.boxWidth = 12;
@@ -101,17 +91,23 @@ export function ChartCard({
   title,
   info,
   loading,
+  hasData,
   children,
   className,
   height = 340,
 }: {
   title: string;
   info?: string;
+  /** loading = true will show skeleton ONLY if hasData === false */
   loading?: boolean;
+  /** pass true after first snapshot; prevents blanking on refresh */
+  hasData?: boolean;
   children: React.ReactNode;
   className?: string;
   height?: number;
 }) {
+  const showSkeleton = !!loading && !hasData;
+
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -120,15 +116,13 @@ export function ChartCard({
       </CardHeader>
       <CardContent>
         <div style={{ height }} className="relative">
-          {loading ? (
+          {showSkeleton ? (
             <div className="absolute inset-0 flex flex-col p-3">
-              {/* title/legend placeholders */}
               <div className="flex items-center gap-2 mb-2">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-4 w-14" />
                 <Skeleton className="h-4 w-14" />
               </div>
-              {/* grid area placeholder */}
               <div className="flex-1 rounded-md border border-dashed border-muted-foreground/20">
                 <div className="h-full w-full grid grid-cols-12">
                   {Array.from({ length: 12 }).map((_, i) => (

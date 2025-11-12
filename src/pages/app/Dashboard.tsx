@@ -1,7 +1,6 @@
 // src/pages/app/Dashboard.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getTrackingWebsites } from "@/services/dashboardService";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw } from "lucide-react";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
+import { initDashboardCompat, setCompatRange } from "@/compat/bootstrap-bridge";
 import type { RangeKey } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -19,11 +19,11 @@ import Donut from "@/components/dashboard/Donut";
 import UTMCampaignsTable from "@/components/dashboard/UTMCampaignsTable";
 import UTMSourcesTable from "@/components/dashboard/UTMSourcesTable";
 import TopPagesTable from "@/components/dashboard/TopPagesTable";
-import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
 
+import { getTrackingWebsites } from "@/services/dashboardService";
 import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
@@ -38,6 +38,15 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
+  // Bootstrap-compat init once
+  useEffect(() => {
+    initDashboardCompat(range).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setCompatRange(range);
+  }, [range]);
+
   const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
@@ -51,21 +60,27 @@ export default function Dashboard() {
   }));
 
   useEffect(() => {
-    if (websites.length) {
-      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
-    }
-    if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
+    if (websites.length && (siteId == null || Number.isNaN(siteId))) {
       setSiteId(websites[0].id);
       localStorage.setItem("current_website_id", String(websites[0].id));
     }
   }, [websites, siteId]);
 
-  // ⬇️ pulls analyticsVersion so charts can update every WS frame
-  const { data, liveCount, liveCities, isLoading, error, analyticsVersion, refreshSnapshot, reconnectWS, restart } =
-    useDashboardRealtime(siteId ?? null, range, { stopRetryOn401: true });
+  const {
+    data,
+    liveCount,
+    liveCities,
+    isLoading,
+    error,
+    analyticsVersion,
+    refreshSnapshot,
+    reconnectWS,
+    restart,
+  } = useDashboardRealtime(siteId ?? null, range);
 
-  const kpiLoading = !data;
-  const pageLoading = isLoading || (!data && !error);
+  const hasData = !!data;
+  const kpiLoading = !hasData;
+  const pageLoading = !hasData && (isLoading || (!data && !error));
 
   const topCards = [
     { key: "live",   name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users,            change: null },
@@ -152,7 +167,7 @@ export default function Dashboard() {
         </div>
 
         {/* Error banner */}
-        {error && error !== "unauthorized" && (
+        {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
             <div className="text-sm">
@@ -225,7 +240,8 @@ export default function Dashboard() {
                     data={data.time_grouped_visits ?? []}
                     range={range}
                     loading={false}
-                    version={analyticsVersion} // 🔁 force rebuild on every frame
+                    hasData={!!data.time_grouped_visits?.length}
+                    version={analyticsVersion}
                   />
                 </div>
                 <EventVolume data={data.events_timeline ?? []} loading={false} />
@@ -257,8 +273,7 @@ export default function Dashboard() {
                         {range === "24h" ? "Past 24 hours" :
                          range === "7d"  ? "Past 7 days"   :
                          range === "30d" ? "Past 30 days"  :
-                         range === "90d" ? "Past 90 days"  :
-                         "Past 12 months"}
+                         range === "90d" ? "Past 90 days"  : "Past 12 months"}
                       </p>
                     </CardHeader>
                     <CardContent className="pt-2 h-[540px]">

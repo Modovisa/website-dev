@@ -8,12 +8,14 @@ export default function TimeGroupedVisits({
   data,
   range,
   loading,
-  version, // 🔁 bump = rebuild dataset/options
+  hasData,
+  version,
 }: {
   data: TimeBucket[];
   range: RangeKey;
   loading?: boolean;
-  version?: number;
+  hasData?: boolean;
+  version?: number; // bump = rebuild dataset/options
 }) {
   const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
 
@@ -33,7 +35,7 @@ export default function TimeGroupedVisits({
       {
         datasetIdKey: "visitors",
         label: "Visitors",
-        data: visitors.slice(), // new array identity
+        data: visitors.slice(),
         backgroundColor: chartTheme.primary,
         borderRadius: 4,
         stack: "stack1",
@@ -95,8 +97,9 @@ export default function TimeGroupedVisits({
   return (
     <ChartCard
       title={titleMap[range] || "Visits"}
-      info="Shows the number of visitors and page views over time based on the selected range."
+      info="Shows the number of visitors and page views over time based on the selected range. Helps spot engagement trends."
       loading={loading}
+      hasData={hasData}
       height={360}
     >
       <Bar data={ds} options={options} />
