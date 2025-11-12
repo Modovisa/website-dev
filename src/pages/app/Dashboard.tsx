@@ -1,6 +1,6 @@
 // src/pages/app/Dashboard.tsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getTrackingWebsites } from "@/services/dashboardService";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle } from "lucide-react";
+import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw } from "lucide-react";
 
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
-import type { RangeKey, DashboardPayload } from "@/types/dashboard";
+import type { RangeKey } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
 import EventVolume from "@/components/dashboard/EventVolume";
@@ -40,12 +40,13 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Websites list (this is the only REST call on the page)
+  // Websites list (REST)
   const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
     staleTime: 5 * 60 * 1000,
   });
+
   const websites: Website[] = (websitesRaw || []).map((p: any) => ({
     id: Number(p.id),
     website_name: String(p.website_name || p.name || `Site ${p.id}`),
@@ -54,7 +55,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (websites.length) {
-      try { localStorage.setItem("mv.sites", JSON.stringify(websites)); } catch {}
+      try {
+        localStorage.setItem("mv.sites", JSON.stringify(websites));
+      } catch {}
     }
     if ((siteId == null || Number.isNaN(siteId)) && websites[0]) {
       setSiteId(websites[0].id);
@@ -62,10 +65,14 @@ export default function Dashboard() {
     }
   }, [websites, siteId]);
 
-  // 🔴 Pure WS stream (no REST fallback)
-  const { status, data, liveCount, liveCities, lastError } = useDashboardRealtime(siteId ?? undefined, range);
-  const loading = status === "idle" || status === "connecting" || status === "handshake-timeout";
-  const errored = status === "error";
+  // ✅ REST snapshot first, then WS refine
+  const { data, liveCount, liveCities, isLoading, error, reconnect } = useDashboardRealtime(
+    siteId ?? null,
+    range,
+    { stopRetryOn401: true }
+  );
+
+  const loading = isLoading || (!data && !error); // first paint skeletons until we have the snapshot or a hard error
 
   const topCards = [
     { key: "live",   name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users,            change: null },
@@ -133,32 +140,25 @@ export default function Dashboard() {
 
             <Button
               variant="outline"
-              onClick={() => {
-                // Nudge the server to resend for the same range without tearing down socket
-                // (Our hook sends set_dashboard_range again if ws is open)
-                setRange((r) => (r === "24h" ? "7d" : "24h"));
-                setTimeout(() => setRange((r) => (r === "24h" ? "7d" : "24h")), 0);
-              }}
+              onClick={() => reconnect()}
               disabled={!siteId}
+              className="gap-2"
+              title="Refresh snapshot + keep live stream"
             >
+              <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
           </div>
         </div>
 
-        {/* Error banner */}
-        {(errored || status === "handshake-timeout") && (
+        {/* Error banner (includes WS hard/soft errors and 401 from REST inside the hook) */}
+        {error && error !== "unauthorized" && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
             <div className="text-sm">
-              <div className="font-semibold text-destructive">
-                {status === "handshake-timeout" ? "Live stream handshake timed out." : "Live stream error."}
-              </div>
+              <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">
-                {status === "handshake-timeout"
-                  ? "No dashboard frames received after connecting. Verify the DO broadcasts `dashboard_analytics` for this site/range."
-                  : "WebSocket error/close encountered. Reconnecting with backoff."}
-                {lastError ? ` (${lastError})` : ""}
+                {error}
               </div>
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function Dashboard() {
                 <stat.icon className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {loading || !data ? (
+                {loading ? (
                   <div className="space-y-2">
                     <Skeleton className="h-8 w-24" />
                     <div className="flex gap-2 justify-start">
@@ -198,8 +198,8 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* If no first frame yet, show skeletons */}
-        {!data ? (
+        {/* First paint skeletons while REST snapshot is loading */}
+        {loading ? (
           <div className="space-y-6">
             <Skeleton className="h-[300px] w-full" />
             <div className="grid gap-6 md:grid-cols-2">
@@ -213,111 +213,113 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <>
-            {/* Charts Row 1 */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2">
-                <TimeGroupedVisits data={data.time_grouped_visits ?? []} range={range} loading={false} />
+          data && (
+            <>
+              {/* Charts Row 1 */}
+              <div className="grid gap-6 md:grid-cols-3">
+                <div className="md:col-span-2">
+                  <TimeGroupedVisits data={data.time_grouped_visits ?? []} range={range} loading={false} />
+                </div>
+                <EventVolume data={data.events_timeline ?? []} loading={false} />
               </div>
-              <EventVolume data={data.events_timeline ?? []} loading={false} />
-            </div>
 
-            {/* Tables */}
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
-                <CardContent>
-                  <TopPagesTable rows={(data.top_pages ?? []).map((p: any) => ({ url: p.url, views: p.views }))} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
-                <CardContent>
-                  <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} />
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Geographic */}
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <Card className="h-[660px]">
-                  <CardHeader className="px-6 pt-6 pb-0">
-                    <CardTitle>World Visitors</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {range === "24h" ? "Past 24 hours" :
-                       range === "7d"  ? "Past 7 days"   :
-                       range === "30d" ? "Past 30 days"  :
-                       range === "90d" ? "Past 90 days"  :
-                       range === "12mo"? "Past 12 months": ""}
-                    </p>
-                  </CardHeader>
-                  <CardContent className="pt-2 h-[540px]">
-                    <WorldMap
-                      countries={data.countries ?? []}
-                      cities={liveCities}
-                      height={540}
-                    />
+              {/* Tables */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
+                  <CardContent>
+                    <TopPagesTable rows={(data.top_pages ?? []).map((p: any) => ({ url: p.url, views: p.views }))} />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
+                  <CardContent>
+                    <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} />
                   </CardContent>
                 </Card>
               </div>
-              <div>
-                <Card className="h-[660px]">
-                  <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
-                  <CardContent className="h-[540px] overflow-auto">
-                    <CountryVisits countries={data.countries ?? []} />
-                  </CardContent>
+
+              {/* Geographic */}
+              <div className="grid gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <Card className="h-[660px]">
+                    <CardHeader className="px-6 pt-6 pb-0">
+                      <CardTitle>World Visitors</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {range === "24h" ? "Past 24 hours" :
+                         range === "7d"  ? "Past 7 days"   :
+                         range === "30d" ? "Past 30 days"  :
+                         range === "90d" ? "Past 90 days"  :
+                         range === "12mo"? "Past 12 months": ""}
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pt-2 h-[540px]">
+                      <WorldMap
+                        countries={data.countries ?? []}
+                        cities={liveCities}
+                        height={540}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+                <div>
+                  <Card className="h-[660px]">
+                    <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
+                    <CardContent className="h-[540px] overflow-auto">
+                      <CountryVisits countries={data.countries ?? []} />
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Heatmap */}
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <CardTitle>Visitor Density Calendar</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <VisitorsHeatmap data={data.calendar_density ?? []} height={220} />
+                </CardContent>
+              </Card>
+
+              {/* Lines */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <UniqueReturning data={data.unique_vs_returning ?? []} />
+                <PerformanceLine
+                  title="Conversions"
+                  current={data.conversions_timeline ?? []}
+                  previous={data.conversions_previous_timeline ?? []}
+                  color="#8b5cf6"
+                  filled
+                />
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <PerformanceLine title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled />
+                <PerformanceLine title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled />
+                <PerformanceLine title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled />
+                <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled />
+              </div>
+
+              {/* Donuts + UTMs */}
+              <div className="grid gap-6 md:grid-cols-3">
+                <Donut title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
+                <Donut title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
+                <Donut title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-3">
+                <Card className="md:col-span-2">
+                  <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
+                  <CardContent><UTMCampaignsTable rows={data.utm_campaigns ?? []} /></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
+                  <CardContent><UTMSourcesTable rows={data.utm_sources ?? []} /></CardContent>
                 </Card>
               </div>
-            </div>
-
-            {/* Heatmap */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle>Visitor Density Calendar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <VisitorsHeatmap data={data.calendar_density ?? []} height={220} />
-              </CardContent>
-            </Card>
-
-            {/* Lines */}
-            <div className="grid gap-6 md:grid-cols-2">
-              <UniqueReturning data={data.unique_vs_returning ?? []} />
-              <PerformanceLine
-                title="Conversions"
-                current={data.conversions_timeline ?? []}
-                previous={data.conversions_previous_timeline ?? []}
-                color="#8b5cf6"
-                filled
-              />
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <PerformanceLine title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled />
-              <PerformanceLine title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled />
-              <PerformanceLine title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled />
-              <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled />
-            </div>
-
-            {/* Donuts + UTMs */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <Donut title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
-              <Donut title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
-              <Donut title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card className="md:col-span-2">
-                <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
-                <CardContent><UTMCampaignsTable rows={data.utm_campaigns ?? []} /></CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
-                <CardContent><UTMSourcesTable rows={data.utm_sources ?? []} /></CardContent>
-              </Card>
-            </div>
-          </>
+            </>
+          )
         )}
       </div>
     </DashboardLayout>

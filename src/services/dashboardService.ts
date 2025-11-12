@@ -1,87 +1,19 @@
 // src/services/dashboardService.ts
+// Single source of truth for dashboard REST + WS ticket
+// - No dependency on src/lib/api (build-safe)
+// - Dedupe + throttle WS ticket requests
+// - Friendly HttpError + Unauthorized handling
 
-import { http, HttpError } from "./http";
-import { apiBase } from "@/lib/api";               // ← uses your env toggle (api.modovisa.com / dev-api)
-import { secureFetch } from "@/lib/auth";          // ← attaches/refreshes Authorization automatically
+import { secureFetch } from "@/lib/auth";
+import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
-/* ---------- Websites (keep as-is REST) ---------- */
+/* ---------- Types ---------- */
 export type TrackingWebsite = { id: number; website_name: string; domain: string };
-type TrackingWebsitesAPI = { projects: Array<{ id: number; website_name?: string; name?: string; domain?: string }> };
+type TrackingWebsitesAPI = {
+  projects: Array<{ id: number; website_name?: string; name?: string; domain?: string }>;
+};
 
-export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
-  const j = await http<TrackingWebsitesAPI>("/api/tracking-websites", { method: "POST" });
-  return (j.projects || []).map((p) => ({
-    id: Number(p.id),
-    website_name: String(p.website_name || p.name || `Site ${p.id}`),
-    domain: String(p.domain || ""),
-  }));
-}
-
-/* ---------- WS ticket (dedupe + backoff) ---------- */
 type WSTicketAPI = { ticket: string };
-
-const inflightTickets = new Map<number, Promise<string>>();
-const lastTicketAt = new Map<number, number>();
-
-export async function getWSTicket(siteId: number): Promise<string> {
-  const now = Date.now();
-  const last = lastTicketAt.get(siteId) ?? 0;
-
-  // small dedupe window to avoid 429s if callers stampede
-  if (now - last < 5000) {
-    const existing = inflightTickets.get(siteId);
-    if (existing) return existing;
-  }
-
-  const p = (async () => {
-    try {
-      const url = `${apiBase()}/api/ws-ticket`;
-
-      // Use secureFetch → ensures Authorization, refreshes if needed
-      const res = await secureFetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ site_id: siteId }),
-      });
-
-      // NOTE: secureFetch already retries once on 401 by refreshing.
-      // If it still returns 401 here, treat it as a hard auth failure.
-      if (res.status === 401) {
-        throw new HttpError(401, "Unauthorized");
-      }
-
-      if (res.status === 429) {
-        const ra = Number(res.headers.get("retry-after") || "10");
-        // brief courtesy wait then surface as error so caller backoff runs
-        await new Promise((r) => setTimeout(r, Math.max(3, ra) * 1000));
-        throw new HttpError(429, "Too Many Requests");
-      }
-
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new HttpError(res.status, `ticket failed ${res.status}`, body);
-      }
-
-      const j = (await res.json()) as WSTicketAPI;
-      if (!j?.ticket) throw new Error("no_ticket");
-      return j.ticket;
-    } catch (e: any) {
-      // secureFetch may throw plain "unauthorized" on refresh failure — normalize to HttpError(401)
-      const msg = String(e?.message || "");
-      if (e?.status === 401 || msg === "unauthorized" || /unauthor/i.test(msg)) {
-        throw new HttpError(401, "Unauthorized");
-      }
-      throw e;
-    } finally {
-      lastTicketAt.set(siteId, Date.now());
-      inflightTickets.delete(siteId);
-    }
-  })();
-
-  inflightTickets.set(siteId, p);
-  return p;
-}
 
 export type GeoCityPoint = {
   city: string;
@@ -91,3 +23,108 @@ export type GeoCityPoint = {
   count: number;
   debug_ids?: string[];
 };
+
+/* ---------- Small error class ---------- */
+export class HttpError extends Error {
+  status: number;
+  body?: string;
+  constructor(status: number, message: string, body?: string) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+export class UnauthorizedError extends HttpError {
+  constructor(body?: string) {
+    super(401, "unauthorized", body);
+  }
+}
+
+/* ---------- REST: tracking websites ---------- */
+export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
+  const res = await secureFetch("https://api.modovisa.com/api/tracking-websites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new HttpError(res.status, "failed_tracking_websites", await res.text().catch(() => ""));
+
+  const j = (await res.json()) as TrackingWebsitesAPI;
+  return (j.projects || []).map((p) => ({
+    id: Number(p.id),
+    website_name: String(p.website_name || p.name || `Site ${p.id}`),
+    domain: String(p.domain || ""),
+  }));
+}
+
+/* ---------- REST: dashboard snapshot ---------- */
+export async function getDashboardSnapshot(args: {
+  siteId: number;
+  range: RangeKey;
+  tzOffset?: number;
+}): Promise<DashboardPayload> {
+  const tz = Number.isFinite(args.tzOffset) ? String(args.tzOffset) : String(new Date().getTimezoneOffset());
+  const url =
+    `https://api.modovisa.com/api/user-dashboard-analytics` +
+    `?range=${encodeURIComponent(args.range)}` +
+    `&tz_offset=${encodeURIComponent(tz)}` +
+    `&site_id=${encodeURIComponent(args.siteId)}`;
+
+  const res = await secureFetch(url, { method: "GET" });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new HttpError(res.status, "failed_dashboard_snapshot", await res.text().catch(() => ""));
+
+  return (await res.json()) as DashboardPayload;
+}
+
+/* ---------- WS ticket (dedupe + throttle + 429 backoff) ---------- */
+const inflightTickets = new Map<number, Promise<string>>();
+const lastTicketAt = new Map<number, number>();
+const MIN_TICKET_MS = 1500;
+
+export async function getWSTicket(siteId: number): Promise<string> {
+  const now = Date.now();
+  const last = lastTicketAt.get(siteId) ?? 0;
+
+  if (now - last < MIN_TICKET_MS) {
+    const existing = inflightTickets.get(siteId);
+    if (existing) return existing;
+  }
+
+  const p = (async () => {
+    try {
+      const res = await secureFetch("https://api.modovisa.com/api/ws-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_id: siteId }),
+      });
+
+      if (res.status === 401) {
+        throw new UnauthorizedError(await res.text().catch(() => ""));
+      }
+
+      if (res.status === 429) {
+        const ra = Number(res.headers.get("retry-after") || "10");
+        const wait = Math.max(3, ra) * 1000;
+        await new Promise((r) => setTimeout(r, wait));
+        throw new HttpError(429, "too_many_requests");
+      }
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new HttpError(res.status, `ticket_failed_${res.status}`, body);
+      }
+
+      const j = (await res.json()) as WSTicketAPI;
+      if (!j?.ticket) throw new HttpError(500, "no_ticket");
+      return j.ticket;
+    } finally {
+      lastTicketAt.set(siteId, Date.now());
+      inflightTickets.delete(siteId);
+    }
+  })();
+
+  inflightTickets.set(siteId, p);
+  return p;
+}
