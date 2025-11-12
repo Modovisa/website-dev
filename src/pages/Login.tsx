@@ -473,7 +473,7 @@ const Login = () => {
             <DialogDescription>
               We use a visitor ID cookie to measure website traffic. Please confirm that you agree to our{" "}
               <a 
-                href="/legal/privacy.html" 
+                href="/legal/privacy" 
                 target="_blank" 
                 rel="noopener" 
                 className="text-primary hover:underline"
@@ -482,7 +482,7 @@ const Login = () => {
               </a>{" "}
               and{" "}
               <a 
-                href="/legal/terms-and-conditions.html" 
+                href="/legal/terms-and-conditions" 
                 target="_blank" 
                 rel="noopener"
                 className="text-primary hover:underline"
