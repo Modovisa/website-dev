@@ -101,10 +101,12 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
         }
         
         // CRITICAL: Validate data array sizes match expected range
-        // Backend bug: WebSocket sometimes sends 30d data even when range is 24h
-        // We must reject mismatched data to prevent chart from switching ranges
+        // Backend bug: WebSocket sends 30d data even when range is 24h
+        // We must reject mismatched CHART data but still accept METRICS updates
         if (incoming.time_grouped_visits && incoming.time_grouped_visits.length > 0) {
           const dataPoints = incoming.time_grouped_visits.length;
+          
+          // TIGHT validation ranges based on actual expected data
           const expectedPoints: Record<RangeKey, [number, number]> = {
             '24h': [20, 28],   // 24h hourly = ~24 points (±2 for edge cases)
             '7d': [6, 9],      // 7d daily = ~7 points
@@ -118,17 +120,47 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
           
           if (dataPoints < min || dataPoints > max) {
             console.warn(
-              `⚠️ [Hook] REJECTING WebSocket frame - data size mismatch!`,
+              `⚠️ [Hook] REJECTING chart arrays - data size mismatch!`,
               `Expected ${min}-${max} points for range "${range}", got ${dataPoints} points.`,
-              `This suggests backend sent wrong range data. Keeping existing data.`
+              `Keeping existing chart data but updating metrics/counts.`
             );
-            // Don't merge - just update live counts, keep existing chart data
-            setState((s) => ({
-              ...s,
-              liveCount: incoming.live_visitors ?? s.liveCount,
-              error: null,
-            }));
-            return; // Skip the full merge
+            
+            // Merge ONLY non-chart fields (metrics, counts, simple arrays)
+            setState((s) => {
+              const merged: DashboardPayload = {
+                ...(s.data || {}),
+                ...incoming,
+                // REJECT: Keep old chart data, don't merge incoming chart arrays
+                time_grouped_visits: s.data?.time_grouped_visits,
+                unique_vs_returning: s.data?.unique_vs_returning,
+                events_timeline: s.data?.events_timeline,
+                funnel: s.data?.funnel,
+                calendar_density: s.data?.calendar_density,
+                
+                // ACCEPT: Merge scalar metrics and simple lists
+                unique_visitors: incoming.unique_visitors ?? s.data?.unique_visitors,
+                live_visitors: incoming.live_visitors ?? s.data?.live_visitors,
+                bounce_rate: incoming.bounce_rate ?? s.data?.bounce_rate,
+                avg_duration: incoming.avg_duration ?? s.data?.avg_duration,
+                multi_page_visits: incoming.multi_page_visits ?? s.data?.multi_page_visits,
+                
+                // ACCEPT: Simple data arrays (not time-series charts)
+                referrers: incoming.referrers ?? s.data?.referrers,
+                browsers: incoming.browsers ?? s.data?.browsers,
+                devices: incoming.devices ?? s.data?.devices,
+                os: incoming.os ?? s.data?.os,
+                countries: incoming.countries ?? s.data?.countries,
+                top_pages: incoming.top_pages ?? s.data?.top_pages,
+                utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
+                utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
+                page_flow: incoming.page_flow ?? s.data?.page_flow,
+              } as DashboardPayload;
+              
+              console.log("📊 [Hook] Partial merge: kept chart data, updated metrics");
+              return { ...s, data: merged, error: null };
+            });
+            setAnalyticsVersion((v) => v + 1);
+            return; // Skip full merge
           } else {
             console.log(`✅ [Hook] Validation passed - ${dataPoints} points is valid for range "${range}"`);
           }
