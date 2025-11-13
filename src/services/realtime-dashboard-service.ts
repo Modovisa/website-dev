@@ -152,10 +152,7 @@ export async function getDashboardSnapshot(args: {
 
   const data = await res.json();
   
-  // CRITICAL: Override the range field to match requested range (backend bug workaround)
-  if (data.range && data.range !== args.range) {
-    console.log("📊 [REST] Overriding incorrect backend range:", data.range, "→", args.range);
-  }
+  // Ensure range matches what we requested
   data.range = args.range;
   
   console.log("✅ [REST] Snapshot received, emitting to mvBus");
@@ -284,23 +281,11 @@ async function connectWS(forceNewTicket = false) {
       const data = msg.payload;
       if (!data) return;
 
-      // CRITICAL: Backend bug - always sends range:"30d" in metadata!
-      // The data arrays (time_grouped_visits, etc.) ARE correctly filtered by backend.
-      // Solution: Override the range field with our client-side selected range.
-      // This matches the bootstrap version's behavior.
-      if (data.range && data.range !== selectedRange) {
-        console.log(
-          "📊 [WS] Overriding incorrect backend range:",
-          data.range,
-          "→",
-          selectedRange
-        );
-      }
+      // ✅ CRITICAL FIX: Don't override the range!
+      // Let the hook see the REAL backend range so it can reject mismatched data
+      // Bootstrap does this check BEFORE rendering, we do it in the hook
       
-      // Override range field with correct client-side range before emitting
-      data.range = selectedRange;
-
-      console.log("✨ [WS] Emitting dashboard frame update with range:", selectedRange);
+      console.log("✨ [WS] Emitting dashboard frame update, backend range:", data.range, "client wants:", selectedRange);
       mvBus.emit("mv:dashboard:frame", data);
     }
 

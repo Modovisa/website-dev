@@ -126,25 +126,42 @@ export function useBilling() {
   /* -------- Actions -------- */
 
   /** Stripe Embedded Checkout inside #react-billing-embedded-modal */
-  const startEmbeddedCheckout = useCallback(
+    const startEmbeddedCheckout = useCallback(
     async (tierId: number, interval: "month" | "year", onMounted?: () => void) => {
       const stripe = await getStripe();
       if (!stripe) throw new Error("Stripe failed to load");
 
-      const { client_secret } = await jsonSecure<{ client_secret: string }>(
-        `${apiBase()}/api/stripe/embedded-session`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tier_id: tierId, interval }),
-        }
-      );
+      // Ask backend for an Embedded Checkout client_secret for this tier/interval
+      const resp = await jsonSecure<any>(`${apiBase()}/api/stripe/embedded-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier_id: tierId, interval }),
+      });
 
+      // ✅ If server handled the upgrade without a checkout (card on file), treat as success
+      if (resp?.success === true || resp?.embedded_handled === true) {
+        // refresh plan + invoices, then let caller close their UI
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["billing:info"] }),
+          qc.invalidateQueries({ queryKey: ["billing:invoices"] }),
+        ]);
+        onMounted?.();
+        return;
+      }
+
+      // Normal embedded flow
+      const clientSecret: string | undefined = resp?.client_secret || resp?.clientSecret;
+      if (!clientSecret) {
+        throw new Error(resp?.error || "Missing Stripe client secret");
+      }
+
+      // Show the modal shell
       show("react-billing-embedded-modal");
 
+      // Mount Embedded Checkout
       let checkout: StripeEmbeddedCheckout | null = null;
       try {
-        checkout = await stripe.initEmbeddedCheckout({ clientSecret: client_secret });
+        checkout = await stripe.initEmbeddedCheckout({ clientSecret });
         await checkout.mount("#react-billing-stripe-element");
         onMounted?.();
       } catch (e) {
@@ -152,6 +169,7 @@ export function useBilling() {
         throw e;
       }
 
+      // Close handlers: overlay click or Escape
       const modalEl = document.getElementById("react-billing-embedded-modal");
       const cleanup = () => {
         checkout?.destroy();
@@ -170,6 +188,7 @@ export function useBilling() {
     },
     [qc]
   );
+
 
   /** Update card via SetupIntent + Payment Element in #react-billing-updatecard-modal */
   const startUpdateCard = useCallback(async () => {

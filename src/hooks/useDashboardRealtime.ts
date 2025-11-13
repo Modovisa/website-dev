@@ -97,13 +97,59 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
         
         // Log what we received
         if (incoming.time_grouped_visits) {
-          console.log("📊 [Hook] WebSocket data points:", incoming.time_grouped_visits.length, "metadata range:", incoming.range);
+          console.log("📊 [Hook] WebSocket data points:", incoming.time_grouped_visits.length, "backend range:", incoming.range);
         }
         
-        // NO VALIDATION - Trust the data like bootstrap does
-        // Bootstrap doesn't validate array sizes, it just uses whatever comes through
-        // Since we override data.range to match selectedRange, the data should be correct
-        console.log("📊 [Hook] Accepting WebSocket data without validation (bootstrap mode)");
+        // CRITICAL: Check if backend range matches our selected range
+        // This is what bootstrap does - reject chart data if range doesn't match
+        if (incoming.range && incoming.range !== range) {
+          console.warn(
+            `⚠️ [Hook] Range mismatch! Backend sent "${incoming.range}" but we want "${range}"`,
+            `This means backend sent wrong time period data (e.g., 30 days instead of 24 hours).`,
+            `Updating metrics only, keeping existing chart data.`
+          );
+          
+          // Partial merge: Accept metrics/lists, reject chart arrays
+          setState((s) => {
+            const merged: DashboardPayload = {
+              ...(s.data || {}),
+              ...incoming,
+              
+              // REJECT: Keep old chart data (wrong time period)
+              time_grouped_visits: s.data?.time_grouped_visits,
+              unique_vs_returning: s.data?.unique_vs_returning,
+              events_timeline: s.data?.events_timeline,
+              funnel: s.data?.funnel,
+              calendar_density: s.data?.calendar_density,
+              
+              // ACCEPT: Update metrics and lists
+              unique_visitors: incoming.unique_visitors ?? s.data?.unique_visitors,
+              live_visitors: incoming.live_visitors ?? s.data?.live_visitors,
+              bounce_rate: incoming.bounce_rate ?? s.data?.bounce_rate,
+              avg_duration: incoming.avg_duration ?? s.data?.avg_duration,
+              multi_page_visits: incoming.multi_page_visits ?? s.data?.multi_page_visits,
+              referrers: incoming.referrers ?? s.data?.referrers,
+              browsers: incoming.browsers ?? s.data?.browsers,
+              devices: incoming.devices ?? s.data?.devices,
+              os: incoming.os ?? s.data?.os,
+              countries: incoming.countries ?? s.data?.countries,
+              top_pages: incoming.top_pages ?? s.data?.top_pages,
+              utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
+              utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
+              page_flow: incoming.page_flow ?? s.data?.page_flow,
+              
+              // Keep the correct range
+              range: s.data?.range,
+            } as DashboardPayload;
+            
+            console.log("📊 [Hook] Partial merge: kept chart data from", s.data?.range, "updated metrics");
+            return { ...s, data: merged, error: null };
+          });
+          setAnalyticsVersion((v) => v + 1);
+          return; // Skip full merge
+        }
+        
+        console.log(`✅ [Hook] Range matches - accepting all data for range "${range}"`);
         
         
         setState((s) => {
