@@ -48,6 +48,9 @@ import {
 } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
 
+// NEW: React port of Billing & Plans
+import BillingAndPlans from "@/components/profile/BillingAndPlans";
+
 const Profile = () => {
   // Auth guard - redirects to login if not authenticated
   const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
@@ -687,56 +690,9 @@ const Profile = () => {
               </Card>
             </TabsContent>
 
+            {/* BILLING TAB -> React port (Bootstrap feature parity) */}
             <TabsContent value="billing" className="space-y-6">
-              <Card>
-                <CardContent className="pt-6">
-                  <h2 className="text-2xl font-semibold mb-6">Current Plan</h2>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Left side - Plan details */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">Your Current Plan is</span>
-                        {isFreeForever ? (
-                          <Badge className="bg-success text-success-foreground text-sm px-3 py-1">
-                            Free Forever
-                          </Badge>
-                        ) : (
-                          <span className="font-semibold">{billingInfo?.plan_name}</span>
-                        )}
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <h3 className="text-xl font-semibold">
-                          {isFreeForever ? "Free Forever" : billingInfo?.plan_name}
-                        </h3>
-                        <p className="text-muted-foreground">
-                          {isFreeForever 
-                            ? "Enjoy unlimited events and full access — forever free."
-                            : billingInfo?.plan_features || "Professional plan features"
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Right side - Usage stats */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-semibold">
-                        {isFreeForever ? "Lifetime Events" : "Current Period"}
-                      </h3>
-                      <div className="flex items-center gap-3">
-                        <Badge className="bg-[hsl(190,100%,45%)] text-white text-lg px-4 py-2 font-bold">
-                          {eventsThisMonth.toLocaleString()}
-                        </Badge>
-                        <span className="text-base">events used {isFreeForever ? "so far" : "this period"}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        since {formatDate(profile?.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <BillingAndPlans />
             </TabsContent>
           </Tabs>
         </div>
