@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { PricingTier } from "@/services/billingService";
+import type { PricingTier } from "@/hooks/useBilling";
 
 type Props = {
   open: boolean;
@@ -60,7 +60,6 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Pro</CardTitle>
 
-            {/* Monthly / Yearly toggle - pixel tight, no drift */}
             <div className="mt-4 flex items-center justify-center gap-3">
               <span className="font-medium select-none">Monthly</span>
 
@@ -83,20 +82,18 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
               </button>
 
               <span className="font-medium select-none">Yearly</span>
-              <span className="ml-1 rounded bg-success px-2 py-0.5 text-lg font-bold text-primary-foreground select-none">Save 20%</span>
+              <span className="ml-1 rounded bg-success px-2 py-0.5 text-lg font-bold text-primary-foreground select-none">
+                Save 20%
+              </span>
             </div>
 
-            {/* Slider with filled progress + native range (accessible) */}
             <div className="mx-auto mt-6 w-full max-w-xl">
               <div className="relative">
-                {/* Track */}
                 <div className="h-3 rounded-full bg-muted my-6" />
-                {/* Filled */}
                 <div
                   className="absolute left-0 top-0 h-3 rounded-full bg-primary"
                   style={{ width: `${percent}%` }}
                 />
-                {/* Range (thumb) */}
                 <input
                   aria-label="Events per month"
                   type="range"
@@ -157,13 +154,6 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Embedded Stripe container (shown/hidden by hook) */}
-      <div id="react-billing-embedded-modal" className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50">
-        <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
-          <div id="react-billing-stripe-element" />
-        </div>
       </div>
     </div>
   );

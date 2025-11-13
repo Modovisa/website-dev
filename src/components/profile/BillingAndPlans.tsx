@@ -32,7 +32,6 @@ export default function BillingAndPlans() {
   const totalDays = info?.total_days ?? (info?.interval === "year" ? 365 : 30);
   const percent = Math.min(100, Math.round((usedDays / (totalDays || 1)) * 100));
 
-  // Only treat as an active paid subscription when it’s truly paid & current
   const hasActiveSubscription = useMemo(
     () =>
       !!(
@@ -65,7 +64,7 @@ export default function BillingAndPlans() {
                     {isFreeForever ? (
                       <>
                         Your Current Plan is{" "}
-                        <span className="rounded-full px-2 py-0.5 bg-success text-primary-foreground">
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700">
                           Free Forever
                         </span>
                       </>
@@ -127,7 +126,6 @@ export default function BillingAndPlans() {
 
               {/* Right block */}
               <div>
-                {/* Alert banners */}
                 {!isFreePlan && (
                   <>
                     {info.cancel_at_period_end ? (
@@ -158,7 +156,6 @@ export default function BillingAndPlans() {
                   </>
                 )}
 
-                {/* Progress */}
                 <div className="mb-2 flex items-center justify-between">
                   <h6 className="mb-1">{isFreePlan ? "Month Progress" : "Billing Period Progress"}</h6>
                   <h6 className="mb-1">{isFreeForever ? "—" : `${usedDays} of ${totalDays} Days`}</h6>
@@ -190,14 +187,12 @@ export default function BillingAndPlans() {
 
               {/* Actions */}
               <div className="col-span-full mt-2 flex flex-wrap gap-3">
-                {/* Upgrade is hidden only for Free Forever */}
                 {!isFreeForever && (
                   <Button onClick={() => setShowUpgrade(true)} className="mr-2">
                     Upgrade Plan
                   </Button>
                 )}
 
-                {/* Show cancel/reactivate/downgrade/update only for real paid subs */}
                 {hasActiveSubscription && !info.cancel_at_period_end && (
                   <Button variant="outline" className="text-red-600" onClick={cancelSubscription}>
                     Cancel Subscription
@@ -227,27 +222,37 @@ export default function BillingAndPlans() {
         </CardContent>
       </Card>
 
-      {/* Invoices */}
       <InvoicesTable rows={invoices} />
 
-      {/* Upgrade modal */}
       <UpgradePlanModal
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}
         tiers={tiers}
         currentPlanAmount={currentPlanAmount}
         onUpgrade={({ tierId, interval }) => {
-          // Handles both embedded checkout and server-side success fallback
+          // Start checkout. We’ll close the Upgrade modal only after Stripe mount succeeds.
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
           }).catch((err) => {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            // Keep modal open; let user retry or close manually.
+            // Leave the upgrade modal open so the user can retry / see errors.
           });
         }}
       />
 
-      {/* Embedded update-card modal container (hook mounts Stripe here) */}
+      {/* 🔒 Embedded Stripe container lives OUTSIDE the upgrade modal to avoid unmounting */}
+      <div
+        id="react-billing-embedded-modal"
+        className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
+      >
+        <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
+          <div id="react-billing-stripe-element" />
+          {/* Optional debug line—leave for Firefox until confirmed stable */}
+          <div id="react-billing-stripe-debug" className="mt-3 text-xs text-muted-foreground"></div>
+        </div>
+      </div>
+
+      {/* Update-card modal container */}
       <div
         id="react-billing-updatecard-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
