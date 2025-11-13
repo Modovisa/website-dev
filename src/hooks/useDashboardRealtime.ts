@@ -76,12 +76,15 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
 
   // Subscribe to mvBus events
   useEffect(() => {
-    console.log("📡 [Hook] Subscribing to mvBus events");
+    console.log("📡 [Hook] Subscribing to mvBus events for range:", range);
 
     const offSnapshot = mvBus.on<DashboardPayload>(
       "mv:dashboard:snapshot",
       (payload) => {
         console.log("📊 [Hook] Received snapshot event, updating state");
+        if (payload.time_grouped_visits) {
+          console.log("📊 [Hook] Snapshot data points:", payload.time_grouped_visits.length, "range:", payload.range);
+        }
         setState((s) => ({ ...s, data: payload, error: null }));
         setAnalyticsVersion((v) => v + 1);
       }
@@ -90,7 +93,12 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
     const offFrame = mvBus.on<DashboardPayload>(
       "mv:dashboard:frame",
       (incoming) => {
-        console.log("📊 [Hook] Received frame event, merging with state");
+        console.log("📊 [Hook] Received frame event for range:", range);
+        
+        // Log what we received
+        if (incoming.time_grouped_visits) {
+          console.log("📊 [Hook] WebSocket data points:", incoming.time_grouped_visits.length, "metadata range:", incoming.range);
+        }
         
         // CRITICAL: Validate data array sizes match expected range
         // Backend bug: WebSocket sometimes sends 30d data even when range is 24h
@@ -106,9 +114,11 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
           };
           
           const [min, max] = expectedPoints[range] || [0, 1000];
+          console.log(`🔍 [Hook] Validating: got ${dataPoints} points, expected ${min}-${max} for range "${range}"`);
+          
           if (dataPoints < min || dataPoints > max) {
             console.warn(
-              `⚠️ [Hook] Rejecting WebSocket frame - data size mismatch!`,
+              `⚠️ [Hook] REJECTING WebSocket frame - data size mismatch!`,
               `Expected ${min}-${max} points for range "${range}", got ${dataPoints} points.`,
               `This suggests backend sent wrong range data. Keeping existing data.`
             );
@@ -119,6 +129,8 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
               error: null,
             }));
             return; // Skip the full merge
+          } else {
+            console.log(`✅ [Hook] Validation passed - ${dataPoints} points is valid for range "${range}"`);
           }
         }
         
@@ -145,6 +157,11 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
             top_pages: incoming.top_pages ?? s.data?.top_pages,
             page_flow: incoming.page_flow ?? s.data?.page_flow,
           } as DashboardPayload;
+          
+          if (merged.time_grouped_visits) {
+            console.log("📊 [Hook] After merge, data points:", merged.time_grouped_visits.length, "range:", merged.range);
+          }
+          
           return { ...s, data: merged, error: null };
         });
         setAnalyticsVersion((v) => v + 1);
@@ -180,7 +197,7 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
       offCount();
       offErr();
     };
-  }, []);
+  }, [range]); // CRITICAL: Add range as dependency to fix closure bug!
 
   const refreshSnapshot = () => {
     console.log("🔄 [Hook] Manually refreshing snapshot");
