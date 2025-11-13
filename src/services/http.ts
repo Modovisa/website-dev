@@ -1,8 +1,26 @@
 // src/services/http.ts
-
 import { secureFetch } from "@/lib/auth";
 
-export const API_BASE = "https://api.modovisa.com";
+/** Resolve API base dynamically (prod/dev) */
+function resolveApiBase(): string {
+  // 1) Explicit override via localStorage (you already use this elsewhere)
+  try {
+    const env = localStorage.getItem("modovisa_api_env"); // "dev" | "prod"
+    if (env === "dev") return "https://dev-api.modovisa.com";
+    if (env === "prod") return "https://api.modovisa.com";
+  } catch {}
+
+  // 2) Heuristic from current host
+  const host = (typeof window !== "undefined" && window.location?.hostname) || "";
+  if (host.startsWith("dev.") || host.includes("-dev") || host.includes("localhost")) {
+    return "https://dev-api.modovisa.com";
+  }
+
+  // 3) Default to prod
+  return "https://api.modovisa.com";
+}
+
+export const API_BASE = resolveApiBase();
 
 export class HttpError extends Error {
   status: number;
@@ -15,14 +33,12 @@ export class HttpError extends Error {
 }
 
 async function parseJsonSafe(res: Response) {
-  // 204 No Content or empty body → return null
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
   try {
     return JSON.parse(text);
   } catch {
-    // If backend ever returns non-JSON (shouldn’t), return raw text
     return text;
   }
 }
@@ -32,14 +48,16 @@ type HttpInit = RequestInit & { timeoutMs?: number };
 /** Core client. Always uses secureFetch (auth, refresh, retry). */
 export async function http<T = unknown>(path: string, init: HttpInit = {}): Promise<T> {
   const ctrl = new AbortController();
-  const timer =
-    init.timeoutMs != null ? setTimeout(() => ctrl.abort("timeout"), init.timeoutMs) : null;
+  const timer = init.timeoutMs != null ? setTimeout(() => ctrl.abort("timeout"), init.timeoutMs) : null;
 
   try {
     const res = await secureFetch(`${API_BASE}${path}`, {
       ...init,
-      // Ensure JSON by default; allow callers to override
-      headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+      // Don’t force JSON header on GET; avoid unnecessary preflights.
+      headers: {
+        ...(init.method && init.method !== "GET" ? { "Content-Type": "application/json" } : {}),
+        ...(init.headers || {}),
+      },
       credentials: "include",
       signal: ctrl.signal,
     });
@@ -54,7 +72,6 @@ export async function http<T = unknown>(path: string, init: HttpInit = {}): Prom
   }
 }
 
-/** Convenience helpers */
 export const httpGet = <T = unknown>(path: string, init?: Omit<HttpInit, "method" | "body">) =>
   http<T>(path, { ...init, method: "GET" });
 
