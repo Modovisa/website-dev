@@ -32,7 +32,7 @@ export default function BillingAndPlans() {
   const totalDays = info?.total_days ?? (info?.interval === "year" ? 365 : 30);
   const percent = Math.min(100, Math.round((usedDays / (totalDays || 1)) * 100));
 
-  // ✅ Only treat as an active paid subscription when it’s truly paid & current
+  // Only treat as an active paid subscription when it’s truly paid & current
   const hasActiveSubscription = useMemo(
     () =>
       !!(
@@ -240,8 +240,9 @@ export default function BillingAndPlans() {
           // Handles both embedded checkout and server-side success fallback
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
-          }).catch(() => {
-            /* no-op: show your own toast if needed */
+          }).catch((err) => {
+            console.error("[billing] startEmbeddedCheckout error:", err);
+            // Keep modal open; let user retry or close manually.
           });
         }}
       />
