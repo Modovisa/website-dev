@@ -90,10 +90,10 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
             <div className="mx-auto mt-6 w-full max-w-xl">
               <div className="relative">
                 {/* Track */}
-                <div className="h-1.5 rounded-full bg-muted mt-4" />
+                <div className="h-1.5 rounded-full bg-muted my-6" />
                 {/* Filled */}
                 <div
-                  className="absolute left-0 top-0 h-1.5 rounded-full bg-primary"
+                  className="absolute left-0 top-0 h-3 rounded-full bg-primary"
                   style={{ width: `${percent}%` }}
                 />
                 {/* Range (thumb) */}
@@ -105,7 +105,7 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                   step={1}
                   value={idx}
                   onChange={(e) => setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])}
-                  className="mv-range absolute inset-[-8px_0_0] w-full range-primary"
+                  className="mv-range absolute inset-[-2px_0_0] w-full range-primary"
                 />
               </div>
 
