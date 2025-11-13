@@ -91,6 +91,37 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
       "mv:dashboard:frame",
       (incoming) => {
         console.log("📊 [Hook] Received frame event, merging with state");
+        
+        // CRITICAL: Validate data array sizes match expected range
+        // Backend bug: WebSocket sometimes sends 30d data even when range is 24h
+        // We must reject mismatched data to prevent chart from switching ranges
+        if (incoming.time_grouped_visits && incoming.time_grouped_visits.length > 0) {
+          const dataPoints = incoming.time_grouped_visits.length;
+          const expectedPoints: Record<RangeKey, [number, number]> = {
+            '24h': [18, 50],   // 24h should have ~24-48 hourly points
+            '7d': [6, 15],     // 7d should have ~7-14 daily points  
+            '30d': [25, 35],   // 30d should have ~30 daily points
+            '90d': [80, 100],  // 90d should have ~90 daily points
+            '12mo': [10, 15],  // 12mo should have ~12 monthly points
+          };
+          
+          const [min, max] = expectedPoints[range] || [0, 1000];
+          if (dataPoints < min || dataPoints > max) {
+            console.warn(
+              `⚠️ [Hook] Rejecting WebSocket frame - data size mismatch!`,
+              `Expected ${min}-${max} points for range "${range}", got ${dataPoints} points.`,
+              `This suggests backend sent wrong range data. Keeping existing data.`
+            );
+            // Don't merge - just update live counts, keep existing chart data
+            setState((s) => ({
+              ...s,
+              liveCount: incoming.live_visitors ?? s.liveCount,
+              error: null,
+            }));
+            return; // Skip the full merge
+          }
+        }
+        
         setState((s) => {
           const merged: DashboardPayload = {
             ...(s.data || {}),
