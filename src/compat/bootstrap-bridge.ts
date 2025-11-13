@@ -1,4 +1,5 @@
 // src/compat/bootstrap-bridge.ts
+// FIXED: Matches bootstrap version behavior exactly
 
 import { mvBus } from "@/lib/mvBus";
 import { secureFetch } from "@/lib/auth";
@@ -32,17 +33,14 @@ function safeJSON<T=any>(x: string): T | null {
 }
 
 function normalizeCities(payload: any): GeoCityPoint[] {
-  const arr = Array.isArray(payload?.points) ? payload.points
-    : Array.isArray(payload?.clusters) ? payload.clusters
-    : Array.isArray(payload) ? payload
-    : [];
+  const arr = Array.isArray(payload) ? payload : [];
   return arr.map((v: any) => {
-    const lat = Number(v.lat ?? v.location?.lat ?? 0);
-    const lng = Number(v.lng ?? v.location?.lng ?? 0);
-    const count = Number(v.count ?? v.visitors ?? v.value ?? 0);
+    const lat = Number(v.lat ?? 0);
+    const lng = Number(v.lng ?? 0);
+    const count = Number(v.count ?? 0);
     return {
-      city: String(v.city ?? v.city_name ?? v.name ?? "Unknown"),
-      country: String(v.country ?? v.country_name ?? v.cc ?? "Unknown"),
+      city: String(v.city || "Unknown"),
+      country: String(v.country || "Unknown"),
       lat: Number.isFinite(lat) ? lat : 0,
       lng: Number.isFinite(lng) ? lng : 0,
       count: Number.isFinite(count) ? count : 0,
@@ -51,12 +49,10 @@ function normalizeCities(payload: any): GeoCityPoint[] {
   }).filter(p => p.lat !== 0 || p.lng !== 0);
 }
 
-/** Public: allow React to set the time range used for REST/WS */
 export function setCompatRange(range: RangeKey) {
   selectedRange = range;
 }
 
-/** Public: set/remember site and kick a REST prime */
 export async function setCompatSite(siteId: number) {
   currentSiteId = siteId;
   try {
@@ -69,7 +65,6 @@ export async function setCompatSite(siteId: number) {
   }
 }
 
-/** One-shot REST snapshot (no UI flicker in React; React controls skeleton) */
 export async function primeSnapshot() {
   if (!currentSiteId) {
     console.warn("⚠️ [REST] Cannot prime snapshot - no siteId");
@@ -103,7 +98,6 @@ export async function primeSnapshot() {
   mvBus.emit("mv:dashboard:snapshot", data);
 }
 
-/** Internal: debounce/throttle ticket fetches */
 async function getWSTicket(): Promise<string> {
   const now = Date.now();
   if (ticketLock || now - lastTicketAt < TICKET_THROTTLE_MS) {
@@ -138,12 +132,12 @@ async function getWSTicket(): Promise<string> {
   }
 }
 
-function scheduleReconnect(ms: number = 1200) {
+function scheduleReconnect(ms: number = 4000) {
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
-  reconnectTimer = window.setTimeout(() => connectWS(true), ms) as unknown as number;
+  const jitter = 500 + Math.floor(Math.random() * 500);
+  reconnectTimer = window.setTimeout(() => connectWS(true), ms + jitter) as unknown as number;
 }
 
-/** Public: connect (or reconnect) WS; forceNewTicket optionally */
 export async function connectWS(forceNewTicket = false) {
   if (!currentSiteId) return;
 
@@ -165,43 +159,19 @@ export async function connectWS(forceNewTicket = false) {
   const socket = new WebSocket(url);
   ws = socket;
 
-  const openFail = window.setTimeout(() => {
-    if (ws === socket && socket.readyState !== WebSocket.OPEN) {
-      primeSnapshot().catch(() => {});
-    }
-  }, 6000);
-
   socket.onopen = () => {
-    window.clearTimeout(openFail);
     console.log("✅ [WS] Connected successfully", { siteId: currentSiteId, range: selectedRange });
     
-    // subscribe to streams similar to Bootstrap
-    try {
-      const subscribeMsg = {
-        type: "subscribe",
-        channels: ["dashboard_analytics", "live_visitor_location_grouped"],
-        site_id: currentSiteId,
-        range: selectedRange,
-      };
-      console.log("📤 [WS] Subscribing to channels:", subscribeMsg);
-      socket.send(JSON.stringify(subscribeMsg));
-      
-      const snapshotMsg = { type: "request_dashboard_snapshot", site_id: currentSiteId, range: selectedRange };
-      console.log("📤 [WS] Requesting dashboard snapshot:", snapshotMsg);
-      socket.send(JSON.stringify(snapshotMsg));
-      
-      const citiesMsg = { type: "request_live_cities", site_id: currentSiteId, range: selectedRange };
-      console.log("📤 [WS] Requesting live cities:", citiesMsg);
-      socket.send(JSON.stringify(citiesMsg));
-    } catch (e) {
-      console.error("❌ [WS] Error sending subscription messages:", e);
-    }
-
+    // IMPORTANT: Just ping - NO subscription messages!
+    // The backend automatically sends data without explicit subscriptions
     pingTimer = window.setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
         try { socket.send(JSON.stringify({ type: "ping" })); } catch {}
       }
     }, 25000) as unknown as number;
+    
+    // Fetch initial data via REST
+    primeSnapshot().catch(() => {});
   };
 
   socket.onmessage = (ev) => {
@@ -217,42 +187,42 @@ export async function connectWS(forceNewTicket = false) {
       console.log("📥 [WS] Received message type:", msg.type, "| Full message:", msg);
     }
     
-    const msgSite = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
+    const msgSite = String(msg?.site_id ?? "");
     if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
       console.log("⏭️ [WS] Skipping message for different site:", msgSite, "current:", currentSiteId);
       return;
     }
 
-    if (msg.type === "dashboard_analytics" && msg.payload) {
-      // TEMPORARILY DISABLED - Backend sending wrong range
-      // TODO: Fix backend to respect range parameter
-      // if (msg.payload.range && msg.payload.range !== selectedRange) {
-      //   console.log("⏭️ [WS] Skipping message for different range:", msg.payload.range, "current:", selectedRange);
-      //   return;
-      // }
+    // Dashboard analytics stream
+    if (msg.type === "dashboard_analytics") {
+      const data = msg.payload;
+      if (!data) return;
       
-      // WARN if range mismatch but still process
-      if (msg.payload.range && msg.payload.range !== selectedRange) {
-        console.warn("⚠️ [WS] Range mismatch (processing anyway):", msg.payload.range, "expected:", selectedRange);
+      // Warn if range mismatch but still process (backend sends wrong range)
+      if (data.range && data.range !== selectedRange) {
+        console.warn("⚠️ [WS] Range mismatch (processing anyway):", data.range, "expected:", selectedRange);
       }
       
       console.log("✨ [WS] Emitting dashboard frame update");
-      mvBus.emit("mv:dashboard:frame", msg.payload);
+      mvBus.emit("mv:dashboard:frame", data);
     }
 
-    if (
-      msg.type === "live_visitor_location_grouped" ||
-      msg.type === "live_visitors_clustered" ||
-      msg.type === "live_city_groups"
-    ) {
-      const points = normalizeCities(msg.payload ?? msg.data ?? msg.points ?? msg.clusters ?? []);
+    // Grouped live visitor locations (for world map)
+    if (msg.type === "live_visitor_location_grouped") {
+      const points = normalizeCities(msg.payload || []);
       const total = points.reduce((s, p) => s + (p.count || 0), 0);
       console.log("🌍 [WS] Emitting live cities update:", { total, points: points.length });
       mvBus.emit("mv:live:cities", { points, total });
+      
+      // Also update live count from city data
+      if (total > 0) {
+        mvBus.emit("mv:live:count", { count: total });
+      }
     }
 
-    if (msg.type === "live_visitor_update" || msg.type === "live_count") {
-      const c = Number(msg?.payload?.count ?? msg?.count ?? 0) || 0;
+    // Live visitor count update
+    if (msg.type === "live_visitor_update") {
+      const c = Number(msg?.payload?.count ?? 0) || 0;
       console.log("👥 [WS] Emitting live count update:", c);
       mvBus.emit("mv:live:count", { count: c });
     }
@@ -260,19 +230,15 @@ export async function connectWS(forceNewTicket = false) {
 
   socket.onerror = (err) => {
     console.error("❌ [WS] WebSocket error:", err);
-    scheduleReconnect(1500 + Math.floor(Math.random() * 600));
+    scheduleReconnect();
   };
 
   socket.onclose = (ev) => {
     console.warn("🔌 [WS] WebSocket closed:", { code: ev.code, reason: ev.reason });
-    if ([4001, 4003, 4401].includes(ev.code)) {
-      console.error("🚫 [WS] Policy close code - stopping reconnection:", ev.code);
-      return; // policy → stop
-    }
-    scheduleReconnect(1500 + Math.floor(Math.random() * 600));
+    scheduleReconnect();
   };
 
-  // Focus → reconnect with fresh ticket (mirrors Bootstrap)
+  // Focus → reconnect with fresh ticket
   if (visHandler) document.removeEventListener("visibilitychange", visHandler);
   visHandler = () => {
     if (document.visibilityState === "visible") {
@@ -287,8 +253,8 @@ export async function connectWS(forceNewTicket = false) {
   document.addEventListener("visibilitychange", visHandler);
 }
 
-/** Public one-call init that also preloads site from localStorage */
 export async function initDashboardCompat(initialRange: RangeKey) {
+  console.log("🚀 [Compat] Initializing dashboard compatibility layer");
   selectedRange = initialRange;
   const saved = localStorage.getItem("current_website_id");
   if (saved) currentSiteId = Number(saved);
