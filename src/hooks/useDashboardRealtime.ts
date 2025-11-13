@@ -1,11 +1,16 @@
 // src/hooks/useDashboardRealtime.ts
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { mvBus } from "@/lib/mvBus";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
-import { initDashboardCompat, setCompatRange, setCompatSite, primeSnapshot, connectWS } from "@/compat/bootstrap-bridge";
+import * as DashboardService from "@/services/realtime-dashboard-service";
 
 type GeoCityPoint = {
-  city: string; country: string; lat: number; lng: number; count: number; debug_ids?: string[];
+  city: string;
+  country: string;
+  lat: number;
+  lng: number;
+  count: number;
+  debug_ids?: string[];
 };
 
 type State = {
@@ -17,63 +22,98 @@ type State = {
 
 export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
   const [state, setState] = useState<State>({
-    data: null, liveCities: [], liveCount: null, error: null,
+    data: null,
+    liveCities: [],
+    liveCount: null,
+    error: null,
   });
   const [analyticsVersion, setAnalyticsVersion] = useState(0);
 
-  // only show skeletons until first snapshot lands
-  const hasData = !!state.data;
-
+  // Initialize service once on mount
   useEffect(() => {
-    // initialize compat once and set current range
-    initDashboardCompat(range).catch(() => {});
-    setCompatRange(range);
-  }, []); // once
+    console.log("🎬 [Hook] Initializing dashboard service");
+    DashboardService.initialize(range).catch((e) => {
+      console.error("❌ [Hook] Initialization failed:", e);
+    });
 
-  useEffect(() => { setCompatRange(range); primeSnapshot().catch(() => {}); }, [range]);
+    // Cleanup on unmount
+    return () => {
+      console.log("🎬 [Hook] Cleaning up dashboard service");
+      DashboardService.cleanup();
+    };
+  }, []); // Empty deps - run once only!
 
+  // Update range when it changes
   useEffect(() => {
-    if (siteId) setCompatSite(siteId).catch(() => {});
+    console.log("🎯 [Hook] Range changed to:", range);
+    DashboardService.setRange(range);
+    DashboardService.fetchSnapshot().catch(() => {});
+  }, [range]);
+
+  // Update site when it changes
+  useEffect(() => {
+    if (siteId) {
+      console.log("🌐 [Hook] Site changed to:", siteId);
+      DashboardService.setSite(siteId).catch(() => {});
+    }
   }, [siteId]);
 
+  // Subscribe to mvBus events
   useEffect(() => {
-    const offSnapshot = mvBus.on<DashboardPayload>("mv:dashboard:snapshot", (payload) => {
-      console.log("📊 [Hook] Received snapshot event, updating state");
-      setState((s) => ({ ...s, data: payload, error: null }));
-      setAnalyticsVersion((v) => v + 1);
-    });
+    console.log("📡 [Hook] Subscribing to mvBus events");
 
-    const offFrame = mvBus.on<DashboardPayload>("mv:dashboard:frame", (incoming) => {
-      console.log("📊 [Hook] Received frame event, merging with state");
-      setState((s) => {
-        const merged: DashboardPayload = {
-          ...(s.data || {}),
-          ...incoming,
-          // Preserve arrays that might not be in every frame
-          time_grouped_visits: incoming.time_grouped_visits ?? s.data?.time_grouped_visits,
-          unique_vs_returning: incoming.unique_vs_returning ?? s.data?.unique_vs_returning,
-          funnel: incoming.funnel ?? s.data?.funnel,
-          referrers: incoming.referrers ?? s.data?.referrers,
-          browsers: incoming.browsers ?? s.data?.browsers,
-          devices: incoming.devices ?? s.data?.devices,
-          os: incoming.os ?? s.data?.os,
-          countries: incoming.countries ?? s.data?.countries,
-          events_timeline: incoming.events_timeline ?? s.data?.events_timeline,
-          utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
-          utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
-          calendar_density: incoming.calendar_density ?? s.data?.calendar_density,
-          top_pages: incoming.top_pages ?? s.data?.top_pages,
-          page_flow: incoming.page_flow ?? s.data?.page_flow,
-        } as DashboardPayload;
-        return { ...s, data: merged, error: null };
-      });
-      setAnalyticsVersion((v) => v + 1);
-    });
+    const offSnapshot = mvBus.on<DashboardPayload>(
+      "mv:dashboard:snapshot",
+      (payload) => {
+        console.log("📊 [Hook] Received snapshot event, updating state");
+        setState((s) => ({ ...s, data: payload, error: null }));
+        setAnalyticsVersion((v) => v + 1);
+      }
+    );
 
-    const offCities = mvBus.on<{ points: GeoCityPoint[]; total: number }>("mv:live:cities", ({ points, total }) => {
-      console.log("🌍 [Hook] Received live cities event:", { total, pointsCount: points.length });
-      setState((s) => ({ ...s, liveCities: points, liveCount: total }));
-    });
+    const offFrame = mvBus.on<DashboardPayload>(
+      "mv:dashboard:frame",
+      (incoming) => {
+        console.log("📊 [Hook] Received frame event, merging with state");
+        setState((s) => {
+          const merged: DashboardPayload = {
+            ...(s.data || {}),
+            ...incoming,
+            // Preserve arrays that might not be in every frame
+            time_grouped_visits:
+              incoming.time_grouped_visits ?? s.data?.time_grouped_visits,
+            unique_vs_returning:
+              incoming.unique_vs_returning ?? s.data?.unique_vs_returning,
+            funnel: incoming.funnel ?? s.data?.funnel,
+            referrers: incoming.referrers ?? s.data?.referrers,
+            browsers: incoming.browsers ?? s.data?.browsers,
+            devices: incoming.devices ?? s.data?.devices,
+            os: incoming.os ?? s.data?.os,
+            countries: incoming.countries ?? s.data?.countries,
+            events_timeline: incoming.events_timeline ?? s.data?.events_timeline,
+            utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
+            utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
+            calendar_density:
+              incoming.calendar_density ?? s.data?.calendar_density,
+            top_pages: incoming.top_pages ?? s.data?.top_pages,
+            page_flow: incoming.page_flow ?? s.data?.page_flow,
+          } as DashboardPayload;
+          return { ...s, data: merged, error: null };
+        });
+        setAnalyticsVersion((v) => v + 1);
+      }
+    );
+
+    const offCities = mvBus.on<{ points: GeoCityPoint[]; total: number }>(
+      "mv:live:cities",
+      ({ points, total }) => {
+        console.log("🌍 [Hook] Received live cities event:", {
+          total,
+          pointsCount: points.length,
+        });
+        setState((s) => ({ ...s, liveCities: points, liveCount: total }));
+      }
+    );
 
     const offCount = mvBus.on<{ count: number }>("mv:live:count", ({ count }) => {
       console.log("👥 [Hook] Received live count event:", count);
@@ -86,20 +126,37 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
     });
 
     return () => {
-      offSnapshot(); offFrame(); offCities(); offCount(); offErr();
+      console.log("📡 [Hook] Unsubscribing from mvBus events");
+      offSnapshot();
+      offFrame();
+      offCities();
+      offCount();
+      offErr();
     };
   }, []);
 
-  const refreshSnapshot = () => { primeSnapshot().catch(() => {}); };
-  const reconnectWS = () => { connectWS(true).catch(() => {}); };
-  const restart = () => { primeSnapshot().catch(() => {}); connectWS(true).catch(() => {}); };
+  const refreshSnapshot = () => {
+    console.log("🔄 [Hook] Manually refreshing snapshot");
+    DashboardService.fetchSnapshot().catch(() => {});
+  };
+
+  const reconnectWS = () => {
+    console.log("🔄 [Hook] Manually reconnecting WebSocket");
+    DashboardService.reconnectWebSocket().catch(() => {});
+  };
+
+  const restart = () => {
+    console.log("🔄 [Hook] Restarting service");
+    DashboardService.fetchSnapshot().catch(() => {});
+    DashboardService.reconnectWebSocket().catch(() => {});
+  };
 
   return {
     data: state.data,
     liveCities: state.liveCities,
     liveCount: state.liveCount,
     error: state.error,
-    isLoading: !hasData,
+    isLoading: !state.data,
     analyticsVersion,
     refreshSnapshot,
     reconnectWS,
