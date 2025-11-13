@@ -97,5 +97,5 @@ export async function deleteAccount(data: AccountDeleteData): Promise<void> {
 
 // ==================== Dashboard Stats ====================
 export async function getDashboardStats(): Promise<any> {
-  return await httpGet('/api/dashboard-stats');
+  return await httpGet('/api/user-dashboard-analytics');
 }
