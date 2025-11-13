@@ -83,14 +83,14 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
               </button>
 
               <span className="font-medium select-none">Yearly</span>
-              <span className="ml-1 rounded bg-green-100 px-2 py-0.5 text-sm text-green-700 select-none">Save 20%</span>
+              <span className="ml-1 rounded bg-success px-2 py-0.5 text-lg font-bold text-primary-foreground select-none">Save 20%</span>
             </div>
 
             {/* Slider with filled progress + native range (accessible) */}
             <div className="mx-auto mt-6 w-full max-w-xl">
               <div className="relative">
                 {/* Track */}
-                <div className="h-1.5 rounded-full bg-muted" />
+                <div className="h-1.5 rounded-full bg-muted mt-4" />
                 {/* Filled */}
                 <div
                   className="absolute left-0 top-0 h-1.5 rounded-full bg-primary"
