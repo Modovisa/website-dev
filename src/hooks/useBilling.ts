@@ -2,7 +2,8 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadStripe, Stripe, StripeEmbeddedCheckout } from "@stripe/stripe-js";
-import { apiBase, authHeaders } from "@/lib/api";
+import { apiBase } from "@/lib/api";
+import { secureFetch } from "@/lib/auth";
 
 /* ---------------- Types ---------------- */
 export type PricingTier = {
