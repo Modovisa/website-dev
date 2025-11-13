@@ -1,6 +1,7 @@
 // src/services/billingService.ts
-// Minimal, cookie-auth friendly service used by the Billing components.
-// Keeps endpoints identical to your Bootstrap implementation.
+import { apiBase } from "@/lib/api";
+import { secureFetch } from "@/lib/auth"; // <-- use secureFetch
+const API = apiBase();
 
 export type BillingInfo = {
   plan_id: number | 0;
@@ -37,8 +38,6 @@ export type InvoiceRow = {
   pdf_link?: string | null;
 };
 
-const API = "https://api.modovisa.com";
-
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error(await res.text().catch(() => "request_failed"));
@@ -46,25 +45,34 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export async function getBillingInfo(): Promise<BillingInfo> {
-  const r = await fetch(`${API}/api/user-billing-info`, { credentials: "include", cache: "no-store" });
+  const r = await secureFetch(`${API}/api/user-billing-info`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   return json<BillingInfo>(r);
 }
 
 export async function getPricingTiers(): Promise<PricingTier[]> {
-  const r = await fetch(`${API}/api/billing-pricing-tiers`, { credentials: "include", cache: "no-store" });
+  const r = await secureFetch(`${API}/api/billing-pricing-tiers`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   return json<PricingTier[]>(r);
 }
 
 export async function getStripeRuntime(): Promise<{ publishableKey: string }> {
-  const r = await fetch(`${API}/api/stripe/runtime-config`, { credentials: "include", cache: "no-store" });
+  const r = await secureFetch(`${API}/api/stripe/runtime-config`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   return json<{ publishableKey: string }>(r);
 }
 
 export async function createEmbeddedSession(args: {
   tier_id: number;
   interval: "month" | "year";
-}): Promise<any> {
-  const r = await fetch(`${API}/api/stripe/embedded-session`, {
+}) {
+  const r = await secureFetch(`${API}/api/stripe/embedded-session`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -74,7 +82,7 @@ export async function createEmbeddedSession(args: {
 }
 
 export async function openUpdateCardSession(): Promise<{ clientSecret: string }> {
-  const r = await fetch(`${API}/api/stripe/update-payment-method`, {
+  const r = await secureFetch(`${API}/api/stripe/update-payment-method`, {
     method: "POST",
     credentials: "include",
   });
@@ -82,21 +90,33 @@ export async function openUpdateCardSession(): Promise<{ clientSecret: string }>
 }
 
 export async function cancelSubscription(): Promise<{ success: boolean }> {
-  const r = await fetch(`${API}/api/cancel-subscription`, { method: "POST", credentials: "include" });
+  const r = await secureFetch(`${API}/api/cancel-subscription`, {
+    method: "POST",
+    credentials: "include",
+  });
   return json<{ success: boolean }>(r);
 }
 
 export async function reactivateSubscription(): Promise<{ success: boolean }> {
-  const r = await fetch(`${API}/api/reactivate-subscription`, { method: "POST", credentials: "include" });
+  const r = await secureFetch(`${API}/api/reactivate-subscription`, {
+    method: "POST",
+    credentials: "include",
+  });
   return json<{ success: boolean }>(r);
 }
 
 export async function cancelDowngrade(): Promise<{ success: boolean }> {
-  const r = await fetch(`${API}/api/cancel-downgrade`, { method: "POST", credentials: "include" });
+  const r = await secureFetch(`${API}/api/cancel-downgrade`, {
+    method: "POST",
+    credentials: "include",
+  });
   return json<{ success: boolean }>(r);
 }
 
 export async function listInvoices(): Promise<{ data: InvoiceRow[] }> {
-  const r = await fetch(`${API}/api/user/invoices`, { credentials: "include", cache: "no-store" });
+  const r = await secureFetch(`${API}/api/user/invoices`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   return json<{ data: InvoiceRow[] }>(r);
 }
