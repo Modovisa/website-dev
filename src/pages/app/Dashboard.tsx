@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock, Target, DollarSign } from "lucide-react";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
-import { initDashboardCompat, setCompatRange } from "@/compat/bootstrap-bridge";
+// ❌ REMOVED: import { initDashboardCompat, setCompatRange } from "@/compat/bootstrap-bridge";
 import type { RangeKey } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -25,7 +25,8 @@ import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
 
-import { getTrackingWebsites } from "@/services/dashboardService";
+// ✅ FIXED: Updated to use new consolidated service
+import { getTrackingWebsites } from "@/services/realtime-dashboard-service";
 import { nf, pct } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
@@ -40,10 +41,10 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // init legacy-compat once
-  useEffect(() => {
-    setCompatRange(range);
-  }, [range]);
+  // ❌ REMOVED: init legacy-compat once
+  // useEffect(() => {
+  //   setCompatRange(range);
+  // }, [range]);
 
   const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
     queryKey: ["tracking-websites"],
