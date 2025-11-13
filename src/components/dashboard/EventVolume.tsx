@@ -8,9 +8,11 @@ type Row = { label: string; count: number };
 export default function EventVolume({
   data,
   loading,
+  hasData,
 }: {
   data: Row[];
   loading?: boolean;
+  hasData?: boolean;
 }) {
   const labels = (data || []).map((d) => d.label);
   const values = (data || []).map((d) => d.count || 0);
@@ -41,7 +43,7 @@ export default function EventVolume({
   } as const;
 
   return (
-    <ChartCard title="Event Volume" loading={loading} height={300}>
+    <ChartCard title="Event Volume" loading={loading} hasData={hasData} height={300}>
       <Line data={ds} options={options} />
     </ChartCard>
   );

@@ -46,6 +46,14 @@ export type DashboardPayload = {
   bounce_rate_delta?: number;
   avg_duration?: string | number;
   avg_duration_delta?: number;
+  
+  // Additional KPIs from Bootstrap version
+  revenue_per_user?: number;
+  revenue_per_user_delta?: number;
+  conversions_per_user?: number;
+  conversions_per_user_delta?: number;
+  multi_page_visits?: number;
+  multi_page_visits_delta?: number;
 
   // charts
   time_grouped_visits?: TimeBucket[];
@@ -80,7 +88,8 @@ export type DashboardPayload = {
 
   countries?: CountryRow[];
 
-  // optional: calendar, map etc. (kept for future)
+  // optional: calendar, map etc.
   calendar_density?: [string, number][];
   page_flow?: { nodes: any[]; links: any[] };
+  funnel?: any[];
 };

@@ -1,13 +1,13 @@
 // src/pages/app/Dashboard.tsx
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw } from "lucide-react";
+import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock, Target, DollarSign } from "lucide-react";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { initDashboardCompat, setCompatRange } from "@/compat/bootstrap-bridge";
 import type { RangeKey } from "@/types/dashboard";
@@ -20,6 +20,7 @@ import Donut from "@/components/dashboard/Donut";
 import UTMCampaignsTable from "@/components/dashboard/UTMCampaignsTable";
 import UTMSourcesTable from "@/components/dashboard/UTMSourcesTable";
 import TopPagesTable from "@/components/dashboard/TopPagesTable";
+import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
@@ -106,11 +107,18 @@ export default function Dashboard() {
   const showKpiSkeleton = !firstPaintDone;
   const showPageSkeleton = !firstPaintDone;
 
+  // Format currency helper
+  const formatCurrency = (val: any) => val ? `$${Number(val).toLocaleString()}` : '--';
+  
+  // All KPI cards matching Bootstrap version
   const topCards = [
-    { key: "live",   name: "Live Visitors",   value: liveCount ?? data?.live_visitors ?? 0, icon: Users,       change: null },
-    { key: "unique", name: "Total Visitors",  value: data?.unique_visitors?.total ?? 0,     icon: Eye,         change: data?.unique_visitors?.delta ?? null },
-    { key: "avg",    name: "Avg. Session",    value: data?.avg_duration ?? "--",            icon: MousePointerClick, change: data?.avg_duration_delta ?? null },
-    { key: "bounce", name: "Bounce Rate",     value: `${data?.bounce_rate ?? 0}%`,          icon: TrendingUp,  change: data?.bounce_rate_delta ?? null },
+    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
+    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
+    { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null, reverseColor: true },
+    { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: Clock, change: data?.avg_duration_delta ?? null },
+    { key: "revenue", name: "Revenue / User", value: formatCurrency(data?.revenue_per_user), icon: DollarSign, change: data?.revenue_per_user_delta ?? null },
+    { key: "conversions", name: "Conversions / User", value: data?.conversions_per_user ?? '--', icon: Target, change: data?.conversions_per_user_delta ?? null },
+    { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? '--', icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
   ];
 
   if (authLoading) {
@@ -214,7 +222,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* KPI Cards */}
+        {/* KPI Cards - Now supporting 7 cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {topCards.map((stat) => (
             <Card key={stat.key}>
@@ -237,8 +245,12 @@ export default function Dashboard() {
                       {typeof stat.value === "number" ? nf(stat.value) : stat.value}
                     </div>
                     {stat.change != null && (
-                      <p className={`text-xs mt-1 ${Number(stat.change) >= 0 ? "text-success" : "text-destructive"}`}>
-                        {pct(Number(stat.change))} from last period
+                      <p className={`text-xs mt-1 ${
+                        (stat as any).reverseColor
+                          ? (Number(stat.change) <= 0 ? "text-green-600" : "text-red-600")
+                          : (Number(stat.change) >= 0 ? "text-green-600" : "text-red-600")
+                      }`}>
+                        {Number(stat.change) >= 0 ? "↑" : "↓"} {Math.abs(Number(stat.change)).toFixed(1)}% from last period
                       </p>
                     )}
                   </>
@@ -295,8 +307,7 @@ export default function Dashboard() {
                 <Card>
                   <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
                   <CardContent>
-                    {/* If you still have ReferrersTable, keep it; otherwise remove */}
-                    {/* <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} /> */}
+                    <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} />
                   </CardContent>
                 </Card>
               </div>

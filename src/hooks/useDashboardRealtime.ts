@@ -47,6 +47,7 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
         const merged: DashboardPayload = {
           ...(s.data || {}),
           ...incoming,
+          // Preserve arrays that might not be in every frame
           time_grouped_visits: incoming.time_grouped_visits ?? s.data?.time_grouped_visits,
           unique_vs_returning: incoming.unique_vs_returning ?? s.data?.unique_vs_returning,
           funnel: incoming.funnel ?? s.data?.funnel,
@@ -59,6 +60,8 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
           utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
           utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
           calendar_density: incoming.calendar_density ?? s.data?.calendar_density,
+          top_pages: incoming.top_pages ?? s.data?.top_pages,
+          page_flow: incoming.page_flow ?? s.data?.page_flow,
         } as DashboardPayload;
         return { ...s, data: merged, error: null };
       });
