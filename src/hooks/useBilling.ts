@@ -83,7 +83,7 @@ async function resolvePublishableKey(): Promise<string> {
   return "";
 }
 
-/** Wait for window.Stripe injected by basil script, with a short timeout for Firefox / ETP quirks. */
+/** Wait for window.Stripe injected by basil script, with a short timeout (Firefox/ETP friendly). */
 function waitForStripeGlobal(maxMs = 6000, stepMs = 120): Promise<void> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
@@ -139,14 +139,14 @@ export function useBilling() {
     staleTime: 30_000,
   });
 
-  // Pricing tiers (array)
+  // Pricing tiers
   const tiersQ = useQuery({
     queryKey: ["billing:tiers"],
     queryFn: async () => jsonSecure<PricingTier[]>(`${apiBase()}/api/billing-pricing-tiers`),
     staleTime: 60_000,
   });
 
-  // Invoices ({ data: [...] })
+  // Invoices
   const invoicesQ = useQuery({
     queryKey: ["billing:invoices"],
     queryFn: async () =>
@@ -162,7 +162,6 @@ export function useBilling() {
       const stripe = await getStripe();
       if (!stripe) {
         console.error("[billing] Stripe failed to load/initialize.");
-        // Do not close anything here — caller decides UI.
         throw new Error("Stripe failed to load");
       }
 
@@ -173,7 +172,7 @@ export function useBilling() {
         body: JSON.stringify({ tier_id: tierId, interval }),
       });
 
-      // ✅ If server handled the upgrade without a checkout (card on file), treat as success
+      // ✅ Server-side success fallback (card already on file)
       if (resp?.success === true || resp?.embedded_handled === true) {
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["billing:info"] }),
@@ -187,7 +186,6 @@ export function useBilling() {
       const clientSecret: string | undefined = resp?.client_secret || resp?.clientSecret;
       if (!clientSecret) {
         console.error("[billing] Missing Stripe client secret in response:", resp);
-        // Keep the UI as-is so user sees the state; surface error upward.
         throw new Error(resp?.error || "Missing Stripe client secret");
       }
 
@@ -202,14 +200,16 @@ export function useBilling() {
         onMounted?.();
       } catch (e) {
         console.error("[billing] initEmbeddedCheckout/mount failed:", e);
-        // ❗ Do NOT auto-close; leave modal visible for diagnostics.
+        // Do NOT auto-close; leave modal visible for diagnostics.
         throw e;
       }
 
       // Close handlers: overlay click or Escape
       const modalEl = document.getElementById("react-billing-embedded-modal");
       const cleanup = () => {
-        try { checkout?.destroy(); } catch {}
+        try {
+          checkout?.destroy();
+        } catch {}
         hide("react-billing-embedded-modal");
         window.removeEventListener("keydown", onKey);
         qc.invalidateQueries({ queryKey: ["billing:info"] });
@@ -225,48 +225,6 @@ export function useBilling() {
     },
     [qc]
   );
-
-  /** Update card via SetupIntent + Payment Element in #react-billing-updatecard-modal */
-  const startUpdateCard = useCallback(async () => {
-    const stripe = await getStripe();
-    if (!stripe) throw new Error("Stripe failed to load");
-
-    const { client_secret } = await jsonSecure<{ client_secret: string }>(
-      `${apiBase()}/api/stripe/update-payment-method`,
-      { method: "POST", headers: { "Content-Type": "application/json" } }
-    );
-
-    show("react-billing-updatecard-modal");
-
-    const elements = stripe.elements({ clientSecret: client_secret, appearance: { theme: "stripe" } });
-    const paymentElement = elements.create("payment");
-    paymentElement.mount("#react-billing-updatecard-element");
-
-    const submit = async () => {
-      const { error } = await stripe.confirmSetup({ elements, redirect: "if_required" });
-      if (error) return;
-      hide("react-billing-updatecard-modal");
-      elements?.destroy();
-    };
-
-    const modalEl = document.getElementById("react-billing-updatecard-modal");
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") {
-        hide("react-billing-updatecard-modal");
-        elements?.destroy();
-        window.removeEventListener("keydown", onKey);
-      }
-      if (ev.key === "Enter") submit();
-    };
-    modalEl?.addEventListener("click", (e) => {
-      if (e.target === modalEl) {
-        hide("react-billing-updatecard-modal");
-        elements?.destroy();
-        window.removeEventListener("keydown", onKey);
-      }
-    });
-    window.addEventListener("keydown", onKey);
-  }, []);
 
   // Note: endpoints without /stripe prefix per your billingService.ts
   const cancelSubscription = useCallback(async () => {
@@ -304,7 +262,6 @@ export function useBilling() {
 
     // actions
     startEmbeddedCheckout,
-    startUpdateCard,
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,

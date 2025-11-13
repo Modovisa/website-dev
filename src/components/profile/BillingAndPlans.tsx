@@ -15,7 +15,6 @@ export default function BillingAndPlans() {
     isFreePlan,
     isFreeForever,
     startEmbeddedCheckout,
-    startUpdateCard,
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
@@ -32,6 +31,7 @@ export default function BillingAndPlans() {
   const totalDays = info?.total_days ?? (info?.interval === "year" ? 365 : 30);
   const percent = Math.min(100, Math.round((usedDays / (totalDays || 1)) * 100));
 
+  // Considered “paid & current”
   const hasActiveSubscription = useMemo(
     () =>
       !!(
@@ -187,12 +187,14 @@ export default function BillingAndPlans() {
 
               {/* Actions */}
               <div className="col-span-full mt-2 flex flex-wrap gap-3">
+                {/* Upgrade visible for everything except Free Forever */}
                 {!isFreeForever && (
                   <Button onClick={() => setShowUpgrade(true)} className="mr-2">
                     Upgrade Plan
                   </Button>
                 )}
 
+                {/* Cancel / Reactivate / Cancel Downgrade only for paid active subs */}
                 {hasActiveSubscription && !info.cancel_at_period_end && (
                   <Button variant="outline" className="text-red-600" onClick={cancelSubscription}>
                     Cancel Subscription
@@ -210,32 +212,28 @@ export default function BillingAndPlans() {
                     Cancel Downgrade
                   </Button>
                 )}
-
-                {hasActiveSubscription && (
-                  <Button variant="outline" onClick={startUpdateCard}>
-                    Update Card
-                  </Button>
-                )}
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Invoices */}
       <InvoicesTable rows={invoices} />
 
+      {/* Upgrade modal */}
       <UpgradePlanModal
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}
         tiers={tiers}
         currentPlanAmount={currentPlanAmount}
         onUpgrade={({ tierId, interval }) => {
-          // Start checkout. We’ll close the Upgrade modal only after Stripe mount succeeds.
+          // Start checkout. Close the Upgrade modal only after Stripe mount succeeds.
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
           }).catch((err) => {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            // Leave the upgrade modal open so the user can retry / see errors.
+            // Keep modal open so user can retry / see errors.
           });
         }}
       />
@@ -249,16 +247,6 @@ export default function BillingAndPlans() {
           <div id="react-billing-stripe-element" />
           {/* Optional debug line—leave for Firefox until confirmed stable */}
           <div id="react-billing-stripe-debug" className="mt-3 text-xs text-muted-foreground"></div>
-        </div>
-      </div>
-
-      {/* Update-card modal container */}
-      <div
-        id="react-billing-updatecard-modal"
-        className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
-      >
-        <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
-          <div id="react-billing-updatecard-element" />
         </div>
       </div>
     </div>
