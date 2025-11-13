@@ -53,7 +53,7 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
 
         <div className="text-center mb-6">
           <h2 className="text-3xl font-semibold">Upgrade Plan</h2>
-          <p className="text-muted-foreground">Choose the best plan based on your usage needs.</p>
+          <p className="text-muted-foreground mt-2">Choose the best plan based on your usage needs.</p>
         </div>
 
         <Card className="border shadow-sm">
@@ -105,7 +105,7 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                   step={1}
                   value={idx}
                   onChange={(e) => setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])}
-                  className="mv-range absolute inset-[-2px_0_0] w-full range-primary"
+                  className="mv-range absolute inset-[1px_0_0] w-full range-primary"
                 />
               </div>
 
