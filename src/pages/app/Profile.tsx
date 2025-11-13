@@ -231,7 +231,7 @@ const Profile = () => {
                         <Badge className="ml-2 bg-success text-primary-foreground text-xs">Free Forever</Badge>
                       </>
                     ) : (
-                      <span className="ml-2">{billingInfo?.plan_name || "Free"}</span>
+                      <Badge className="ml-2 bg-[#eae8fd] text-[#7367f0]">{billingInfo?.plan_name || "Free"}</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
