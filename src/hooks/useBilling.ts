@@ -42,40 +42,38 @@ type Invoice = {
 
 type RuntimeStripeConfig =
   | { publishableKey?: string; mode?: "test" | "live" }
-  | { mode?: "test" | "live"; test_pk?: string; live_pk?: string }; // support both shapes
+  | { mode?: "test" | "live"; test_pk?: string; live_pk?: string };
 
 /* ---------------- Internals ---------------- */
 let stripePromise: Promise<Stripe | null> | null = null;
 
+async function jsonSecure<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await secureFetch(url, init);
+  const data = await res.json();
+  if (!res.ok) throw new Error((data && data.error) || "Request failed");
+  return data as T;
+}
+
 async function resolvePublishableKey(): Promise<string> {
-  // 1) Prefer Vite env for local/dev overrides
+  // 1) Prefer Vite env override for local/dev
   const envPk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
   if (envPk && envPk.trim()) return envPk;
 
-  // 2) Fall back to runtime-config controlled from Admin (your screenshot)
+  // 2) Admin runtime config (Test/Live)
   try {
-    const res = await fetch(`${apiBase()}/api/stripe/runtime-config`, {
-      // no caching; this is cheap and keeps Test/Live in sync with admin
+    const j = await jsonSecure<RuntimeStripeConfig>(`${apiBase()}/api/stripe/runtime-config`, {
       cache: "no-store",
-      headers: { ...(await authHeaders()) },
     });
-    const j: RuntimeStripeConfig = await res.json();
-
-    // Accept either direct `publishableKey` or a (mode, test_pk, live_pk) trio
-    if ("publishableKey" in j && j.publishableKey) return j.publishableKey;
-
+    if ("publishableKey" in j && j.publishableKey) return j.publishableKey!;
     const mode = j.mode || "test";
     const pick =
       mode === "live"
         ? (j as any).live_pk || (j as any).livePublishableKey
         : (j as any).test_pk || (j as any).testPublishableKey;
-
     if (pick && typeof pick === "string") return pick;
   } catch {
-    // ignore; final fallback below
+    /* noop – fall through */
   }
-
-  // 3) Last-resort empty key (Stripe will error visibly)
   return "";
 }
 
@@ -83,21 +81,12 @@ const getStripe = () => {
   if (!stripePromise) {
     stripePromise = (async () => {
       const pk = await resolvePublishableKey();
-      if (!pk) {
-        console.warn("Stripe publishable key could not be resolved (env or runtime-config).");
-      }
+      if (!pk) console.warn("Stripe publishable key could not be resolved.");
       return loadStripe(pk);
     })();
   }
   return stripePromise;
 };
-
-async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, init);
-  const data = (await res.json()) as any;
-  if (!res.ok) throw new Error(data?.error || "Request failed");
-  return data as T;
-}
 
 function show(id: string) {
   const el = document.getElementById(id);
@@ -115,61 +104,44 @@ export function useBilling() {
   // Current billing info
   const infoQ = useQuery({
     queryKey: ["billing:info"],
-    queryFn: async () =>
-      json<BillingInfo>(`${apiBase()}/api/user-billing-info`, {
-        headers: { ...(await authHeaders()) },
-      }),
+    queryFn: async () => jsonSecure<BillingInfo>(`${apiBase()}/api/user-billing-info`),
     staleTime: 30_000,
   });
 
-  // Pricing tiers (Bootstrap parity: array)
+  // Pricing tiers (array)
   const tiersQ = useQuery({
     queryKey: ["billing:tiers"],
-    queryFn: async () =>
-      json<PricingTier[]>(`${apiBase()}/api/billing-pricing-tiers`, {
-        headers: { ...(await authHeaders()) },
-      }),
+    queryFn: async () => jsonSecure<PricingTier[]>(`${apiBase()}/api/billing-pricing-tiers`),
     staleTime: 60_000,
   });
 
-  // Invoices (Bootstrap parity: { data: Invoice[] })
+  // Invoices ({ data: [...] })
   const invoicesQ = useQuery({
     queryKey: ["billing:invoices"],
     queryFn: async () =>
-      json<{ data: Invoice[] }>(`${apiBase()}/api/user/invoices`, {
-        headers: { ...(await authHeaders()) },
-      }).then((r) => r.data || []),
+      jsonSecure<{ data: Invoice[] }>(`${apiBase()}/api/user/invoices`).then((r) => r.data || []),
     staleTime: 30_000,
   });
 
   /* -------- Actions -------- */
 
-  /**
-   * Launches Stripe Embedded Checkout inside:
-   * #react-billing-embedded-modal > #react-billing-stripe-element
-   */
+  /** Stripe Embedded Checkout inside #react-billing-embedded-modal */
   const startEmbeddedCheckout = useCallback(
     async (tierId: number, interval: "month" | "year", onMounted?: () => void) => {
       const stripe = await getStripe();
       if (!stripe) throw new Error("Stripe failed to load");
 
-      // Ask backend for an Embedded Checkout client_secret for this tier/interval
-      const { client_secret } = await json<{ client_secret: string }>(
+      const { client_secret } = await jsonSecure<{ client_secret: string }>(
         `${apiBase()}/api/stripe/embedded-session`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(await authHeaders()),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tier_id: tierId, interval }),
         }
       );
 
-      // Show the modal shell
       show("react-billing-embedded-modal");
 
-      // Mount Embedded Checkout
       let checkout: StripeEmbeddedCheckout | null = null;
       try {
         checkout = await stripe.initEmbeddedCheckout({ clientSecret: client_secret });
@@ -180,13 +152,11 @@ export function useBilling() {
         throw e;
       }
 
-      // Close handlers: overlay click or Escape
       const modalEl = document.getElementById("react-billing-embedded-modal");
       const cleanup = () => {
         checkout?.destroy();
         hide("react-billing-embedded-modal");
         window.removeEventListener("keydown", onKey);
-        // refresh plan + invoices
         qc.invalidateQueries({ queryKey: ["billing:info"] });
         qc.invalidateQueries({ queryKey: ["billing:invoices"] });
       };
@@ -201,45 +171,29 @@ export function useBilling() {
     [qc]
   );
 
-  /**
-   * Opens a small modal and mounts a Payment Element for updating the card.
-   * Backend must return a SetupIntent client secret.
-   */
+  /** Update card via SetupIntent + Payment Element in #react-billing-updatecard-modal */
   const startUpdateCard = useCallback(async () => {
     const stripe = await getStripe();
     if (!stripe) throw new Error("Stripe failed to load");
 
-    // Ask backend for a SetupIntent client secret
-    const { client_secret } = await json<{ client_secret: string }>(
+    const { client_secret } = await jsonSecure<{ client_secret: string }>(
       `${apiBase()}/api/stripe/update-payment-method`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await authHeaders()),
-        },
-      }
+      { method: "POST", headers: { "Content-Type": "application/json" } }
     );
 
-    // Show the modal shell
     show("react-billing-updatecard-modal");
 
-    // Mount Elements + PaymentElement
-    const elements = stripe.elements({
-      clientSecret: client_secret,
-      appearance: { theme: "stripe" },
-    });
+    const elements = stripe.elements({ clientSecret: client_secret, appearance: { theme: "stripe" } });
     const paymentElement = elements.create("payment");
     paymentElement.mount("#react-billing-updatecard-element");
 
     const submit = async () => {
       const { error } = await stripe.confirmSetup({ elements, redirect: "if_required" });
-      if (error) return; // Keep modal open for user to fix
+      if (error) return;
       hide("react-billing-updatecard-modal");
       elements?.destroy();
     };
 
-    // Close on overlay click or Escape
     const modalEl = document.getElementById("react-billing-updatecard-modal");
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === "Escape") {
@@ -259,27 +213,19 @@ export function useBilling() {
     window.addEventListener("keydown", onKey);
   }, []);
 
+  // Note: endpoints without /stripe prefix per your billingService.ts
   const cancelSubscription = useCallback(async () => {
-    await json(`${apiBase()}/api/stripe/cancel-subscription`, {
-      method: "POST",
-      headers: { ...(await authHeaders()) },
-    });
+    await jsonSecure(`${apiBase()}/api/cancel-subscription`, { method: "POST" });
     await qc.invalidateQueries({ queryKey: ["billing:info"] });
   }, [qc]);
 
   const reactivateSubscription = useCallback(async () => {
-    await json(`${apiBase()}/api/stripe/reactivate`, {
-      method: "POST",
-      headers: { ...(await authHeaders()) },
-    });
+    await jsonSecure(`${apiBase()}/api/reactivate-subscription`, { method: "POST" });
     await qc.invalidateQueries({ queryKey: ["billing:info"] });
   }, [qc]);
 
   const cancelDowngrade = useCallback(async () => {
-    await json(`${apiBase()}/api/stripe/cancel-downgrade`, {
-      method: "POST",
-      headers: { ...(await authHeaders()) },
-    });
+    await jsonSecure(`${apiBase()}/api/cancel-downgrade`, { method: "POST" });
     await qc.invalidateQueries({ queryKey: ["billing:info"] });
   }, [qc]);
 
@@ -289,10 +235,8 @@ export function useBilling() {
     [infoQ.isLoading, tiersQ.isLoading, invoicesQ.isLoading]
   );
 
-  const isFreePlan =
-    !!infoQ.data?.is_free_plan || (!infoQ.data?.price && !infoQ.data?.interval);
-  const isFreeForever =
-    String(infoQ.data?.is_free_forever) === "1" || infoQ.data?.is_free_forever === true;
+  const isFreePlan = !!infoQ.data?.is_free_plan || (!infoQ.data?.price && !infoQ.data?.interval);
+  const isFreeForever = String(infoQ.data?.is_free_forever) === "1" || infoQ.data?.is_free_forever === true;
 
   return {
     // state
