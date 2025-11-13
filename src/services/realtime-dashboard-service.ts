@@ -277,21 +277,23 @@ async function connectWS(forceNewTicket = false) {
       const data = msg.payload;
       if (!data) return;
 
-      // CRITICAL: Ignore the "range" field in WebSocket messages!
-      // Backend bug: always sends range:"30d" in metadata, but actual data
-      // arrays (time_grouped_visits, etc.) are correctly filtered to selected range.
-      // Solution: Trust the data, ignore the metadata.
+      // CRITICAL: Backend bug - always sends range:"30d" in metadata!
+      // The data arrays (time_grouped_visits, etc.) ARE correctly filtered by backend.
+      // Solution: Override the range field with our client-side selected range.
+      // This matches the bootstrap version's behavior.
       if (data.range && data.range !== selectedRange) {
         console.log(
-          "📊 [WS] Ignoring range metadata mismatch (backend bug):",
+          "📊 [WS] Overriding incorrect backend range:",
           data.range,
-          "vs",
-          selectedRange,
-          "- processing data anyway"
+          "→",
+          selectedRange
         );
       }
+      
+      // Override range field with correct client-side range before emitting
+      data.range = selectedRange;
 
-      console.log("✨ [WS] Emitting dashboard frame update");
+      console.log("✨ [WS] Emitting dashboard frame update with range:", selectedRange);
       mvBus.emit("mv:dashboard:frame", data);
     }
 
