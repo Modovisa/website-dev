@@ -106,11 +106,11 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
         if (incoming.time_grouped_visits && incoming.time_grouped_visits.length > 0) {
           const dataPoints = incoming.time_grouped_visits.length;
           const expectedPoints: Record<RangeKey, [number, number]> = {
-            '24h': [18, 50],   // 24h should have ~24-48 hourly points
-            '7d': [6, 15],     // 7d should have ~7-14 daily points  
-            '30d': [25, 35],   // 30d should have ~30 daily points
-            '90d': [80, 100],  // 90d should have ~90 daily points
-            '12mo': [10, 15],  // 12mo should have ~12 monthly points
+            '24h': [20, 28],   // 24h hourly = ~24 points (±2 for edge cases)
+            '7d': [6, 9],      // 7d daily = ~7 points
+            '30d': [28, 32],   // 30d daily = ~30 points
+            '90d': [85, 95],   // 90d daily = ~90 points
+            '12mo': [11, 13],  // 12mo monthly = ~12 points
           };
           
           const [min, max] = expectedPoints[range] || [0, 1000];
