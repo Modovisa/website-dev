@@ -105,7 +105,7 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                   step={1}
                   value={idx}
                   onChange={(e) => setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])}
-                  className="mv-range absolute inset-[2px_0_0] w-full range-primary"
+                  className="mv-range absolute inset-[4px_0_0] w-full range-primary"
                 />
               </div>
 
