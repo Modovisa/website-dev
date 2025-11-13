@@ -1,5 +1,5 @@
 // src/components/profile/UpgradePlanModal.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PricingTier } from "@/services/billingService";
@@ -20,10 +20,10 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
   const [isYearly, setIsYearly] = useState(false);
   const [events, setEvents] = useState<number>(25_000);
 
-  // match a tier exactly like the bootstrap slider did
-  const matchedTier = useMemo(() => {
-    return tiers.find((t) => events >= t.min_events && events <= t.max_events) || null;
-  }, [events, tiers]);
+  const matchedTier = useMemo(
+    () => tiers.find((t) => events >= t.min_events && events <= t.max_events) || null,
+    [events, tiers]
+  );
 
   const price = useMemo(() => {
     if (!matchedTier) return 0;
@@ -109,35 +109,35 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                 </span>
               </div>
             </CardHeader>
-          </Card>
 
-          <CardContent className="text-center">
-            <ul className="mb-4 space-y-2 text-sm">
-              <li>✔ Forever data retention</li>
-              <li>✔ All features available</li>
-            </ul>
+            <CardContent className="text-center">
+              <ul className="mb-4 space-y-2 text-sm">
+                <li>✔ Forever data retention</li>
+                <li>✔ All features available</li>
+              </ul>
 
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={!matchedTier}
-              onClick={() => {
-                if (!matchedTier) return;
-                onUpgrade({ tierId: matchedTier.id, interval: isYearly ? "year" : "month" });
-              }}
-            >
-              Upgrade
-            </Button>
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!matchedTier}
+                onClick={() => {
+                  if (!matchedTier) return;
+                  onUpgrade({ tierId: matchedTier.id, interval: isYearly ? "year" : "month" });
+                }}
+              >
+                Upgrade
+              </Button>
 
-            {/* Current plan amount, for parity with Bootstrap modal footer */}
-            <div className="mt-5 text-center text-sm">
-              <p className="mb-1 text-muted-foreground">Your current plan:</p>
-              <div className="text-primary text-3xl font-bold">
-                ${currentPlanAmount}
-                <span className="ml-1 text-base text-muted-foreground">/month</span>
+              {/* Current plan amount, for parity with Bootstrap modal footer */}
+              <div className="mt-5 text-center text-sm">
+                <p className="mb-1 text-muted-foreground">Your current plan:</p>
+                <div className="text-primary text-3xl font-bold">
+                  ${currentPlanAmount}
+                  <span className="ml-1 text-base text-muted-foreground">/month</span>
+                </div>
               </div>
-            </div>
-          </CardContent>
+            </CardContent>
+          </Card>
         </Card>
       </div>
 
