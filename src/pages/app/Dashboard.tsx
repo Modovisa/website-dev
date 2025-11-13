@@ -42,9 +42,6 @@ export default function Dashboard() {
 
   // init legacy-compat once
   useEffect(() => {
-    initDashboardCompat(range).catch(() => {});
-  }, []);
-  useEffect(() => {
     setCompatRange(range);
   }, [range]);
 

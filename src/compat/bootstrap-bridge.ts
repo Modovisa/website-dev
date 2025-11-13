@@ -212,7 +212,10 @@ export async function connectWS(forceNewTicket = false) {
       return;
     }
     
-    console.log("📥 [WS] Received message:", msg.type, msg);
+    // Debug ALL non-ping messages
+    if (msg.type !== "ping" && msg.type !== "pong") {
+      console.log("📥 [WS] Received message type:", msg.type, "| Full message:", msg);
+    }
     
     const msgSite = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
     if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
@@ -221,11 +224,18 @@ export async function connectWS(forceNewTicket = false) {
     }
 
     if (msg.type === "dashboard_analytics" && msg.payload) {
-      // only accept frames for the currently selected range
+      // TEMPORARILY DISABLED - Backend sending wrong range
+      // TODO: Fix backend to respect range parameter
+      // if (msg.payload.range && msg.payload.range !== selectedRange) {
+      //   console.log("⏭️ [WS] Skipping message for different range:", msg.payload.range, "current:", selectedRange);
+      //   return;
+      // }
+      
+      // WARN if range mismatch but still process
       if (msg.payload.range && msg.payload.range !== selectedRange) {
-        console.log("⏭️ [WS] Skipping message for different range:", msg.payload.range, "current:", selectedRange);
-        return;
+        console.warn("⚠️ [WS] Range mismatch (processing anyway):", msg.payload.range, "expected:", selectedRange);
       }
+      
       console.log("✨ [WS] Emitting dashboard frame update");
       mvBus.emit("mv:dashboard:frame", msg.payload);
     }
