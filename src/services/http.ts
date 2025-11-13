@@ -1,26 +1,8 @@
 // src/services/http.ts
 import { secureFetch } from "@/lib/auth";
+import { apiBase } from "@/lib/api";
 
-/** Resolve API base dynamically (prod/dev) */
-function resolveApiBase(): string {
-  // 1) Explicit override via localStorage (you already use this elsewhere)
-  try {
-    const env = localStorage.getItem("modovisa_api_env"); // "dev" | "prod"
-    if (env === "dev") return "https://dev-api.modovisa.com";
-    if (env === "prod") return "https://api.modovisa.com";
-  } catch {}
-
-  // 2) Heuristic from current host
-  const host = (typeof window !== "undefined" && window.location?.hostname) || "";
-  if (host.startsWith("dev.") || host.includes("-dev") || host.includes("localhost")) {
-    return "https://dev-api.modovisa.com";
-  }
-
-  // 3) Default to prod
-  return "https://api.modovisa.com";
-}
-
-export const API_BASE = resolveApiBase();
+export const API_BASE = apiBase();
 
 export class HttpError extends Error {
   status: number;
@@ -53,7 +35,6 @@ export async function http<T = unknown>(path: string, init: HttpInit = {}): Prom
   try {
     const res = await secureFetch(`${API_BASE}${path}`, {
       ...init,
-      // Don’t force JSON header on GET; avoid unnecessary preflights.
       headers: {
         ...(init.method && init.method !== "GET" ? { "Content-Type": "application/json" } : {}),
         ...(init.headers || {}),

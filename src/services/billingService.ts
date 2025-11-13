@@ -1,7 +1,5 @@
 // src/services/billingService.ts
-import { apiBase } from "@/lib/api";
-import { secureFetch } from "@/lib/auth"; // <-- use secureFetch
-const API = apiBase();
+import { httpGet, httpPost } from "@/services/http";
 
 export type BillingInfo = {
   plan_id: number | 0;
@@ -38,85 +36,38 @@ export type InvoiceRow = {
   pdf_link?: string | null;
 };
 
-async function json<T>(res: Response): Promise<T> {
-  if (res.status === 401) throw new Error("unauthorized");
-  if (!res.ok) throw new Error(await res.text().catch(() => "request_failed"));
-  return (await res.json()) as T;
-}
-
 export async function getBillingInfo(): Promise<BillingInfo> {
-  const r = await secureFetch(`${API}/api/user-billing-info`, {
-    credentials: "include",
-    cache: "no-store",
-  });
-  return json<BillingInfo>(r);
+  return await httpGet<BillingInfo>("/api/user-billing-info", { cache: "no-store" });
 }
 
 export async function getPricingTiers(): Promise<PricingTier[]> {
-  const r = await secureFetch(`${API}/api/billing-pricing-tiers`, {
-    credentials: "include",
-    cache: "no-store",
-  });
-  return json<PricingTier[]>(r);
+  return await httpGet<PricingTier[]>("/api/billing-pricing-tiers", { cache: "no-store" });
 }
 
 export async function getStripeRuntime(): Promise<{ publishableKey: string }> {
-  const r = await secureFetch(`${API}/api/stripe/runtime-config`, {
-    credentials: "include",
-    cache: "no-store",
-  });
-  return json<{ publishableKey: string }>(r);
+  return await httpGet<{ publishableKey: string }>("/api/stripe/runtime-config", { cache: "no-store" });
 }
 
-export async function createEmbeddedSession(args: {
-  tier_id: number;
-  interval: "month" | "year";
-}) {
-  const r = await secureFetch(`${API}/api/stripe/embedded-session`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(args),
-  });
-  return json<any>(r);
+export async function createEmbeddedSession(args: { tier_id: number; interval: "month" | "year" }) {
+  return await httpPost<any>("/api/stripe/embedded-session", args);
 }
 
 export async function openUpdateCardSession(): Promise<{ clientSecret: string }> {
-  const r = await secureFetch(`${API}/api/stripe/update-payment-method`, {
-    method: "POST",
-    credentials: "include",
-  });
-  return json<{ clientSecret: string }>(r);
+  return await httpPost<{ clientSecret: string }>("/api/stripe/update-payment-method");
 }
 
 export async function cancelSubscription(): Promise<{ success: boolean }> {
-  const r = await secureFetch(`${API}/api/cancel-subscription`, {
-    method: "POST",
-    credentials: "include",
-  });
-  return json<{ success: boolean }>(r);
+  return await httpPost<{ success: boolean }>("/api/cancel-subscription");
 }
 
 export async function reactivateSubscription(): Promise<{ success: boolean }> {
-  const r = await secureFetch(`${API}/api/reactivate-subscription`, {
-    method: "POST",
-    credentials: "include",
-  });
-  return json<{ success: boolean }>(r);
+  return await httpPost<{ success: boolean }>("/api/reactivate-subscription");
 }
 
 export async function cancelDowngrade(): Promise<{ success: boolean }> {
-  const r = await secureFetch(`${API}/api/cancel-downgrade`, {
-    method: "POST",
-    credentials: "include",
-  });
-  return json<{ success: boolean }>(r);
+  return await httpPost<{ success: boolean }>("/api/cancel-downgrade");
 }
 
 export async function listInvoices(): Promise<{ data: InvoiceRow[] }> {
-  const r = await secureFetch(`${API}/api/user/invoices`, {
-    credentials: "include",
-    cache: "no-store",
-  });
-  return json<{ data: InvoiceRow[] }>(r);
+  return await httpGet<{ data: InvoiceRow[] }>("/api/user/invoices", { cache: "no-store" });
 }
