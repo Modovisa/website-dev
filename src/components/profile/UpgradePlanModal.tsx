@@ -1,15 +1,9 @@
 // src/components/profile/UpgradePlanModal.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PricingTier } from "@/services/billingService";
-
-/* noUiSlider is loaded globally from /public/nouislider.min.js */
-declare global {
-  interface Window {
-    noUiSlider: any;
-  }
-}
 
 type Props = {
   open: boolean;
@@ -25,10 +19,10 @@ const SNAP_STEPS = [
 
 export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmount, onUpgrade }: Props) {
   const [isYearly, setIsYearly] = useState(false);
-  const [events, setEvents] = useState<number>(SNAP_STEPS[0]);
+  const [events, setEvents] = useState<number>(25_000);
 
-  const sliderRef = useRef<HTMLDivElement | null>(null);
-  const sliderInstRef = useRef<any>(null);
+  const idx = useMemo(() => Math.max(0, SNAP_STEPS.indexOf(events)), [events]);
+  const percent = useMemo(() => (idx / (SNAP_STEPS.length - 1)) * 100, [idx]);
 
   const matchedTier = useMemo(
     () => tiers.find((t) => events >= t.min_events && events <= t.max_events) || null,
@@ -41,71 +35,24 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
     return isYearly ? Math.ceil(monthly * 0.8) : monthly;
   }, [matchedTier, isYearly]);
 
-  // Reset when modal is closed
   useEffect(() => {
     if (!open) {
       setIsYearly(false);
-      setEvents(SNAP_STEPS[0]);
-      // destroy slider if exists (avoid duplicate instances)
-      if (sliderInstRef.current) {
-        sliderInstRef.current.destroy();
-        sliderInstRef.current = null;
-      }
+      setEvents(25_000);
     }
-  }, [open]);
-
-  // Initialize noUiSlider on open
-  useEffect(() => {
-    if (!open || !sliderRef.current) return;
-    const noUi = window.noUiSlider;
-    if (!noUi) return;
-
-    // start at current events index
-    const startIndex = Math.max(0, SNAP_STEPS.findIndex((v) => v === events));
-
-    sliderInstRef.current = noUi.create(sliderRef.current, {
-      start: startIndex,
-      step: 1,
-      range: { min: 0, max: SNAP_STEPS.length - 1 },
-      connect: [true, false],
-      behaviour: "tap-drag",
-      // no tooltips; we render our own labels beneath
-    });
-
-    const inst = sliderInstRef.current;
-
-    const onUpdate = (values: string[]) => {
-      const idx = Math.round(parseFloat(values[0]));
-      const clamped = Math.min(Math.max(idx, 0), SNAP_STEPS.length - 1);
-      setEvents(SNAP_STEPS[clamped]);
-    };
-
-    inst.on("update", onUpdate);
-
-    // Ensure slider re-renders correctly when modal animates in
-    setTimeout(() => inst && inst.updateOptions({}, false), 0);
-
-    return () => {
-      if (inst) {
-        inst.off("update", onUpdate);
-        inst.destroy();
-        sliderInstRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
-      <div className="w-full max-w-3xl rounded-xl bg-background p-4 shadow-xl">
+      <div className="w-full max-w-3xl rounded-2xl bg-background p-4 shadow-xl">
         <div className="flex justify-end">
           <button className="text-muted-foreground" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-semibold">Upgrade Plan</h2>
+          <h2 className="text-3xl font-semibold">Upgrade Plan</h2>
           <p className="text-muted-foreground">Choose the best plan based on your usage needs.</p>
         </div>
 
@@ -113,51 +60,69 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Pro</CardTitle>
 
-            {/* Monthly / Yearly toggle - consistent spacing & alignment */}
-            <div className="mt-3 flex items-center justify-center gap-4">
-              <span className={`font-medium ${!isYearly ? "text-foreground" : "text-muted-foreground"}`}>Monthly</span>
+            {/* Monthly / Yearly toggle - pixel tight, no drift */}
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <span className="font-medium select-none">Monthly</span>
 
               <button
                 type="button"
-                aria-label="Toggle yearly billing"
+                aria-pressed={isYearly}
                 onClick={() => setIsYearly((v) => !v)}
-                className={`relative h-7 w-12 rounded-full transition-colors ${
-                  isYearly ? "bg-primary" : "bg-muted"
-                }`}
+                className={[
+                  "relative inline-flex h-8 w-16 items-center rounded-full transition-colors",
+                  isYearly ? "bg-primary" : "bg-muted",
+                ].join(" ")}
               >
                 <span
-                  className={`absolute top-0.5 h-6 w-6 rounded-full bg-background shadow transition-transform ${
-                    isYearly ? "translate-x-6" : "translate-x-1"
-                  }`}
+                  className={[
+                    "pointer-events-none absolute left-1 top-1 h-6 w-6 rounded-full bg-background border",
+                    "border-primary/40 shadow transition-transform",
+                    isYearly ? "translate-x-8" : "translate-x-0",
+                  ].join(" ")}
                 />
               </button>
 
-              <div className="flex items-center gap-2">
-                <span className={`font-medium ${isYearly ? "text-foreground" : "text-muted-foreground"}`}>Yearly</span>
-                <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Save 20%</span>
-              </div>
+              <span className="font-medium select-none">Yearly</span>
+              <span className="ml-1 rounded bg-green-100 px-2 py-0.5 text-sm text-green-700 select-none">Save 20%</span>
             </div>
 
-            {/* noUiSlider (discrete steps) */}
+            {/* Slider with filled progress + native range (accessible) */}
             <div className="mx-auto mt-6 w-full max-w-xl">
-              <div ref={sliderRef} className="noUi-target noUi-ltr noUi-horizontal" />
+              <div className="relative">
+                {/* Track */}
+                <div className="h-1.5 rounded-full bg-muted" />
+                {/* Filled */}
+                <div
+                  className="absolute left-0 top-0 h-1.5 rounded-full bg-primary"
+                  style={{ width: `${percent}%` }}
+                />
+                {/* Range (thumb) */}
+                <input
+                  aria-label="Events per month"
+                  type="range"
+                  min={0}
+                  max={SNAP_STEPS.length - 1}
+                  step={1}
+                  value={idx}
+                  onChange={(e) => setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])}
+                  className="mv-range absolute inset-[-8px_0_0] w-full"
+                />
+              </div>
 
               <div className="mt-4 flex items-center justify-between text-base font-semibold">
-                <span>
+                <span className="tabular-nums">
                   {events.toLocaleString()} <span className="text-sm text-muted-foreground">events / mo</span>
                 </span>
-
-                <span className="flex items-baseline gap-2">
+                <span className="tabular-nums">
                   {isYearly ? (
                     <>
-                      <span className="line-through opacity-70">${matchedTier?.monthly_price ?? 0}</span>
-                      <span className="text-foreground">${price}</span>
-                      <span className="text-sm text-muted-foreground">/ mo</span>
+                      <span className="mr-2 line-through opacity-60">${matchedTier?.monthly_price ?? 0}</span>${price}
+                      <span className="text-sm text-muted-foreground"> / mo</span>
                     </>
                   ) : (
                     <>
-                      <span className="text-foreground">${price}</span>
-                      <span className="text-sm text-muted-foreground">/ mo</span>
+                      ${price}
+                      <span className="text-sm text-muted-foreground"> / mo</span>
                     </>
                   )}
                 </span>
@@ -166,7 +131,7 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
           </CardHeader>
 
           <CardContent className="text-center">
-            <ul className="mb-4 space-y-2 text-sm">
+            <ul className="mb-5 space-y-2 text-sm">
               <li>✔ Forever data retention</li>
               <li>✔ All features available</li>
             </ul>
@@ -183,8 +148,7 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
               Upgrade
             </Button>
 
-            {/* Current plan amount */}
-            <div className="mt-5 text-center text-sm">
+            <div className="mt-6 text-center text-sm">
               <p className="mb-1 text-muted-foreground">Your current plan:</p>
               <div className="text-primary text-3xl font-bold">
                 ${currentPlanAmount}
