@@ -1,5 +1,4 @@
 // src/compat/bootstrap-bridge.ts
-
 import { mvBus } from "@/lib/mvBus";
 import { secureFetch } from "@/lib/auth";
 
@@ -12,7 +11,7 @@ type GeoCityPoint = {
   debug_ids?: string[];
 };
 
-type RangeKey = "24h"|"7d"|"30d"|"90d"|"12mo";
+type RangeKey = "24h" | "7d" | "30d" | "90d" | "12mo";
 
 const API = "https://api.modovisa.com";
 
@@ -23,32 +22,41 @@ let pingTimer: number | null = null;
 let ticketLock = false;
 let lastTicketAt = 0;
 let reconnectTimer: number | null = null;
-let visHandler: any = null;
+let visHandler: (() => void) | null = null;
 
 const TICKET_THROTTLE_MS = 1500;
 
-function safeJSON<T=any>(x: string): T | null {
-  try { return JSON.parse(x) as T; } catch { return null; }
+function safeJSON<T = any>(x: string): T | null {
+  try {
+    return JSON.parse(x) as T;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeCities(payload: any): GeoCityPoint[] {
-  const arr = Array.isArray(payload?.points) ? payload.points
-    : Array.isArray(payload?.clusters) ? payload.clusters
-    : Array.isArray(payload) ? payload
+  const arr = Array.isArray(payload?.points)
+    ? payload.points
+    : Array.isArray(payload?.clusters)
+    ? payload.clusters
+    : Array.isArray(payload)
+    ? payload
     : [];
-  return arr.map((v: any) => {
-    const lat = Number(v.lat ?? v.location?.lat ?? 0);
-    const lng = Number(v.lng ?? v.location?.lng ?? 0);
-    const count = Number(v.count ?? v.visitors ?? v.value ?? 0);
-    return {
-      city: String(v.city ?? v.city_name ?? v.name ?? "Unknown"),
-      country: String(v.country ?? v.country_name ?? v.cc ?? "Unknown"),
-      lat: Number.isFinite(lat) ? lat : 0,
-      lng: Number.isFinite(lng) ? lng : 0,
-      count: Number.isFinite(count) ? count : 0,
-      debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
-    };
-  }).filter(p => p.lat !== 0 || p.lng !== 0);
+  return arr
+    .map((v: any) => {
+      const lat = Number(v.lat ?? v.location?.lat ?? 0);
+      const lng = Number(v.lng ?? v.location?.lng ?? 0);
+      const count = Number(v.count ?? v.visitors ?? v.value ?? 0);
+      return {
+        city: String(v.city ?? v.city_name ?? v.name ?? "Unknown"),
+        country: String(v.country ?? v.country_name ?? v.cc ?? "Unknown"),
+        lat: Number.isFinite(lat) ? lat : 0,
+        lng: Number.isFinite(lng) ? lng : 0,
+        count: Number.isFinite(count) ? count : 0,
+        debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
+      };
+    })
+    .filter((p) => p.lat !== 0 || p.lng !== 0);
 }
 
 /** Public: allow React to set the time range used for REST/WS */
@@ -94,17 +102,37 @@ async function getWSTicket(): Promise<string> {
   }
   ticketLock = true;
   lastTicketAt = Date.now();
+
   try {
     const res = await secureFetch(`${API}/api/ws-ticket`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" }, // ✅ required for Worker req.json()
       body: JSON.stringify({ site_id: currentSiteId }),
     });
+
     if (res.status === 401) {
       (window as any).logoutAndRedirect?.("401");
       throw new Error("unauthorized");
     }
-    if (!res.ok) throw new Error(await res.text());
-    const { ticket } = await res.json();
+
+    if (res.status === 429) {
+      // Respect Retry-After if present; otherwise back off ~8s
+      const ra = Number(res.headers.get("retry-after") || "8");
+      scheduleReconnect((Math.max(3, ra)) * 1000);
+      throw new Error("too_many_requests");
+    }
+
+    if (!res.ok) {
+      // Surface backend message if any (helps when diagnosing 5xx)
+      const body = await res.text().catch(() => "");
+      if (res.status >= 500) {
+        scheduleReconnect(5000 + Math.floor(Math.random() * 3000));
+      }
+      throw new Error(body || `ticket_failed_${res.status}`);
+    }
+
+    const { ticket } = (await res.json()) as { ticket?: string };
+    if (!ticket) throw new Error("no_ticket");
     return ticket;
   } finally {
     ticketLock = false;
@@ -117,13 +145,18 @@ function scheduleReconnect(ms: number = 1200) {
 }
 
 /** Public: connect (or reconnect) WS; forceNewTicket optionally */
-export async function connectWS(forceNewTicket = false) {
+export async function connectWS(_forceNewTicket = false) {
   if (!currentSiteId) return;
 
   // Close any prior
-  try { ws?.close(); } catch {}
+  try {
+    ws?.close();
+  } catch {}
   ws = null;
-  if (pingTimer) { window.clearInterval(pingTimer); pingTimer = null; }
+  if (pingTimer) {
+    window.clearInterval(pingTimer);
+    pingTimer = null;
+  }
 
   let ticket: string;
   try {
@@ -146,7 +179,6 @@ export async function connectWS(forceNewTicket = false) {
 
   socket.onopen = () => {
     window.clearTimeout(openFail);
-    // subscribe to streams similar to Bootstrap
     try {
       socket.send(
         JSON.stringify({
@@ -156,13 +188,27 @@ export async function connectWS(forceNewTicket = false) {
           range: selectedRange,
         })
       );
-      socket.send(JSON.stringify({ type: "request_dashboard_snapshot", site_id: currentSiteId, range: selectedRange }));
-      socket.send(JSON.stringify({ type: "request_live_cities", site_id: currentSiteId, range: selectedRange }));
+      socket.send(
+        JSON.stringify({
+          type: "request_dashboard_snapshot",
+          site_id: currentSiteId,
+          range: selectedRange,
+        })
+      );
+      socket.send(
+        JSON.stringify({
+          type: "request_live_cities",
+          site_id: currentSiteId,
+          range: selectedRange,
+        })
+      );
     } catch {}
 
     pingTimer = window.setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
-        try { socket.send(JSON.stringify({ type: "ping" })); } catch {}
+        try {
+          socket.send(JSON.stringify({ type: "ping" }));
+        } catch {}
       }
     }, 25000) as unknown as number;
   };
@@ -171,11 +217,11 @@ export async function connectWS(forceNewTicket = false) {
     if (socket.readyState !== WebSocket.OPEN) return;
     const msg = safeJSON<any>(ev.data);
     if (!msg) return;
+
     const msgSite = String(msg?.site_id ?? msg?.payload?.site_id ?? "");
     if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) return;
 
     if (msg.type === "dashboard_analytics" && msg.payload) {
-      // only accept frames for the currently selected range
       if (msg.payload.range && msg.payload.range !== selectedRange) return;
       mvBus.emit("mv:dashboard:frame", msg.payload);
     }
@@ -209,12 +255,22 @@ export async function connectWS(forceNewTicket = false) {
   if (visHandler) document.removeEventListener("visibilitychange", visHandler);
   visHandler = () => {
     if (document.visibilityState === "visible") {
-      try { socket.close(); } catch {}
-      if (pingTimer) { window.clearInterval(pingTimer); pingTimer = null; }
+      try {
+        socket.close();
+      } catch {}
+      if (pingTimer) {
+        window.clearInterval(pingTimer);
+        pingTimer = null;
+      }
       connectWS(true);
     } else {
-      try { socket.close(); } catch {}
-      if (pingTimer) { window.clearInterval(pingTimer); pingTimer = null; }
+      try {
+        socket.close();
+      } catch {}
+      if (pingTimer) {
+        window.clearInterval(pingTimer);
+        pingTimer = null;
+      }
     }
   };
   document.addEventListener("visibilitychange", visHandler);
