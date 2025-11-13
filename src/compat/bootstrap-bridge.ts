@@ -87,8 +87,16 @@ export async function primeSnapshot() {
     throw new Error("unauthorized");
   }
   if (!res.ok) {
-    console.error("❌ [REST] Snapshot failed:", res.status);
-    throw new Error("snapshot_failed");
+    const errorBody = await res.text().catch(() => "");
+    console.error("❌ [REST] Snapshot failed:", {
+      status: res.status,
+      statusText: res.statusText,
+      body: errorBody,
+      url: url,
+      siteId: currentSiteId,
+      range: selectedRange
+    });
+    throw new Error(`snapshot_failed_${res.status}`);
   }
   const data = await res.json();
   console.log("✅ [REST] Snapshot received, emitting to mvBus:", data);
@@ -106,13 +114,23 @@ async function getWSTicket(): Promise<string> {
   try {
     const res = await secureFetch(`${API}/api/ws-ticket`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ site_id: currentSiteId }),
     });
     if (res.status === 401) {
       (window as any).logoutAndRedirect?.("401");
       throw new Error("unauthorized");
     }
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      console.error("❌ [WS] Ticket request failed:", {
+        status: res.status,
+        statusText: res.statusText,
+        body: errorBody,
+        siteId: currentSiteId
+      });
+      throw new Error(`ticket_failed_${res.status}: ${errorBody}`);
+    }
     const { ticket } = await res.json();
     return ticket;
   } finally {
