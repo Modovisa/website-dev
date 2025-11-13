@@ -22,11 +22,28 @@ export default function BillingAndPlans() {
   } = useBilling();
 
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const currentPlanAmount = useMemo(() => (isFreePlan ? 0 : info?.price || 0), [info, isFreePlan]);
+
+  const currentPlanAmount = useMemo(
+    () => (isFreePlan ? 0 : info?.price || 0),
+    [info, isFreePlan]
+  );
 
   const usedDays = info?.days_used ?? 0;
   const totalDays = info?.total_days ?? (info?.interval === "year" ? 365 : 30);
   const percent = Math.min(100, Math.round((usedDays / (totalDays || 1)) * 100));
+
+  // ✅ Only treat as an active paid subscription when it’s truly paid & current
+  const hasActiveSubscription = useMemo(
+    () =>
+      !!(
+        info &&
+        !isFreeForever &&
+        !isFreePlan &&
+        (info.price ?? 0) > 0 &&
+        !!info.interval
+      ),
+    [info, isFreeForever, isFreePlan]
+  );
 
   return (
     <div className="space-y-6">
@@ -48,7 +65,9 @@ export default function BillingAndPlans() {
                     {isFreeForever ? (
                       <>
                         Your Current Plan is{" "}
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700">Free Forever</span>
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700">
+                          Free Forever
+                        </span>
                       </>
                     ) : (
                       <>Your Current Plan is {info.plan_name}</>
@@ -87,7 +106,9 @@ export default function BillingAndPlans() {
                         <>
                           ${info.price} Per {info.interval === "year" ? "Year" : "Month"}{" "}
                           {info.is_popular ? (
-                            <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">Popular</span>
+                            <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                              Popular
+                            </span>
                           ) : null}
                         </>
                       )}
@@ -113,7 +134,8 @@ export default function BillingAndPlans() {
                       <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
                         <div className="font-medium">Needs attention!</div>
                         <div>
-                          Your plan will revert to <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
+                          Your plan will revert to{" "}
+                          <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
                           <span className="font-semibold text-red-600">
                             {info.active_until
                               ? new Date(info.active_until).toLocaleDateString("en-US", {
@@ -157,7 +179,10 @@ export default function BillingAndPlans() {
                     </>
                   ) : (
                     <>
-                      <span className="text-xl font-semibold">{info.event_count.toLocaleString()}</span> events used so far
+                      <span className="text-xl font-semibold">
+                        {info.event_count.toLocaleString()}
+                      </span>{" "}
+                      events used so far
                     </>
                   )}
                 </div>
@@ -165,28 +190,33 @@ export default function BillingAndPlans() {
 
               {/* Actions */}
               <div className="col-span-full mt-2 flex flex-wrap gap-3">
+                {/* Upgrade is hidden only for Free Forever */}
                 {!isFreeForever && (
                   <Button onClick={() => setShowUpgrade(true)} className="mr-2">
                     Upgrade Plan
                   </Button>
                 )}
-                {!isFreePlan && !info.cancel_at_period_end && (
+
+                {/* Show cancel/reactivate/downgrade/update only for real paid subs */}
+                {hasActiveSubscription && !info.cancel_at_period_end && (
                   <Button variant="outline" className="text-red-600" onClick={cancelSubscription}>
                     Cancel Subscription
                   </Button>
                 )}
-                {info.cancel_at_period_end && (
+
+                {hasActiveSubscription && info.cancel_at_period_end && (
                   <Button variant="outline" className="text-green-600" onClick={reactivateSubscription}>
                     Reactivate Plan
                   </Button>
                 )}
-                {info.scheduled_downgrade && !info.cancel_at_period_end && (
+
+                {hasActiveSubscription && info.scheduled_downgrade && !info.cancel_at_period_end && (
                   <Button variant="outline" onClick={cancelDowngrade}>
                     Cancel Downgrade
                   </Button>
                 )}
-                {/* Optional: update card entry point */}
-                {!isFreePlan && (
+
+                {hasActiveSubscription && (
                   <Button variant="outline" onClick={startUpdateCard}>
                     Update Card
                   </Button>
@@ -207,18 +237,20 @@ export default function BillingAndPlans() {
         tiers={tiers}
         currentPlanAmount={currentPlanAmount}
         onUpgrade={({ tierId, interval }) => {
-          // Mirrors the Bootstrap modal: start Stripe flow, then show success/applied banner
+          // Handles both embedded checkout and server-side success fallback
           startEmbeddedCheckout(tierId, interval, () => {
-            // You can show a toast/modal here if you want parity with “Success/Applied” modals.
             setShowUpgrade(false);
           }).catch(() => {
-            // failure toast is fine
+            /* no-op: show your own toast if needed */
           });
         }}
       />
 
       {/* Embedded update-card modal container (hook mounts Stripe here) */}
-      <div id="react-billing-updatecard-modal" className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50">
+      <div
+        id="react-billing-updatecard-modal"
+        className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
+      >
         <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
           <div id="react-billing-updatecard-element" />
         </div>
