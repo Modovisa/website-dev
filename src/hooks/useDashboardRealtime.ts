@@ -38,11 +38,13 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
 
   useEffect(() => {
     const offSnapshot = mvBus.on<DashboardPayload>("mv:dashboard:snapshot", (payload) => {
+      console.log("📊 [Hook] Received snapshot event, updating state");
       setState((s) => ({ ...s, data: payload, error: null }));
       setAnalyticsVersion((v) => v + 1);
     });
 
     const offFrame = mvBus.on<DashboardPayload>("mv:dashboard:frame", (incoming) => {
+      console.log("📊 [Hook] Received frame event, merging with state");
       setState((s) => {
         const merged: DashboardPayload = {
           ...(s.data || {}),
@@ -69,14 +71,17 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
     });
 
     const offCities = mvBus.on<{ points: GeoCityPoint[]; total: number }>("mv:live:cities", ({ points, total }) => {
+      console.log("🌍 [Hook] Received live cities event:", { total, pointsCount: points.length });
       setState((s) => ({ ...s, liveCities: points, liveCount: total }));
     });
 
     const offCount = mvBus.on<{ count: number }>("mv:live:count", ({ count }) => {
+      console.log("👥 [Hook] Received live count event:", count);
       setState((s) => ({ ...s, liveCount: count }));
     });
 
     const offErr = mvBus.on<{ message: string }>("mv:error", ({ message }) => {
+      console.error("❌ [Hook] Received error event:", message);
       setState((s) => ({ ...s, error: message || "error" }));
     });
 

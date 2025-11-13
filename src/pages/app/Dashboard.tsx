@@ -107,17 +107,12 @@ export default function Dashboard() {
   const showKpiSkeleton = !firstPaintDone;
   const showPageSkeleton = !firstPaintDone;
 
-  // Format currency helper
-  const formatCurrency = (val: any) => val ? `$${Number(val).toLocaleString()}` : '--';
-  
-  // All KPI cards matching Bootstrap version
+  // Only 5 KPI cards as requested
   const topCards = [
     { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
     { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
     { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null, reverseColor: true },
     { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: Clock, change: data?.avg_duration_delta ?? null },
-    { key: "revenue", name: "Revenue / User", value: formatCurrency(data?.revenue_per_user), icon: DollarSign, change: data?.revenue_per_user_delta ?? null },
-    { key: "conversions", name: "Conversions / User", value: data?.conversions_per_user ?? '--', icon: Target, change: data?.conversions_per_user_delta ?? null },
     { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? '--', icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
   ];
 
@@ -222,8 +217,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* KPI Cards - Now supporting 7 cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {/* KPI Cards - 5 cards in one row */}
+        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
           {topCards.map((stat) => (
             <Card key={stat.key}>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -263,7 +258,12 @@ export default function Dashboard() {
         {/* First paint skeletons */}
         {showPageSkeleton ? (
           <div className="space-y-6">
-            <Skeleton className="h-[300px] w-full" />
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="md:col-span-2">
+                <Skeleton className="h-[360px] w-full" />
+              </div>
+              <Skeleton className="h-[300px] w-full" />
+            </div>
             <div className="grid gap-6 md:grid-cols-2">
               <Skeleton className="h-[260px] w-full" />
               <Skeleton className="h-[260px] w-full" />
@@ -352,21 +352,22 @@ export default function Dashboard() {
 
               {/* Lines */}
               <div className="grid gap-6 md:grid-cols-2">
-                <UniqueReturning data={data.unique_vs_returning ?? []} />
+                <UniqueReturning data={data.unique_vs_returning ?? []} version={analyticsVersion} />
                 <PerformanceLine
                   title="Conversions"
                   current={data.conversions_timeline ?? []}
                   previous={data.conversions_previous_timeline ?? []}
                   color="#8b5cf6"
                   filled
+                  version={analyticsVersion}
                 />
               </div>
 
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <PerformanceLine title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled />
-                <PerformanceLine title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled />
-                <PerformanceLine title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled />
-                <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled />
+                <PerformanceLine title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled version={analyticsVersion} />
+                <PerformanceLine title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled version={analyticsVersion} />
+                <PerformanceLine title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled version={analyticsVersion} />
+                <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled version={analyticsVersion} />
               </div>
 
               {/* Donuts + UTMs */}

@@ -1,5 +1,6 @@
 // src/components/dashboard/PerformanceLine.tsx
 
+import { useMemo } from "react";
 import { Line } from "react-chartjs-2";
 import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 
@@ -24,6 +25,7 @@ export default function PerformanceLine({
   color = chartTheme.info,
   filled = false,
   loading,
+  version,
 }: {
   title: string;
   current: Row[];
@@ -31,23 +33,24 @@ export default function PerformanceLine({
   color?: string;
   filled?: boolean;
   loading?: boolean;
+  version?: number;
 }) {
-  const labels = (current || previous || []).map((d) => d.label);
-  const prevMap = new Map((previous || []).map((r) => [r.label, r.count]));
-  const dsCurrent = labels.map((l) => current.find((c) => c.label === l)?.count ?? null);
-  const dsPrev = labels.map((l) => prevMap.get(l) ?? null);
+  const labels = useMemo(() => (current || previous || []).map((d) => d.label), [current, previous, version]);
+  const prevMap = useMemo(() => new Map((previous || []).map((r) => [r.label, r.count])), [previous, version]);
+  const dsCurrent = useMemo(() => labels.map((l) => current.find((c) => c.label === l)?.count ?? null), [labels, current, version]);
+  const dsPrev = useMemo(() => labels.map((l) => prevMap.get(l) ?? null), [labels, prevMap, version]);
 
   const bg = filled ? withAlphaHex(color, 0.18) : "transparent";
 
-  const ds = {
+  const ds = useMemo(() => ({
     labels,
     datasets: [
       {
         label: title,
-        data: dsCurrent,
+        data: dsCurrent.slice(),
         borderColor: color,
         backgroundColor: bg,
-        fill: filled ? true : false, // <-- simple & reliable
+        fill: filled ? true : false,
         tension: 0.35,
         pointRadius: filled ? 3 : 0,
         pointHoverRadius: filled ? 5 : 0,
@@ -59,7 +62,7 @@ export default function PerformanceLine({
       },
       {
         label: "Previous Period",
-        data: dsPrev,
+        data: dsPrev.slice(),
         borderColor: chartTheme.gray,
         borderDash: [5, 5],
         backgroundColor: "transparent",
@@ -70,10 +73,12 @@ export default function PerformanceLine({
         spanGaps: true,
       },
     ],
-  };
+  }), [labels, dsCurrent, dsPrev, title, color, bg, filled, version]);
 
-  const options = {
-    ...useBaseOptions({ yBeginAtZero: true, showLegend: true }),
+  const base = useBaseOptions({ yBeginAtZero: true, showLegend: true });
+
+  const options = useMemo(() => ({
+    ...base,
     interaction: { mode: "index" as const, intersect: false },
     scales: {
       x: { grid: { display: false } },
@@ -82,10 +87,10 @@ export default function PerformanceLine({
     plugins: {
       legend: { position: "bottom" as const, labels: { usePointStyle: true } },
       tooltip: { mode: "index" as const, intersect: false },
-      filler: { propagate: false }, // <-- ensure fill draws under the line
+      filler: { propagate: false },
     },
     maintainAspectRatio: false,
-  } as const;
+  } as const), [base]);
 
   return (
     <ChartCard title={title} loading={loading} height={260}>

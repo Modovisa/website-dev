@@ -1,5 +1,6 @@
 // src/components/dashboard/UniqueReturning.tsx
 
+import { useMemo } from "react";
 import { Line } from "react-chartjs-2";
 import { ChartCard, chartTheme, useBaseOptions } from "./ChartKit";
 
@@ -8,46 +9,50 @@ type Row = { label: string; unique: number; returning: number };
 export default function UniqueReturning({
   data,
   loading,
+  version,
 }: {
   data: Row[];
   loading?: boolean;
+  version?: number;
 }) {
-  const labels = (data || []).map((d) => d.label);
-  const uniques = (data || []).map((d) => d.unique || 0);
-  const returning = (data || []).map((d) => d.returning || 0);
+  const labels = useMemo(() => (data || []).map((d) => d.label), [data, version]);
+  const uniques = useMemo(() => (data || []).map((d) => d.unique || 0), [data, version]);
+  const returning = useMemo(() => (data || []).map((d) => d.returning || 0), [data, version]);
 
-  const ds = {
+  const ds = useMemo(() => ({
     labels,
     datasets: [
       {
         label: "Unique",
-        data: uniques,
+        data: uniques.slice(),
         borderColor: "#3b82f6",
         backgroundColor: "rgba(55, 128, 246,0.55)",
         fill: true,
         tension: 0.4,
-        pointRadius: 2,               // show points
+        pointRadius: 2,
         pointHoverRadius: 3,
         borderWidth: 2,
         stack: "uvr",
       },
       {
         label: "Returning",
-        data: returning,
+        data: returning.slice(),
         borderColor: "#22c55e",
         backgroundColor: "rgba(34,197,94,0.20)",
         fill: true,
         tension: 0.4,
-        pointRadius: 2,               // show points
+        pointRadius: 2,
         pointHoverRadius: 3,
         borderWidth: 2,
         stack: "uvr",
       },
     ],
-  };
+  }), [labels, uniques, returning, version]);
 
-  const options = {
-    ...useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true }),
+  const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
+
+  const options = useMemo(() => ({
+    ...base,
     plugins: {
       legend: { position: "bottom" as const, labels: { usePointStyle: true } },
       tooltip: {
@@ -70,7 +75,7 @@ export default function UniqueReturning({
       x: { stacked: true, grid: { display: true, color: "rgba(0,0,0,0.03)" } },
       y: { stacked: true, beginAtZero: true, grid: { color: chartTheme.grid } },
     },
-  } as const;
+  } as const), [base]);
 
   return (
     <ChartCard
