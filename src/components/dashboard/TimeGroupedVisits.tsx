@@ -18,19 +18,19 @@ export default function TimeGroupedVisits({
   version?: number; // bump = rebuild dataset/options
 }) {
   const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
-
+  
   const labels = useMemo(() => (data || []).map((d) => d.label), [data, version]);
   const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data, version]);
   const views = useMemo(() => (data || []).map((d) => d.views || 0), [data, version]);
-
+  
   const { ds, options } = useMemo(() => {
     const maxValue = Math.max(0, ...visitors, ...views);
     const approxStep = Math.ceil(maxValue / 5 || 1);
     const stepSize = Math.pow(10, Math.floor(Math.log10(approxStep)));
-
+    
     const totalBars = labels.length;
     const barPct = totalBars > 30 ? 0.5 : totalBars > 20 ? 0.6 : totalBars > 10 ? 0.7 : 0.8;
-
+    
     const datasets = [
       {
         datasetIdKey: "visitors",
@@ -53,7 +53,7 @@ export default function TimeGroupedVisits({
         categoryPercentage: 0.9,
       },
     ];
-
+    
     const options = {
       ...base,
       scales: {
@@ -82,10 +82,10 @@ export default function TimeGroupedVisits({
       responsive: true,
       maintainAspectRatio: false,
     } as const;
-
+    
     return { ds: { labels: labels.slice(), datasets }, options };
   }, [labels, visitors, views, base, version]);
-
+  
   const titleMap: Record<string, string> = {
     "24h": "Visits — Today",
     "7d": "Visits — Last 7 Days",
@@ -93,7 +93,7 @@ export default function TimeGroupedVisits({
     "90d": "Visits — Last 90 Days",
     "12mo": "Visits — Last 12 Months",
   };
-
+  
   return (
     <ChartCard
       title={titleMap[range] || "Visits"}
@@ -102,7 +102,9 @@ export default function TimeGroupedVisits({
       hasData={hasData}
       height={360}
     >
-      <Bar data={ds} options={options} />
+      {/* CRITICAL FIX: Add key={version} to force chart remount like bootstrap does */}
+      {/* Bootstrap destroys and recreates the chart every time, we do the same by forcing remount */}
+      <Bar key={version} data={ds} options={options} />
     </ChartCard>
   );
 }
