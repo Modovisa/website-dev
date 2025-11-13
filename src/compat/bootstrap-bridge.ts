@@ -1,5 +1,7 @@
 // src/compat/bootstrap-bridge.ts
+
 import { mvBus } from "@/lib/mvBus";
+import { secureFetch } from "@/lib/auth";
 
 type GeoCityPoint = {
   city: string;
@@ -27,12 +29,6 @@ const TICKET_THROTTLE_MS = 1500;
 
 function safeJSON<T=any>(x: string): T | null {
   try { return JSON.parse(x) as T; } catch { return null; }
-}
-
-async function secureFetch(input: RequestInfo, init: RequestInit = {}) {
-  const headers = new Headers(init.headers || {});
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  return fetch(input, { credentials: "include", mode: "cors", ...init, headers });
 }
 
 function normalizeCities(payload: any): GeoCityPoint[] {
