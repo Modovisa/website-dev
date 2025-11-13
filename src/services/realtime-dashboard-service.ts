@@ -151,6 +151,13 @@ export async function getDashboardSnapshot(args: {
   }
 
   const data = await res.json();
+  
+  // CRITICAL: Override the range field to match requested range (backend bug workaround)
+  if (data.range && data.range !== args.range) {
+    console.log("📊 [REST] Overriding incorrect backend range:", data.range, "→", args.range);
+  }
+  data.range = args.range;
+  
   console.log("✅ [REST] Snapshot received, emitting to mvBus");
   return data as DashboardPayload;
 }
