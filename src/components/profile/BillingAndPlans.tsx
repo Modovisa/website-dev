@@ -65,7 +65,7 @@ export default function BillingAndPlans() {
                     {isFreeForever ? (
                       <>
                         Your Current Plan is{" "}
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700">
+                        <span className="rounded-full px-2 py-0.5 bg-success text-primary-foreground">
                           Free Forever
                         </span>
                       </>
