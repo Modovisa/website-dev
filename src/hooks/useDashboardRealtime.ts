@@ -1,5 +1,5 @@
 // src/hooks/useDashboardRealtime.ts
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { mvBus } from "@/lib/mvBus";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 import * as DashboardService from "@/services/realtime-dashboard-service";
@@ -28,6 +28,11 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
     error: null,
   });
   const [analyticsVersion, setAnalyticsVersion] = useState(0);
+  
+  // Track first mount to prevent duplicate fetches
+  const isFirstMount = useRef(true);
+  const initialRange = useRef(range);
+  const initialSite = useRef(siteId);
 
   // Initialize service once on mount
   useEffect(() => {
@@ -43,15 +48,26 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
     };
   }, []); // Empty deps - run once only!
 
-  // Update range when it changes
+  // Update range when it changes (skip first mount)
   useEffect(() => {
+    if (isFirstMount.current && range === initialRange.current) {
+      // Skip - already handled by initialize
+      return;
+    }
+    
     console.log("🎯 [Hook] Range changed to:", range);
     DashboardService.setRange(range);
     DashboardService.fetchSnapshot().catch(() => {});
   }, [range]);
 
-  // Update site when it changes
+  // Update site when it changes (skip first mount)
   useEffect(() => {
+    if (isFirstMount.current && siteId === initialSite.current) {
+      // Skip - already handled by initialize
+      isFirstMount.current = false; // Mark as no longer first mount
+      return;
+    }
+    
     if (siteId) {
       console.log("🌐 [Hook] Site changed to:", siteId);
       DashboardService.setSite(siteId).catch(() => {});

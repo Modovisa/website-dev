@@ -277,14 +277,21 @@ async function connectWS(forceNewTicket = false) {
       const data = msg.payload;
       if (!data) return;
 
-      // Warn if range mismatch but still process (backend bug - always sends 30d)
+      // CRITICAL: Reject data with wrong range (matches bootstrap behavior)
       if (data.range && data.range !== selectedRange) {
         console.warn(
-          "⚠️ [WS] Range mismatch (processing anyway):",
+          "⚠️ [WS] Range mismatch - IGNORING dashboard update:",
           data.range,
           "expected:",
           selectedRange
         );
+        
+        // Only update live visitor count (range-independent)
+        if (data.live_visitors != null) {
+          mvBus.emit("mv:live:count", { count: data.live_visitors });
+        }
+        
+        return; // ← STOP HERE! Don't emit to dashboard:frame
       }
 
       console.log("✨ [WS] Emitting dashboard frame update");
