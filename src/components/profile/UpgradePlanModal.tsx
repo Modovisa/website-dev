@@ -108,36 +108,36 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                   )}
                 </span>
               </div>
-            </CardHeader>
+            </div>
+          </CardHeader>
 
-            <CardContent className="text-center">
-              <ul className="mb-4 space-y-2 text-sm">
-                <li>✔ Forever data retention</li>
-                <li>✔ All features available</li>
-              </ul>
+          <CardContent className="text-center">
+            <ul className="mb-4 space-y-2 text-sm">
+              <li>✔ Forever data retention</li>
+              <li>✔ All features available</li>
+            </ul>
 
-              <Button
-                size="lg"
-                className="w-full"
-                disabled={!matchedTier}
-                onClick={() => {
-                  if (!matchedTier) return;
-                  onUpgrade({ tierId: matchedTier.id, interval: isYearly ? "year" : "month" });
-                }}
-              >
-                Upgrade
-              </Button>
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={!matchedTier}
+              onClick={() => {
+                if (!matchedTier) return;
+                onUpgrade({ tierId: matchedTier.id, interval: isYearly ? "year" : "month" });
+              }}
+            >
+              Upgrade
+            </Button>
 
-              {/* Current plan amount, for parity with Bootstrap modal footer */}
-              <div className="mt-5 text-center text-sm">
-                <p className="mb-1 text-muted-foreground">Your current plan:</p>
-                <div className="text-primary text-3xl font-bold">
-                  ${currentPlanAmount}
-                  <span className="ml-1 text-base text-muted-foreground">/month</span>
-                </div>
+            {/* Current plan amount, for parity with Bootstrap modal footer */}
+            <div className="mt-5 text-center text-sm">
+              <p className="mb-1 text-muted-foreground">Your current plan:</p>
+              <div className="text-primary text-3xl font-bold">
+                ${currentPlanAmount}
+                <span className="ml-1 text-base text-muted-foreground">/month</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
         </Card>
       </div>
 
