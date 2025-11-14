@@ -1,10 +1,27 @@
-// src/hooks/useDashboardRealtime.ts
-import { useEffect, useState, useRef } from "react";
-import { mvBus } from "@/lib/mvBus";
-import type { RangeKey, DashboardPayload } from "@/types/dashboard";
-import * as DashboardService from "@/services/realtime-dashboard-service";
+// src/services/realtime-dashboard-service.ts
+// Consolidated dashboard service - Single source of truth for REST + WebSocket
 
-type GeoCityPoint = {
+import { mvBus } from "@/lib/mvBus";
+import { secureFetch } from "@/lib/auth";
+import type { RangeKey, DashboardPayload } from "@/types/dashboard";
+
+/* ---------- Types ---------- */
+export type TrackingWebsite = { 
+  id: number; 
+  website_name: string; 
+  domain: string; 
+};
+
+type TrackingWebsitesAPI = {
+  projects: Array<{ 
+    id: number; 
+    website_name?: string; 
+    name?: string; 
+    domain?: string; 
+  }>;
+};
+
+export type GeoCityPoint = {
   city: string;
   country: string;
   lat: number;
@@ -13,209 +30,434 @@ type GeoCityPoint = {
   debug_ids?: string[];
 };
 
-type State = {
-  data: DashboardPayload | null;
-  liveCities: GeoCityPoint[];
-  liveCount: number | null;
-  error: string | null;
-};
+/* ---------- Errors ---------- */
+export class HttpError extends Error {
+  status: number;
+  body?: string;
+  constructor(status: number, message: string, body?: string) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
 
-export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
-  const [state, setState] = useState<State>({
-    data: null,
-    liveCities: [],
-    liveCount: null,
-    error: null,
+export class UnauthorizedError extends HttpError {
+  constructor(body?: string) {
+    super(401, "unauthorized", body);
+  }
+}
+
+/* ---------- Constants ---------- */
+const API = "https://api.modovisa.com";
+
+/* ---------- State (Singleton Pattern) ---------- */
+let selectedRange: RangeKey = "24h";
+let currentSiteId: number | null = null;
+let ws: WebSocket | null = null;
+let pingTimer: number | null = null;
+let reconnectTimer: number | null = null;
+let visHandler: any = null;
+let initialized = false; // Prevent double initialization
+
+// WS Ticket management
+let ticketLock = false;
+let lastTicketAt = 0;
+const TICKET_THROTTLE_MS = 1500;
+
+/* ---------- Utilities ---------- */
+function safeJSON<T = any>(x: string): T | null {
+  try {
+    return JSON.parse(x) as T;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCities(payload: any): GeoCityPoint[] {
+  const arr = Array.isArray(payload) ? payload : [];
+  return arr
+    .map((v: any) => {
+      const lat = Number(v.lat ?? 0);
+      const lng = Number(v.lng ?? 0);
+      const count = Number(v.count ?? 0);
+      return {
+        city: String(v.city || "Unknown"),
+        country: String(v.country || "Unknown"),
+        lat: Number.isFinite(lat) ? lat : 0,
+        lng: Number.isFinite(lng) ? lng : 0,
+        count: Number.isFinite(count) ? count : 0,
+        debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
+      };
+    })
+    .filter((p) => p.lat !== 0 || p.lng !== 0);
+}
+
+/* ---------- REST API ---------- */
+
+export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
+  console.log("📡 [REST] Fetching tracking websites");
+  const res = await secureFetch(`${API}/api/tracking-websites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
   });
-  const [analyticsVersion, setAnalyticsVersion] = useState(0);
+
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "");
+    console.error("❌ [REST] Failed to fetch websites:", {
+      status: res.status,
+      body: errorBody,
+    });
+    throw new HttpError(res.status, "failed_tracking_websites", errorBody);
+  }
+
+  const j = (await res.json()) as TrackingWebsitesAPI;
+  return (j.projects || []).map((p) => ({
+    id: Number(p.id),
+    website_name: String(p.website_name || p.name || `Site ${p.id}`),
+    domain: String(p.domain || ""),
+  }));
+}
+
+export async function getDashboardSnapshot(args: {
+  siteId: number;
+  range: RangeKey;
+  tzOffset?: number;
+}): Promise<DashboardPayload> {
+  const tz = Number.isFinite(args.tzOffset)
+    ? String(args.tzOffset)
+    : String(new Date().getTimezoneOffset());
+  const url =
+    `${API}/api/user-dashboard-analytics` +
+    `?range=${encodeURIComponent(args.range)}` +
+    `&tz_offset=${encodeURIComponent(tz)}` +
+    `&site_id=${encodeURIComponent(args.siteId)}`;
+
+  console.log("📡 [REST] Fetching dashboard snapshot:", {
+    siteId: args.siteId,
+    range: args.range,
+  });
+
+  const res = await secureFetch(url, { method: "GET" });
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "");
+    console.error("❌ [REST] Snapshot failed:", {
+      status: res.status,
+      body: errorBody,
+      url: url,
+    });
+    throw new HttpError(res.status, "failed_dashboard_snapshot", errorBody);
+  }
+
+  const data = await res.json();
   
-  // Track first mount to prevent duplicate fetches
-  const isFirstMount = useRef(true);
-  const initialRange = useRef(range);
-  const initialSite = useRef(siteId);
+  // Ensure range matches what we requested
+  data.range = args.range;
+  
+  console.log("✅ [REST] Snapshot received, emitting to mvBus");
+  return data as DashboardPayload;
+}
 
-  // Initialize service once on mount
-  useEffect(() => {
-    console.log("🎬 [Hook] Initializing dashboard service");
-    DashboardService.initialize(range).catch((e) => {
-      console.error("❌ [Hook] Initialization failed:", e);
+/* ---------- WebSocket Ticket ---------- */
+
+async function getWSTicket(): Promise<string> {
+  const now = Date.now();
+  if (ticketLock || now - lastTicketAt < TICKET_THROTTLE_MS) {
+    await new Promise((r) => setTimeout(r, TICKET_THROTTLE_MS));
+  }
+  ticketLock = true;
+  lastTicketAt = Date.now();
+  try {
+    const res = await secureFetch(`${API}/api/ws-ticket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site_id: currentSiteId }),
+    });
+    if (res.status === 401) {
+      (window as any).logoutAndRedirect?.("401");
+      throw new Error("unauthorized");
+    }
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      console.error("❌ [WS] Ticket request failed:", {
+        status: res.status,
+        body: errorBody,
+      });
+      throw new Error(`ticket_failed_${res.status}`);
+    }
+    const { ticket } = await res.json();
+    return ticket;
+  } finally {
+    ticketLock = false;
+  }
+}
+
+/* ---------- WebSocket Connection ---------- */
+
+function scheduleReconnect(ms: number = 4000) {
+  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+  const jitter = 500 + Math.floor(Math.random() * 500);
+  reconnectTimer = window.setTimeout(
+    () => connectWS(true),
+    ms + jitter
+  ) as unknown as number;
+}
+
+async function connectWS(forceNewTicket = false) {
+  if (!currentSiteId) {
+    console.warn("⚠️ [WS] Cannot connect - no siteId");
+    return;
+  }
+
+  // Close any prior connection
+  try {
+    ws?.close();
+  } catch {}
+  ws = null;
+  if (pingTimer) {
+    window.clearInterval(pingTimer);
+    pingTimer = null;
+  }
+
+  let ticket: string;
+  try {
+    ticket = await getWSTicket();
+  } catch (e: any) {
+    console.error("❌ [WS] Failed to get ticket:", e.message);
+    mvBus.emit("mv:error", { message: e?.message || "ticket_failed" });
+    scheduleReconnect();
+    return;
+  }
+
+  const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(
+    ticket
+  )}`;
+  const socket = new WebSocket(url);
+  ws = socket;
+
+  socket.onopen = () => {
+    console.log("✅ [WS] Connected successfully", {
+      siteId: currentSiteId,
+      range: selectedRange,
     });
 
-    // Cleanup on unmount
-    return () => {
-      console.log("🎬 [Hook] Cleaning up dashboard service");
-      DashboardService.cleanup();
-    };
-  }, []); // Empty deps - run once only!
+    // CRITICAL: Just ping - NO subscription messages (matches bootstrap)
+    pingTimer = window.setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({ type: "ping" }));
+        } catch {}
+      }
+    }, 25000) as unknown as number;
+  };
 
-  // Update range when it changes (skip first mount)
-  useEffect(() => {
-    if (isFirstMount.current && range === initialRange.current) {
-      // Skip - already handled by initialize
+  socket.onmessage = (ev) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    const msg = safeJSON<any>(ev.data);
+    if (!msg) {
+      console.warn("⚠️ [WS] Received invalid JSON:", ev.data);
       return;
     }
-    
-    console.log("🎯 [Hook] Range changed to:", range);
-    DashboardService.setRange(range);
-    DashboardService.fetchSnapshot().catch(() => {});
-  }, [range]);
 
-  // Update site when it changes (skip first mount)
-  useEffect(() => {
-    if (isFirstMount.current && siteId === initialSite.current) {
-      // Skip - already handled by initialize
-      isFirstMount.current = false; // Mark as no longer first mount
+    // Debug ALL non-ping messages
+    if (msg.type !== "ping" && msg.type !== "pong") {
+      console.log("📥 [WS] Received message type:", msg.type);
+    }
+
+    const msgSite = String(msg?.site_id ?? "");
+    if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
+      console.log(
+        "⏭️ [WS] Skipping message for different site:",
+        msgSite,
+        "current:",
+        currentSiteId
+      );
       return;
     }
-    
-    if (siteId) {
-      console.log("🌐 [Hook] Site changed to:", siteId);
-      DashboardService.setSite(siteId).catch(() => {});
+
+    // Dashboard analytics stream
+    if (msg.type === "dashboard_analytics") {
+      const data = msg.payload;
+      if (!data) return;
+
+      // 🔥 CRITICAL: Like bootstrap, we DON'T override the range!
+      // If backend sends wrong range, the hook will REJECT the chart data
+      // and only update the live count (just like bootstrap does)
+      
+      console.log("📊 [WS] Dashboard analytics received:", {
+        backendRange: data.range,
+        clientRange: selectedRange,
+        dataPoints: data.time_grouped_visits?.length || 0,
+        willMatch: data.range === selectedRange
+      });
+      
+      mvBus.emit("mv:dashboard:frame", data);
     }
-  }, [siteId]);
 
-  // Subscribe to mvBus events
-  useEffect(() => {
-    console.log("📡 [Hook] Subscribing to mvBus events for range:", range);
+    // Grouped live visitor locations (for world map)
+    if (msg.type === "live_visitor_location_grouped") {
+      console.log("🌍 [WS] Received live_visitor_location_grouped message!");
+      const points = normalizeCities(msg.payload || []);
+      const total = points.reduce((s, p) => s + (p.count || 0), 0);
+      console.log("🌍 [WS] Emitting live cities update:", {
+        total,
+        pointsCount: points.length,
+        points: points.slice(0, 3), // Log first 3 for debugging
+      });
+      mvBus.emit("mv:live:cities", { points, total });
 
-    const offSnapshot = mvBus.on<DashboardPayload>(
-      "mv:dashboard:snapshot",
-      (payload) => {
-        console.log("📊 [Hook] Received snapshot event, updating state");
-        if (payload.time_grouped_visits) {
-          console.log("📊 [Hook] Snapshot data points:", payload.time_grouped_visits.length, "range:", payload.range);
-        }
-        setState((s) => ({ ...s, data: payload, error: null }));
-        setAnalyticsVersion((v) => v + 1);
+      // Also update live count from city data
+      if (total > 0) {
+        mvBus.emit("mv:live:count", { count: total });
       }
-    );
+    }
 
-    const offFrame = mvBus.on<DashboardPayload>(
-      "mv:dashboard:frame",
-      (incoming) => {
-        console.log("📊 [Hook] Received frame event for range:", range);
-        
-        // Log what we received
-        if (incoming.time_grouped_visits) {
-          console.log("📊 [Hook] WebSocket data points:", incoming.time_grouped_visits.length, "backend range:", incoming.range);
-        }
-        
-        // CRITICAL: Check if backend range matches our selected range
-        // This is what bootstrap does - reject chart data if range doesn't match
-        if (incoming.range && incoming.range !== range) {
-          console.warn(
-            `⚠️ [Hook] Range mismatch! Backend sent "${incoming.range}" but we want "${range}"`,
-            `Backend sent wrong time period data. Only updating live visitor count (like bootstrap).`
-          );
-          
-          // CRITICAL: Like bootstrap, ONLY update live_visitors when range doesn't match
-          // Don't update charts, lists, or other metrics - they're all for the wrong time period!
-          setState((s) => ({
-            ...s,
-            data: {
-              ...s.data!,
-              live_visitors: incoming.live_visitors ?? s.data?.live_visitors,
-            } as DashboardPayload,
-          }));
-          
-          console.log("📊 [Hook] Updated live_visitors only, rejected all other data");
-          // Don't increment version - chart shouldn't re-render
-          return; // Skip full merge
-        }
-        
-        console.log(`✅ [Hook] Range matches - accepting all data for range "${range}"`);
-        
-        
-        setState((s) => {
-          const merged: DashboardPayload = {
-            ...(s.data || {}),
-            ...incoming,
-            // Preserve arrays that might not be in every frame
-            time_grouped_visits:
-              incoming.time_grouped_visits ?? s.data?.time_grouped_visits,
-            unique_vs_returning:
-              incoming.unique_vs_returning ?? s.data?.unique_vs_returning,
-            funnel: incoming.funnel ?? s.data?.funnel,
-            referrers: incoming.referrers ?? s.data?.referrers,
-            browsers: incoming.browsers ?? s.data?.browsers,
-            devices: incoming.devices ?? s.data?.devices,
-            os: incoming.os ?? s.data?.os,
-            countries: incoming.countries ?? s.data?.countries,
-            events_timeline: incoming.events_timeline ?? s.data?.events_timeline,
-            utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
-            utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
-            calendar_density:
-              incoming.calendar_density ?? s.data?.calendar_density,
-            top_pages: incoming.top_pages ?? s.data?.top_pages,
-            page_flow: incoming.page_flow ?? s.data?.page_flow,
-          } as DashboardPayload;
-          
-          if (merged.time_grouped_visits) {
-            console.log("📊 [Hook] After merge, data points:", merged.time_grouped_visits.length, "range:", merged.range);
-          }
-          
-          return { ...s, data: merged, error: null };
-        });
-        setAnalyticsVersion((v) => v + 1);
-      }
-    );
+    // Live visitor count update
+    if (msg.type === "live_visitor_update") {
+      const c = Number(msg?.payload?.count ?? 0) || 0;
+      console.log("👥 [WS] Emitting live count update:", c);
+      mvBus.emit("mv:live:count", { count: c });
+    }
 
-    const offCities = mvBus.on<{ points: GeoCityPoint[]; total: number }>(
-      "mv:live:cities",
-      ({ points, total }) => {
-        console.log("🌍 [Hook] Received live cities event:", {
-          total,
-          pointsCount: points.length,
-        });
-        setState((s) => ({ ...s, liveCities: points, liveCount: total }));
-      }
-    );
+    // New event (for debugging)
+    if (msg.type === "new_event") {
+      console.log("📝 [WS] New event received (not processed)");
+    }
+  };
 
-    const offCount = mvBus.on<{ count: number }>("mv:live:count", ({ count }) => {
-      console.log("👥 [Hook] Received live count event:", count);
-      setState((s) => ({ ...s, liveCount: count }));
+  socket.onerror = (err) => {
+    console.error("❌ [WS] WebSocket error:", err);
+    scheduleReconnect();
+  };
+
+  socket.onclose = (ev) => {
+    console.warn("🔌 [WS] WebSocket closed:", {
+      code: ev.code,
+      reason: ev.reason,
     });
+    scheduleReconnect();
+  };
 
-    const offErr = mvBus.on<{ message: string }>("mv:error", ({ message }) => {
-      console.error("❌ [Hook] Received error event:", message);
-      setState((s) => ({ ...s, error: message || "error" }));
+  // Focus → reconnect with fresh ticket
+  if (visHandler) document.removeEventListener("visibilitychange", visHandler);
+  visHandler = () => {
+    if (document.visibilityState === "visible") {
+      console.log("👁️ [WS] Tab visible - reconnecting");
+      try {
+        socket.close();
+      } catch {}
+      if (pingTimer) {
+        window.clearInterval(pingTimer);
+        pingTimer = null;
+      }
+      connectWS(true);
+    } else {
+      console.log("👁️ [WS] Tab hidden - closing connection");
+      try {
+        socket.close();
+      } catch {}
+      if (pingTimer) {
+        window.clearInterval(pingTimer);
+        pingTimer = null;
+      }
+    }
+  };
+  document.addEventListener("visibilitychange", visHandler);
+}
+
+/* ---------- Public API ---------- */
+
+export function setRange(range: RangeKey) {
+  console.log("🎯 [Service] Setting range:", range);
+  selectedRange = range;
+}
+
+export async function setSite(siteId: number) {
+  console.log("🌐 [Service] Setting site:", siteId);
+  currentSiteId = siteId;
+  try {
+    localStorage.setItem("current_website_id", String(siteId));
+    mvBus.emit("mv:site:changed", { siteId });
+
+    // Fetch new snapshot and reconnect WebSocket
+    const data = await getDashboardSnapshot({
+      siteId: currentSiteId,
+      range: selectedRange,
     });
+    mvBus.emit("mv:dashboard:snapshot", data);
+    await connectWS(true);
+  } catch (e: any) {
+    console.error("❌ [Service] Failed to set site:", e);
+    mvBus.emit("mv:error", { message: e?.message || "site_change_failed" });
+  }
+}
 
-    return () => {
-      console.log("📡 [Hook] Unsubscribing from mvBus events");
-      offSnapshot();
-      offFrame();
-      offCities();
-      offCount();
-      offErr();
-    };
-  }, [range]); // CRITICAL: Add range as dependency to fix closure bug!
+export async function fetchSnapshot() {
+  if (!currentSiteId) {
+    console.warn("⚠️ [Service] Cannot fetch snapshot - no siteId");
+    return;
+  }
+  try {
+    const data = await getDashboardSnapshot({
+      siteId: currentSiteId,
+      range: selectedRange,
+    });
+    mvBus.emit("mv:dashboard:snapshot", data);
+  } catch (e: any) {
+    console.error("❌ [Service] Failed to fetch snapshot:", e);
+    mvBus.emit("mv:error", { message: e?.message || "snapshot_failed" });
+  }
+}
 
-  const refreshSnapshot = () => {
-    console.log("🔄 [Hook] Manually refreshing snapshot");
-    DashboardService.fetchSnapshot().catch(() => {});
-  };
+export async function reconnectWebSocket() {
+  console.log("🔄 [Service] Manually reconnecting WebSocket");
+  await connectWS(true);
+}
 
-  const reconnectWS = () => {
-    console.log("🔄 [Hook] Manually reconnecting WebSocket");
-    DashboardService.reconnectWebSocket().catch(() => {});
-  };
+export async function initialize(initialRange: RangeKey = "24h") {
+  if (initialized) {
+    console.warn("⚠️ [Service] Already initialized - skipping");
+    return;
+  }
 
-  const restart = () => {
-    console.log("🔄 [Hook] Restarting service");
-    DashboardService.fetchSnapshot().catch(() => {});
-    DashboardService.reconnectWebSocket().catch(() => {});
-  };
+  console.log("🚀 [Service] Initializing realtime dashboard service");
+  initialized = true;
+  selectedRange = initialRange;
 
-  return {
-    data: state.data,
-    liveCities: state.liveCities,
-    liveCount: state.liveCount,
-    error: state.error,
-    isLoading: !state.data,
-    analyticsVersion,
-    refreshSnapshot,
-    reconnectWS,
-    restart,
-  };
+  // Load site from localStorage
+  const saved = localStorage.getItem("current_website_id");
+  if (saved) {
+    currentSiteId = Number(saved);
+    console.log("📍 [Service] Loaded site from localStorage:", currentSiteId);
+  }
+
+  // If we have a site, fetch initial data and connect WebSocket
+  if (currentSiteId) {
+    try {
+      const data = await getDashboardSnapshot({
+        siteId: currentSiteId,
+        range: selectedRange,
+      });
+      mvBus.emit("mv:dashboard:snapshot", data);
+      await connectWS(true);
+    } catch (e: any) {
+      console.error("❌ [Service] Initialization failed:", e);
+    }
+  } else {
+    console.warn("⚠️ [Service] No site ID found - waiting for site selection");
+  }
+}
+
+/* ---------- Cleanup ---------- */
+
+export function cleanup() {
+  console.log("🧹 [Service] Cleaning up");
+  try {
+    ws?.close();
+  } catch {}
+  if (pingTimer) window.clearInterval(pingTimer);
+  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+  if (visHandler) document.removeEventListener("visibilitychange", visHandler);
+  initialized = false;
 }
