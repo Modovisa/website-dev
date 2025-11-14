@@ -57,9 +57,11 @@ let ws: WebSocket | null = null;
 let pingTimer: number | null = null;
 let reconnectTimer: number | null = null;
 let visHandler: any = null;
-let initialized = false; // Prevent double initialization
+let onlineHandler: any = null;
+let offlineHandler: any = null;
+let initialized = false;
 
-// WS Ticket management
+// WS ticket management
 let ticketLock = false;
 let lastTicketAt = 0;
 const TICKET_THROTTLE_MS = 1500;
@@ -68,12 +70,11 @@ const TICKET_THROTTLE_MS = 1500;
 let refreshTimer: number | null = null;
 const REFRESH_DEBOUNCE_MS = 2000;
 
-function scheduleSnapshotRefresh(reason: string) {
+function scheduleSnapshotRefresh(_reason: string) {
   if (!currentSiteId) return;
   if (refreshTimer) window.clearTimeout(refreshTimer);
   refreshTimer = window.setTimeout(async () => {
     try {
-      // Pull a fresh, full snapshot for the *selected* range
       const snap = await getDashboardSnapshot({
         siteId: currentSiteId!,
         range: selectedRange,
@@ -83,6 +84,54 @@ function scheduleSnapshotRefresh(reason: string) {
       console.error("❌ [Service] Snapshot refresh failed:", e);
     }
   }, REFRESH_DEBOUNCE_MS) as unknown as number;
+}
+
+/* ---------- OPTIONAL: REST geo fallback (disabled by default) ---------- */
+// Flip to true to enable a periodic REST fetch for city clusters (when WS is thin/idle).
+const GEO_FALLBACK_ENABLED = false;
+let geoFallbackTimer: number | null = null;
+const GEO_FALLBACK_MS = 20000;
+
+async function fetchLiveCitiesREST(siteId: number, range: RangeKey) {
+  try {
+    // If you already expose a REST endpoint for grouped cities, wire it here.
+    // Example (adjust to your real route/params if different):
+    const url =
+      `${API}/api/live-visitor-location-grouped` +
+      `?site_id=${encodeURIComponent(siteId)}` +
+      `&range=${encodeURIComponent(range)}`;
+
+    const res = await secureFetch(url, { method: "GET" });
+    if (res.status === 401) throw new UnauthorizedError();
+    if (!res.ok) {
+      console.warn("⚠️ [REST-geo] non-OK:", res.status);
+      return;
+    }
+    const payload = await res.json();
+    const points = normalizeCities(payload || []);
+    const total = points.reduce((s, p) => s + (p.count || 0), 0);
+    mvBus.emit("mv:live:cities", { points, total });
+    if (typeof total === "number" && total >= 0) {
+      mvBus.emit("mv:live:count", { count: total });
+    }
+  } catch (err) {
+    console.warn("⚠️ [REST-geo] failed:", err);
+  }
+}
+
+function startGeoFallback() {
+  if (!GEO_FALLBACK_ENABLED) return;
+  if (geoFallbackTimer) window.clearInterval(geoFallbackTimer);
+  geoFallbackTimer = window.setInterval(() => {
+    if (currentSiteId) fetchLiveCitiesREST(currentSiteId, selectedRange);
+  }, GEO_FALLBACK_MS) as unknown as number;
+}
+
+function stopGeoFallback() {
+  if (geoFallbackTimer) {
+    window.clearInterval(geoFallbackTimer);
+    geoFallbackTimer = null;
+  }
 }
 
 /* ---------- Utilities ---------- */
@@ -145,9 +194,10 @@ export async function getDashboardSnapshot(args: {
   range: RangeKey;
   tzOffset?: number;
 }): Promise<DashboardPayload> {
-  const tz = Number.isFinite(args.tzOffset)
+  const tz = Number.isFinite(args.tzOffset as number)
     ? String(args.tzOffset)
     : String(new Date().getTimezoneOffset());
+
   const url =
     `${API}/api/user-dashboard-analytics` +
     `?range=${encodeURIComponent(args.range)}` +
@@ -166,15 +216,13 @@ export async function getDashboardSnapshot(args: {
     console.error("❌ [REST] Snapshot failed:", {
       status: res.status,
       body: errorBody,
-      url: url,
+      url,
     });
     throw new HttpError(res.status, "failed_dashboard_snapshot", errorBody);
   }
 
   const data = await res.json();
-
-  // Ensure range matches what we requested (this is REST; it should respect the chosen range)
-  (data as any).range = args.range;
+  (data as any).range = args.range; // keep client-selected range authoritative for UI
 
   console.log("✅ [REST] Snapshot received, emitting to mvBus");
   return data as DashboardPayload;
@@ -253,10 +301,7 @@ async function connectWS(_forceNewTicket = false) {
   ws = socket;
 
   socket.onopen = () => {
-    console.log("✅ [WS] Connected successfully", {
-      siteId: currentSiteId,
-      range: selectedRange,
-    });
+    console.log("✅ [WS] Connected", { siteId: currentSiteId, range: selectedRange });
 
     // CRITICAL: Just ping - NO subscription messages (parity with bootstrap)
     pingTimer = window.setInterval(() => {
@@ -266,6 +311,9 @@ async function connectWS(_forceNewTicket = false) {
         } catch {}
       }
     }, 25000) as unknown as number;
+
+    // (Re)start optional geo fallback while connected
+    startGeoFallback();
   };
 
   socket.onmessage = (ev) => {
@@ -276,38 +324,26 @@ async function connectWS(_forceNewTicket = false) {
       return;
     }
 
-    // Debug ALL non-ping messages
     if (msg.type !== "ping" && msg.type !== "pong") {
-      console.log("📥 [WS] Received message type:", msg.type);
+      console.log("📥 [WS] Message:", msg.type);
     }
 
     const msgSite = String(msg?.site_id ?? "");
     if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
-      console.log("⏭️ [WS] Skipping message for different site:", msgSite, "current:", currentSiteId);
+      console.log("⏭️ [WS] Skipping other site:", msgSite, "current:", currentSiteId);
       return;
     }
 
     // 📊 Dashboard analytics stream
     if (msg.type === "dashboard_analytics") {
       const data = msg.payload || {};
-
-      // DO NOT override range on WS frames; let the hook enforce range guard (bootstrap parity)
       const hasSeries =
         Array.isArray(data.time_grouped_visits) ||
         Array.isArray(data.events_timeline) ||
         Array.isArray(data.unique_vs_returning);
 
-      console.log("📊 [WS] Dashboard analytics received:", {
-        backendRange: data.range,
-        clientRange: selectedRange,
-        dataPoints: data.time_grouped_visits?.length || 0,
-        willMatch: data.range === selectedRange,
-      });
-
-      // Fan-out a lightweight frame; hook decides acceptance and merges immutably
       mvBus.emit("mv:dashboard:frame", data);
 
-      // If the frame is "thin" (no array data), queue a REST refresh for the selected range
       if (!hasSeries) scheduleSnapshotRefresh("thin_dashboard_frame");
     }
 
@@ -315,15 +351,11 @@ async function connectWS(_forceNewTicket = false) {
     if (msg.type === "live_visitor_location_grouped") {
       const points = normalizeCities(msg.payload || []);
       const total = points.reduce((s, p) => s + (p.count || 0), 0);
-      console.log("🌍 [WS] Emitting live cities update:", {
-        total,
-        pointsCount: points.length,
-        sample: points.slice(0, 3),
-      });
       mvBus.emit("mv:live:cities", { points, total });
 
-      // Also update live count from city clusters
-      if (total >= 0) mvBus.emit("mv:live:count", { count: total });
+      if (typeof total === "number" && total >= 0) {
+        mvBus.emit("mv:live:count", { count: total });
+      }
     }
 
     // 👥 Live visitor count update
@@ -344,7 +376,8 @@ async function connectWS(_forceNewTicket = false) {
   };
 
   socket.onclose = (ev) => {
-    console.warn("🔌 [WS] WebSocket closed:", { code: ev.code, reason: ev.reason });
+    console.warn("🔌 [WS] Closed:", { code: ev.code, reason: ev.reason });
+    stopGeoFallback();
     scheduleReconnect();
   };
 
@@ -373,6 +406,22 @@ async function connectWS(_forceNewTicket = false) {
     }
   };
   document.addEventListener("visibilitychange", visHandler);
+
+  // Online/offline awareness
+  if (onlineHandler) window.removeEventListener("online", onlineHandler);
+  if (offlineHandler) window.removeEventListener("offline", offlineHandler);
+  onlineHandler = () => {
+    console.log("🌐 [WS] Browser online - reconnect");
+    scheduleReconnect(500);
+  };
+  offlineHandler = () => {
+    console.log("🌐 [WS] Browser offline - closing WS");
+    try {
+      socket.close();
+    } catch {}
+  };
+  window.addEventListener("online", onlineHandler);
+  window.addEventListener("offline", offlineHandler);
 }
 
 /* ---------- Public API ---------- */
@@ -434,14 +483,12 @@ export async function initialize(initialRange: RangeKey = "24h") {
   initialized = true;
   selectedRange = initialRange;
 
-  // Load site from localStorage
   const saved = localStorage.getItem("current_website_id");
   if (saved) {
     currentSiteId = Number(saved);
     console.log("📍 [Service] Loaded site from localStorage:", currentSiteId);
   }
 
-  // If we have a site, fetch initial data and connect WebSocket
   if (currentSiteId) {
     try {
       const data = await getDashboardSnapshot({
@@ -468,6 +515,9 @@ export function cleanup() {
   if (pingTimer) window.clearInterval(pingTimer);
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   if (visHandler) document.removeEventListener("visibilitychange", visHandler);
+  if (onlineHandler) window.removeEventListener("online", onlineHandler);
+  if (offlineHandler) window.removeEventListener("offline", offlineHandler);
   if (refreshTimer) window.clearTimeout(refreshTimer);
+  stopGeoFallback();
   initialized = false;
 }

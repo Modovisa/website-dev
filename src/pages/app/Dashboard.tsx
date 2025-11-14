@@ -30,6 +30,7 @@ import {
   setRange as rtSetRange,
   fetchSnapshot as rtFetchSnapshot,
   reconnectWebSocket as rtReconnect,
+  cleanup as rtCleanup,
 } from "@/services/realtime-dashboard-service";
 
 import { nf } from "@/lib/format";
@@ -59,14 +60,19 @@ export default function Dashboard() {
   }));
 
   // ---------- CRITICAL BOOTSTRAP ----------
-  // Start the consolidated realtime service once for this page
+  // Start the consolidated realtime service (guarded by auth)
   useEffect(() => {
+    if (!isAuthenticated) return;
     rtInit(range);
     rtSetRange(range);
-  }, []); // eslint-disable-line
+    return () => {
+      rtCleanup();
+    };
+  }, [isAuthenticated]); // eslint-disable-line
 
   // After websites load, pick a site (saved or first) and point the service at it
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!websites || websites.length === 0) return;
 
     const saved = Number(localStorage.getItem("current_website_id") || 0);
@@ -79,20 +85,22 @@ export default function Dashboard() {
     }
 
     rtSetSite(chosen); // triggers REST snapshot + WS connect
-  }, [websites]); // eslint-disable-line
+  }, [websites, isAuthenticated]); // eslint-disable-line
 
   // When the user changes the site from the dropdown
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!siteId) return;
     rtSetSite(siteId); // REST snapshot + WS reconnect
-  }, [siteId]);
+  }, [siteId, isAuthenticated]);
 
   // When the user changes the date range
   useEffect(() => {
+    if (!isAuthenticated) return;
     rtSetRange(range);
     rtFetchSnapshot(); // fresh arrays for the chosen range
     rtReconnect();     // optional: re-handshake stream
-  }, [range]);
+  }, [range, isAuthenticated]);
 
   // Hook that listens to mvBus updates produced by the service
   const {
