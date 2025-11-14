@@ -1,8 +1,8 @@
 // src/services/dashboard.store.ts
-// REST seed + WebSocket realtime for the dashboard (bootstrap-aligned).
+// REST seed (first load only) + 100% WebSocket realtime thereafter.
 // - Ticket-only WS (no hello/subscribe/set_range).
-// - Frame delta logs (views/visitors) for visibility.
-// - Optional lightweight snapshot poll every 45s to avoid stalls.
+// - Clear TGV delta logs tagged by source (WS vs REST).
+// - No periodic REST polling (fully stream-driven after seed).
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -36,7 +36,7 @@ export type TrackingWebsite = { id: number; website_name: string; domain: string
 /* ---------------- Consts ---------------- */
 const API = "https://api.modovisa.com";
 const BACKOFF_MAX = 60_000;
-const SNAPSHOT_POLL_MS = 45_000; // small safety net; comment out to disable
+const SNAPSHOT_POLL_MS = 0; // disabled – stream only after first REST seed
 const TICKET_THROTTLE_MS = 1500;
 
 /* ---------------- Internal state ---------------- */
@@ -62,6 +62,7 @@ const W: any = typeof window !== "undefined" ? window : {};
 const cacheKey = (sid: number, r: RangeKey) => `mv:snapshot:${sid}:${r}`;
 const safeJSON = <T = any,>(x: string): T | null => { try { return JSON.parse(x) as T; } catch { return null; } };
 
+/** Normalize live-city payloads from WS */
 function normalizeCities(payload: any): GeoCityPoint[] {
   const arr = Array.isArray(payload) ? payload : [];
   return arr.map((v: any) => ({
@@ -76,10 +77,30 @@ function normalizeCities(payload: any): GeoCityPoint[] {
 
 const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
 
-// 🔍 sum helper (as requested)
+/** Sum helper */
 const sumBy = (arr: any[], k: string) =>
   Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
+/** 🔎 TGV delta helper (requested): tags source and detects window shift */
+function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
+  const P = Array.isArray(prev) ? prev : [];
+  const N = Array.isArray(next) ? next : [];
+  if (!N.length) return;
+  const pv = P.reduce((s,x)=>s+(+x?.views||0),0);
+  const nv = N.reduce((s,x)=>s+(+x?.views||0),0);
+  const pu = P.reduce((s,x)=>s+(+x?.visitors||0),0);
+  const nu = N.reduce((s,x)=>s+(+x?.visitors||0),0);
+
+  // window shift if last label same but first label changed
+  const shifted = !!(P.length && N.length && (P[P.length-1]?.label === N[N.length-1]?.label) && (P[0]?.label !== N[0]?.label));
+  if (pv !== nv || pu !== nu) {
+    console.log(`📈 [${source} TGV Δ] views: ${pv} → ${nv}, visitors: ${pu} → ${nu}, buckets: ${N.length}${shifted ? " (window shift)" : ""}`);
+  } else {
+    console.log(`⏸ [${source} TGV] no change (views=${nv}, visitors=${nu})${shifted ? " (window shift)" : ""}`);
+  }
+}
+
+/** Signature to detect series changes & trigger chart re-mount when needed */
 function signature(d: DashboardPayload | null, r: RangeKey): string {
   if (!d) return "";
   const tgv = cap((d as any).time_grouped_visits);
@@ -161,7 +182,7 @@ function debugDelta(prev: DashboardPayload | null, next: DashboardPayload | null
   }
 }
 
-/* ---------------- REST ---------------- */
+/* ---------------- REST (seed only) ---------------- */
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   const res = await secureFetch(`${API}/api/tracking-websites`, {
     method: "POST",
@@ -190,9 +211,13 @@ export async function fetchSnapshot() {
     }
     const data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
-    saveSnapshot(state.siteId, state.range, data);
 
+    // 🔎 Delta log (REST)
+    logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
+
+    saveSnapshot(state.siteId, state.range, data);
     const sig = signature(data, state.range);
+
     set({
       data,
       isLoading: false,
@@ -208,7 +233,7 @@ export async function fetchSnapshot() {
   }
 }
 
-/* ---------------- WS (bootstrap-aligned) ---------------- */
+/* ---------------- WS (stream) ---------------- */
 let ws: WebSocket | null = null;
 let wsConnecting = false;
 let pingTimer: number | null = null;
@@ -291,11 +316,13 @@ export async function connectWS(forceNew = false) {
         }
       }, 25_000) as unknown as number;
 
-      // request a fresh snapshot to sync series right away
+      // seed once with REST to align series, then stream-only
       void fetchSnapshot();
 
-      // small poll safety net so KPIs/series don’t stall if stream is quiet
-      pollTimer = window.setInterval(() => { void fetchSnapshot(); }, SNAPSHOT_POLL_MS) as unknown as number;
+      // NO periodic poll (SNAPSHOT_POLL_MS == 0)
+      if (SNAPSHOT_POLL_MS > 0) {
+        pollTimer = window.setInterval(() => { void fetchSnapshot(); }, SNAPSHOT_POLL_MS) as unknown as number;
+      }
     };
 
     socket.onmessage = (ev) => {
@@ -313,26 +340,14 @@ export async function connectWS(forceNew = false) {
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
-          // Existing optional debug (guarded by __mvDashDbg)
+          // optional verbose delta (guarded)
           debugDelta(state.data, next);
 
-          // ✅ Clear delta log (always prints) — inserted right after computing `next`
-          {
-            const prevTGV = Array.isArray(state.data?.time_grouped_visits) ? (state.data as any).time_grouped_visits : [];
-            const nextTGV = Array.isArray((frame as any)?.time_grouped_visits) ? (frame as any).time_grouped_visits : [];
-
-            if (nextTGV.length) {
-              const pv = sumBy(prevTGV, "views");
-              const nv = sumBy(nextTGV, "views");
-              const pu = sumBy(prevTGV, "visitors");
-              const nu = sumBy(nextTGV, "visitors");
-              if (pv !== nv || pu !== nu) {
-                console.log(`📈 [TGV Δ] views: ${pv} → ${nv}, visitors: ${pu} → ${nu}, buckets: ${nextTGV.length}`);
-              } else {
-                console.log(`⏸ [TGV] no change (views=${nv}, visitors=${nu})`);
-              }
-            }
-          }
+          // 🔎 Delta log (WS) – after computing `next`
+          logTgvDelta("WS",
+            state.data?.time_grouped_visits as any[],
+            (next as any)?.time_grouped_visits as any[]
+          );
 
           // recompute live count if not provided explicitly
           let liveCount = state.liveCount;
@@ -403,6 +418,7 @@ export function init(initialRange: RangeKey = "24h") {
   if (state.siteId) {
     emitCached(state.siteId, state.range);
     void connectWS(true);
+    // first load REST seed
     void fetchSnapshot();
   }
 }
@@ -414,6 +430,7 @@ export function setSite(siteId: number) {
 
   emitCached(siteId, state.range);
   void connectWS(true);
+  // seed for new site
   void fetchSnapshot();
 }
 
@@ -423,8 +440,9 @@ export function setRange(range: RangeKey) {
 
   if (state.siteId) {
     emitCached(state.siteId, range);
+    // seed for new range
     void fetchSnapshot();
-    // no range message — ticket scopes the site, not range
+    // WS ticket is site-scoped; no need to force new socket
     void connectWS(false);
   }
 }
