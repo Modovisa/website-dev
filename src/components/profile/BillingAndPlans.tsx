@@ -60,7 +60,7 @@ export default function BillingAndPlans() {
 
           {info && (
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* Left block */}
+              {/* Left */}
               <div>
                 <div className="mb-4">
                   <h6 className="mb-1">
@@ -75,7 +75,6 @@ export default function BillingAndPlans() {
                       <>Your Current Plan is {info.plan_name}</>
                     )}
                   </h6>
-                  <p className="text-muted-foreground" />
                 </div>
 
                 <div className="mb-4">
@@ -127,7 +126,7 @@ export default function BillingAndPlans() {
                 )}
               </div>
 
-              {/* Right block */}
+              {/* Right */}
               <div>
                 {!isFreePlan && (
                   <>
@@ -219,10 +218,8 @@ export default function BillingAndPlans() {
         </CardContent>
       </Card>
 
-      {/* Invoices */}
       <InvoicesTable rows={invoices} />
 
-      {/* Upgrade modal */}
       <UpgradePlanModal
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}
@@ -231,21 +228,22 @@ export default function BillingAndPlans() {
         onUpgrade={async ({ tierId, interval }) => {
           try {
             const result = await startEmbeddedCheckout(tierId, interval, () => {
-              // close only when embed actually mounted
               setShowUpgrade(false);
             });
 
             if (result === "server_applied") {
               setShowUpgrade(false);
               setShowApplied(true);
-            } else if (result === "require_update") {
-              // user must re-auth / update card
+              return;
+            }
+            if (result === "require_update") {
               setShowUpgrade(false);
               setShowUpdateCard(true);
+              return;
             }
+            // "mounted" → Stripe modal is shown; nothing else to do.
           } catch (err: any) {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            // Bootstrap parity: if Stripe/API indicates reauth/update is needed, open update-card modal
             const msg = String(err?.message || err || "");
             if (
               msg.toLowerCase().includes("re-authenticate") ||
@@ -260,7 +258,6 @@ export default function BillingAndPlans() {
         }}
       />
 
-      {/* Embedded Stripe lives outside upgrade modal */}
       <div
         id="react-billing-embedded-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
@@ -271,7 +268,6 @@ export default function BillingAndPlans() {
         </div>
       </div>
 
-      {/* ✅ Simple “applied” confirmation dialog */}
       {showApplied && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40">
           <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-xl">
@@ -287,7 +283,6 @@ export default function BillingAndPlans() {
         </div>
       )}
 
-      {/* 🔁 Update-card embedded modal */}
       <UpdateCardModal
         open={showUpdateCard}
         onClose={() => setShowUpdateCard(false)}
