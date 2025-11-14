@@ -1,3 +1,4 @@
+// src/pages/app/Dashboard.tsx
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -6,7 +7,6 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock } from "lucide-react";
-import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import type { RangeKey } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -22,14 +22,15 @@ import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
 
-import { getTrackingWebsites } from "@/services/realtime-dashboard-service";
 import {
-  initialize as rtInit,
-  setSite as rtSetSite,
-  setRange as rtSetRange,
-  fetchSnapshot as rtFetchSnapshot,
-  reconnectWebSocket as rtReconnect,
-} from "@/services/realtime-dashboard-service";
+  useDashboard,
+  init as dsInit,
+  setSite as dsSetSite,
+  setRange as dsSetRange,
+  fetchSnapshot as dsFetchSnapshot,
+  connectWS as dsReconnect,
+  getTrackingWebsites,
+} from "@/services/dashboard.store";
 
 import { nf } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -57,12 +58,11 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // Boot service once
+  // Boot the store once with the initial range
   useEffect(() => {
-    rtInit(range);
-    rtSetRange(range);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    dsInit(range);
+    dsSetRange(range); // make sure store starts in sync with UI
+  }, []); // eslint-disable-line
 
   // After websites load, select site and seed/reconnect
   useEffect(() => {
@@ -74,24 +74,23 @@ export default function Dashboard() {
       setSiteId(chosen);
       localStorage.setItem("current_website_id", String(chosen));
     }
-    rtSetSite(chosen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [websites]);
+    dsSetSite(chosen);
+  }, [websites]); // eslint-disable-line
 
   // When the user changes site
   useEffect(() => {
     if (!siteId) return;
-    rtSetSite(siteId);
+    dsSetSite(siteId);
   }, [siteId]);
 
   // When the user changes range
   useEffect(() => {
-    rtSetRange(range);
-    rtFetchSnapshot(); // one seed for the new range
-    rtReconnect();     // resume WS
+    dsSetRange(range);
+    dsFetchSnapshot(); // one seed for the new range
+    dsReconnect();     // ensure live stream is active
   }, [range]);
 
-  // Subscribe to realtime
+  // Subscribe to store
   const {
     data,
     liveCount,
@@ -99,11 +98,8 @@ export default function Dashboard() {
     isLoading,
     error,
     analyticsVersion,
-    frameKey,           // ← WS-driven bump for chart remounts
-    refreshSnapshot,
-    reconnectWS,
-    restart,
-  } = useDashboardRealtime(siteId ?? null, range);
+    frameKey,
+  } = useDashboard();
 
   // First paint gating
   const [firstPaintDone, setFirstPaintDone] = useState(false);
@@ -166,7 +162,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                refreshSnapshot();
+                dsFetchSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
             >
@@ -183,7 +179,7 @@ export default function Dashboard() {
 
             <Select value={range} onValueChange={(v: RangeKey) => {
               setRange(v);
-              refreshSnapshot();
+              dsFetchSnapshot();
             }}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
@@ -199,7 +195,7 @@ export default function Dashboard() {
 
             <Button
               variant="outline"
-              onClick={() => { refreshSnapshot(); reconnectWS(); }}
+              onClick={() => { dsFetchSnapshot(); dsReconnect(); }}
               disabled={!siteId}
               className="gap-2"
               title="Refresh snapshot and retry live stream"
@@ -218,10 +214,7 @@ export default function Dashboard() {
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => restart()} disabled={!siteId}>Try again</Button>
-                {error === "unauthorized" && (
-                  <Button size="sm" onClick={() => (window as any).logoutAndRedirect?.("401")}>Sign in again</Button>
-                )}
+                <Button variant="secondary" size="sm" onClick={() => { dsReconnect(); dsFetchSnapshot(); }} disabled={!siteId}>Try again</Button>
               </div>
             </div>
           </div>
@@ -296,11 +289,11 @@ export default function Dashboard() {
                     loading={false}
                     hasData={!!data.time_grouped_visits?.length}
                     version={analyticsVersion}
-                    frameKey={frameKey}                 // ← WS frame key
+                    frameKey={frameKey}                 // ← re-animate on WS frames
                   />
                 </div>
                 <EventVolume
-                  key={`evt-${frameKey}`}               // ← remount on WS frame
+                  key={`evt-${frameKey}`}               // ← remount on every WS frame
                   data={data.events_timeline ?? []}
                   loading={false}
                   hasData={!!data.events_timeline?.length}
