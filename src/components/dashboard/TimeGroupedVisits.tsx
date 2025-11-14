@@ -1,5 +1,5 @@
 // src/components/dashboard/TimeGroupedVisits.tsx
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Bar } from "react-chartjs-2";
 import { chartTheme, ChartCard, useBaseOptions } from "./ChartKit";
 import type { RangeKey, TimeBucket } from "@/types/dashboard";
@@ -15,6 +15,15 @@ type Props = {
   frameKey?: number;
 };
 
+function niceStep(maxValue: number) {
+  // “nice” ticks (1/2/5 × 10^k) so small bumps actually show
+  const approx = Math.max(1, Math.ceil((maxValue || 0) / 5));
+  const pow10 = Math.pow(10, Math.floor(Math.log10(approx)));
+  const cands = [1, 2, 5, 10].map(m => m * pow10);
+  for (const s of cands) if (approx <= s) return s;
+  return cands[cands.length - 1] || 1;
+}
+
 export default function TimeGroupedVisits({
   data,
   range,
@@ -29,10 +38,21 @@ export default function TimeGroupedVisits({
   const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data, version]);
   const views = useMemo(() => (data || []).map((d) => d.views || 0), [data, version]);
 
+  // Optional debug: set window.__mvDashDbg = true in console
+  useEffect(() => {
+    if ((window as any).__mvDashDbg) {
+      const vSum = visitors.reduce((s, n) => s + (n || 0), 0);
+      const wSum = views.reduce((s, n) => s + (n || 0), 0);
+      const last = labels[labels.length - 1];
+      // Emits whenever the chart remounts due to frameKey/version
+      console.debug(`📊 [TGV] range=${range} points=${labels.length} last="${last}" visitorsSum=${vSum} viewsSum=${wSum}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameKey, version]);
+
   const { ds, options } = useMemo(() => {
     const maxValue = Math.max(0, ...visitors, ...views);
-    const approxStep = Math.ceil(maxValue / 5 || 1);
-    const stepSize = Math.pow(10, Math.floor(Math.log10(approxStep)));
+    const stepSize = niceStep(maxValue);
 
     const totalBars = labels.length;
     const barPct =
@@ -50,6 +70,7 @@ export default function TimeGroupedVisits({
         stack: "stack1",
         barPercentage: barPct,
         categoryPercentage: 0.9,
+        parsing: false as const,
       },
       {
         datasetIdKey: "views",
@@ -60,21 +81,22 @@ export default function TimeGroupedVisits({
         stack: "stack1",
         barPercentage: barPct,
         categoryPercentage: 0.9,
+        parsing: false as const,
       },
     ];
 
     const options = {
       ...base,
-      animation: { duration: 600 }, // plays on remount
+      animation: { duration: 600 },
       scales: {
         x: {
-          ...(base as any).scales.x,
+          ...(base as any).scales?.x,
           ticks: { color: chartTheme.axis, maxRotation: 45, minRotation: 0 },
           grid: { display: true, color: "rgba(0,0,0,0.03)" },
           stacked: true,
         },
         y: {
-          ...(base as any).scales.y,
+          ...(base as any).scales?.y,
           beginAtZero: true,
           stacked: true,
           ticks: { color: chartTheme.axis, stepSize },
