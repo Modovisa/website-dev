@@ -1,8 +1,8 @@
 // src/services/dashboard.store.ts
-// REST seed (first load only) + 100% WebSocket realtime thereafter.
-// - Ticket-only WS (no hello/subscribe/set_range).
-// - Clear TGV delta logs tagged by source (WS vs REST).
-// - No periodic REST polling (fully stream-driven after seed).
+// First-load REST seed (once per siteId:range) + 100% WebSocket realtime thereafter.
+// - No periodic polling
+// - No REST on reconnects, range changes, or site changes (WS-only after seed)
+// - Delta logs show source (WS vs REST)
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -36,7 +36,6 @@ export type TrackingWebsite = { id: number; website_name: string; domain: string
 /* ---------------- Consts ---------------- */
 const API = "https://api.modovisa.com";
 const BACKOFF_MAX = 60_000;
-const SNAPSHOT_POLL_MS = 0; // disabled – stream only after first REST seed
 const TICKET_THROTTLE_MS = 1500;
 
 /* ---------------- Internal state ---------------- */
@@ -62,7 +61,6 @@ const W: any = typeof window !== "undefined" ? window : {};
 const cacheKey = (sid: number, r: RangeKey) => `mv:snapshot:${sid}:${r}`;
 const safeJSON = <T = any,>(x: string): T | null => { try { return JSON.parse(x) as T; } catch { return null; } };
 
-/** Normalize live-city payloads from WS */
 function normalizeCities(payload: any): GeoCityPoint[] {
   const arr = Array.isArray(payload) ? payload : [];
   return arr.map((v: any) => ({
@@ -76,12 +74,10 @@ function normalizeCities(payload: any): GeoCityPoint[] {
 }
 
 const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
-
-/** Sum helper */
 const sumBy = (arr: any[], k: string) =>
   Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
-/** 🔎 TGV delta helper (requested): tags source and detects window shift */
+/** Source-tagged delta log with window-shift detection */
 function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   const P = Array.isArray(prev) ? prev : [];
   const N = Array.isArray(next) ? next : [];
@@ -90,8 +86,6 @@ function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   const nv = N.reduce((s,x)=>s+(+x?.views||0),0);
   const pu = P.reduce((s,x)=>s+(+x?.visitors||0),0);
   const nu = N.reduce((s,x)=>s+(+x?.visitors||0),0);
-
-  // window shift if last label same but first label changed
   const shifted = !!(P.length && N.length && (P[P.length-1]?.label === N[N.length-1]?.label) && (P[0]?.label !== N[0]?.label));
   if (pv !== nv || pu !== nu) {
     console.log(`📈 [${source} TGV Δ] views: ${pv} → ${nv}, visitors: ${pu} → ${nu}, buckets: ${N.length}${shifted ? " (window shift)" : ""}`);
@@ -100,7 +94,6 @@ function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   }
 }
 
-/** Signature to detect series changes & trigger chart re-mount when needed */
 function signature(d: DashboardPayload | null, r: RangeKey): string {
   if (!d) return "";
   const tgv = cap((d as any).time_grouped_visits);
@@ -182,37 +175,31 @@ function debugDelta(prev: DashboardPayload | null, next: DashboardPayload | null
   }
 }
 
-/* ---------------- REST (seed only) ---------------- */
-export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
-  const res = await secureFetch(`${API}/api/tracking-websites`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) throw new Error(`tracking_websites_${res.status}:${await res.text().catch(()=> "")}`);
-  const j = (await res.json()) as { projects: Array<{ id: number; website_name?: string; name?: string; domain?: string }> };
-  return (j.projects || []).map((p) => ({
-    id: Number(p.id),
-    website_name: String(p.website_name || p.name || `Site ${p.id}`),
-    domain: String(p.domain || ""),
-  }));
-}
+/* ---------------- REST (seed once per siteId:range) ---------------- */
+const seeded = new Set<string>();
+let seedInFlight = false;
+const seedKey = () => (state.siteId ? `${state.siteId}:${state.range}` : "");
 
-export async function fetchSnapshot() {
+export async function fetchSnapshotSeedOnce() {
   if (!state.siteId) return;
+  const key = seedKey();
+  if (!key || seeded.has(key) || seedInFlight) return;
+
+  seedInFlight = true;
   const tz = String(new Date().getTimezoneOffset());
   const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(state.range)}&tz_offset=${encodeURIComponent(tz)}&site_id=${encodeURIComponent(state.siteId)}`;
 
   try {
     const res = await secureFetch(url, { method: "GET" });
     if (!res.ok) {
-      console.error("❌ [REST] Snapshot failed:", res.status, await res.text().catch(()=> ""));
+      console.error("❌ [REST] Seed snapshot failed:", res.status, await res.text().catch(()=> ""));
       set({ error: `snapshot_${res.status}`, isLoading: false });
       return;
     }
     const data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
 
-    // 🔎 Delta log (REST)
+    // Source-tagged delta log (REST)
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
     saveSnapshot(state.siteId, state.range, data);
@@ -226,10 +213,14 @@ export async function fetchSnapshot() {
       seriesSig: sig,
       error: null,
     });
-    if (W.__mvDashDbg) console.debug("✅ [REST] Snapshot received");
+
+    seeded.add(key);
+    if (W.__mvDashDbg) console.debug("✅ [REST] Seed snapshot completed once for", key);
   } catch (e: any) {
-    console.error("❌ [REST] Snapshot error:", e?.message || e);
+    console.error("❌ [REST] Seed snapshot error:", e?.message || e);
     set({ error: "snapshot_error", isLoading: false });
+  } finally {
+    seedInFlight = false;
   }
 }
 
@@ -238,7 +229,6 @@ let ws: WebSocket | null = null;
 let wsConnecting = false;
 let pingTimer: number | null = null;
 let reconnectTimer: number | null = null;
-let pollTimer: number | null = null;
 let backoffMs = 4000;
 
 W._wsTicketLock ??= false;
@@ -284,7 +274,6 @@ export async function connectWS(forceNew = false) {
 
   wsConnecting = true;
   if (pingTimer) { window.clearInterval(pingTimer); pingTimer = null; }
-  if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null; }
 
   try {
     try { ws?.close(); } catch {}
@@ -316,13 +305,8 @@ export async function connectWS(forceNew = false) {
         }
       }, 25_000) as unknown as number;
 
-      // seed once with REST to align series, then stream-only
-      void fetchSnapshot();
-
-      // NO periodic poll (SNAPSHOT_POLL_MS == 0)
-      if (SNAPSHOT_POLL_MS > 0) {
-        pollTimer = window.setInterval(() => { void fetchSnapshot(); }, SNAPSHOT_POLL_MS) as unknown as number;
-      }
+      // Seed exactly once per siteId:range, never again (no seeds on reconnects)
+      void fetchSnapshotSeedOnce();
     };
 
     socket.onmessage = (ev) => {
@@ -340,10 +324,10 @@ export async function connectWS(forceNew = false) {
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
-          // optional verbose delta (guarded)
+          // Optional verbose delta
           debugDelta(state.data, next);
 
-          // 🔎 Delta log (WS) – after computing `next`
+          // Source-tagged delta (WS)
           logTgvDelta("WS",
             state.data?.time_grouped_visits as any[],
             (next as any)?.time_grouped_visits as any[]
@@ -389,7 +373,6 @@ export async function connectWS(forceNew = false) {
     socket.onclose = (e) => {
       if (W.__mvDashDbg) console.warn("🔌 [WS] closed:", e.code, e.reason);
       if (pingTimer) { window.clearInterval(pingTimer); pingTimer = null; }
-      if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null; }
       scheduleReconnect(backoffMs);
       backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX);
     };
@@ -418,8 +401,7 @@ export function init(initialRange: RangeKey = "24h") {
   if (state.siteId) {
     emitCached(state.siteId, state.range);
     void connectWS(true);
-    // first load REST seed
-    void fetchSnapshot();
+    // ❌ no direct REST here — WS onopen will seed once if not already seeded
   }
 }
 
@@ -430,8 +412,7 @@ export function setSite(siteId: number) {
 
   emitCached(siteId, state.range);
   void connectWS(true);
-  // seed for new site
-  void fetchSnapshot();
+  // ❌ no REST seed here (WS onopen handles one-time seed)
 }
 
 export function setRange(range: RangeKey) {
@@ -440,9 +421,10 @@ export function setRange(range: RangeKey) {
 
   if (state.siteId) {
     emitCached(state.siteId, range);
-    // seed for new range
-    void fetchSnapshot();
-    // WS ticket is site-scoped; no need to force new socket
+    // Keep the same socket (ticket is site-scoped); WS onopen is not called.
+    // If you want a seed on new range, it will happen once when connectWS(true) is used.
+    // We’ll rely on stream frames for range updates; to force a seed for new range:
+    // void fetchSnapshotSeedOnce();  // <- keep commented to stay 100% stream after initial
     void connectWS(false);
   }
 }
@@ -451,7 +433,6 @@ export function cleanup() {
   try { ws?.close(); } catch {}
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   if (pingTimer) window.clearInterval(pingTimer);
-  if (pollTimer) window.clearInterval(pollTimer);
 }
 
 /* ---------------- React hook ---------------- */
@@ -462,3 +443,7 @@ export function useDashboard() {
     () => state
   );
 }
+
+/* ---------------- Expose for debugging ---------------- */
+// @ts-ignore
+if (typeof window !== "undefined") window.__mvDashSeeded = seeded;
