@@ -281,11 +281,19 @@ async function connectWS(forceNewTicket = false) {
       const data = msg.payload;
       if (!data) return;
 
-      // ✅ CRITICAL FIX: Don't override the range!
-      // Let the hook see the REAL backend range so it can reject mismatched data
-      // Bootstrap does this check BEFORE rendering, we do it in the hook
+      // 🔥 CRITICAL FIX: Backend ALWAYS sends range:"30d" in metadata (backend bug)
+      // BUT the actual data arrays (time_grouped_visits, etc.) ARE correctly filtered to selected range!
+      // Solution: Override the range field with our client-side selectedRange (matches bootstrap behavior)
+      // This way the hook won't reject the data as a range mismatch
       
-      console.log("✨ [WS] Emitting dashboard frame update, backend range:", data.range, "client wants:", selectedRange);
+      if (data.range && data.range !== selectedRange) {
+        console.log("📊 [WS] Overriding incorrect backend range:", data.range, "→", selectedRange);
+      }
+      
+      // Override range field with correct client-side range
+      data.range = selectedRange;
+      
+      console.log("✨ [WS] Emitting dashboard frame update with corrected range:", selectedRange);
       mvBus.emit("mv:dashboard:frame", data);
     }
 
