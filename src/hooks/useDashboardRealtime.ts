@@ -41,19 +41,9 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
       console.error("❌ [Hook] Initialization failed:", e);
     });
 
-    // CRITICAL: Set up periodic refresh to get updated chart data
-    // Backend doesn't send updated chart arrays via WebSocket (only metrics)
-    // So we need to periodically fetch via REST to update charts
-    console.log("⏰ [Hook] Setting up periodic refresh every 30 seconds");
-    const refreshInterval = setInterval(() => {
-      console.log("🔄 [Hook] Periodic refresh triggered");
-      DashboardService.fetchSnapshot().catch(() => {});
-    }, 30000); // 30 seconds
-
     // Cleanup on unmount
     return () => {
       console.log("🎬 [Hook] Cleaning up dashboard service");
-      clearInterval(refreshInterval);
       DashboardService.cleanup();
     };
   }, []); // Empty deps - run once only!
@@ -167,14 +157,10 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
           return { ...s, data: merged, error: null };
         });
         
-        // CRITICAL: Only increment version if we got actual chart data
-        // This prevents re-animating the chart when backend sends empty metric-only updates
-        if (incoming.time_grouped_visits && incoming.time_grouped_visits.length > 0) {
-          console.log("🔄 [Hook] Chart data present, incrementing version for re-render");
-          setAnalyticsVersion((v) => v + 1);
-        } else {
-          console.log("⏭️ [Hook] No chart data in update, skipping version increment");
-        }
+        // CRITICAL: Always increment version when we accept dashboard_analytics
+        // Bootstrap always re-renders, even with empty data, because the message signals something happened
+        console.log("🔄 [Hook] Incrementing version to trigger re-render (like bootstrap)");
+        setAnalyticsVersion((v) => v + 1);
       }
     );
 
