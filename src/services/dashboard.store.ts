@@ -1,9 +1,11 @@
 // src/services/dashboard.store.ts
 // Single source of truth for dashboard state: REST seed + WS frames.
-// Exposes a tiny hook (useDashboard) and a few actions (init/setSite/setRange/fetchSnapshot/connectWS/cleanup).
+// React charts keep the selected range (e.g., "24h"). If a WS frame arrives
+// for a different range (e.g., "30d"), we IGNORE its time-series and only
+// update KPIs — exactly like your Bootstrap page.
 
 import { useSyncExternalStore } from "react";
-import { secureFetch } from "@/lib/auth"; // your existing auth-aware fetch
+import { secureFetch } from "@/lib/auth";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 /* ---------------- Types ---------------- */
@@ -23,10 +25,10 @@ export type StoreState = {
   isLoading: boolean;
   error: string | null;
 
-  // 🔢 Bumps on *every* analytics change (snapshot or frame)
+  // bumps on any analytics change (snapshot or frame)
   analyticsVersion: number;
 
-  // 🔑 Bumps on each WS frame (and first snapshot) → charts remount/animate
+  // bumps on each WS frame that affects visible series (and first snapshot)
   frameKey: number;
 
   siteId: number | null;
@@ -37,7 +39,7 @@ export type TrackingWebsite = { id: number; website_name: string; domain: string
 
 /* ---------------- Consts ---------------- */
 const API = "https://api.modovisa.com";
-const SNAPSHOT_TTL_MS = 30 * 60 * 1000; // 30m cache
+const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
 const BACKOFF_MAX = 60_000;
 const TICKET_THROTTLE_MS = 5_000;
 
@@ -80,7 +82,12 @@ function hasSeries(d: any) {
   return (
     (Array.isArray(d?.time_grouped_visits) && d.time_grouped_visits.length > 0) ||
     (Array.isArray(d?.events_timeline) && d.events_timeline.length > 0) ||
-    (Array.isArray(d?.unique_vs_returning) && d.unique_vs_returning.length > 0)
+    (Array.isArray(d?.unique_vs_returning) && d.unique_vs_returning.length > 0) ||
+    (Array.isArray(d?.calendar_density) && d.calendar_density.length > 0) ||
+    (Array.isArray(d?.impressions_timeline) && d.impressions_timeline.length > 0) ||
+    (Array.isArray(d?.clicks_timeline) && d.clicks_timeline.length > 0) ||
+    (Array.isArray(d?.search_visitors_timeline) && d.search_visitors_timeline.length > 0) ||
+    (Array.isArray(d?.conversions_timeline) && d.conversions_timeline.length > 0)
   );
 }
 
@@ -96,7 +103,7 @@ function emitCachedSnapshotIfAny(siteId: number, range: RangeKey) {
       data,
       isLoading: false,
       analyticsVersion: state.analyticsVersion + 1,
-      frameKey: state.frameKey + 1, // animate first paint
+      frameKey: state.frameKey + 1,
       error: null,
     });
     return true;
@@ -109,7 +116,64 @@ function saveSnapshotToCache(siteId: number, range: RangeKey, data: DashboardPay
   try { localStorage.setItem(cacheKey(siteId, range), JSON.stringify({ ts: Date.now(), data })); } catch {}
 }
 
-/* ---------------- Public: small REST helper kept here for convenience ---------------- */
+/* ---------- Range-mismatch guard (Bootstrap parity) ---------- */
+// Keys we will *never* take from a mismatched WS frame.
+const RANGE_SERIES_KEYS = new Set<string>([
+  "time_grouped_visits",
+  "events_timeline",
+  "unique_vs_returning",
+  "calendar_density",
+  "funnel",
+  "browsers",
+  "devices",
+  "os",
+  "referrers",
+  "utm_campaigns",
+  "utm_sources",
+  "countries",
+  "top_pages",
+  "page_flow",
+  "impressions_timeline",
+  "impressions_previous_timeline",
+  "clicks_timeline",
+  "clicks_previous_timeline",
+  "search_visitors_timeline",
+  "search_visitors_previous_timeline",
+  "conversions_timeline",
+  "conversions_previous_timeline",
+  "unique_visitors_timeline",
+  "previous_unique_visitors_timeline",
+]);
+
+// KPI fields we *do* allow to update regardless of range (cards).
+const KPI_KEYS = new Set<string>([
+  "live_visitors",
+  "unique_visitors",
+  "bounce_rate",
+  "bounce_rate_delta",
+  "avg_duration",
+  "avg_duration_delta",
+  "multi_page_visits",
+  "multi_page_visits_delta",
+]);
+
+function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardPayload>): DashboardPayload {
+  const merged = { ...(base || {}), ...frame } as DashboardPayload;
+  (merged as any).range = state.range;
+  return merged;
+}
+
+function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPayload>): DashboardPayload {
+  const next = { ...(base || {}) } as any;
+  for (const k of Object.keys(frame || {})) {
+    if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
+  }
+  // keep current selected range & existing series unchanged
+  next.range = state.range;
+  return next as DashboardPayload;
+}
+
+/* ---------------- Public: small REST helper ---------------- */
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   const res = await secureFetch(`${API}/api/tracking-websites`, {
     method: "POST",
@@ -127,7 +191,7 @@ export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   }));
 }
 
-/* ---------------- REST: snapshot (seed only) ---------------- */
+/* ---------------- REST: snapshot (seed once) ---------------- */
 export async function fetchSnapshot() {
   if (!state.siteId) return;
   const tz = String(new Date().getTimezoneOffset());
@@ -151,7 +215,7 @@ export async function fetchSnapshot() {
       data,
       isLoading: false,
       analyticsVersion: state.analyticsVersion + 1,
-      frameKey: state.frameKey + 1, // animate the first paint
+      frameKey: state.frameKey + 1, // animate first paint
       error: null,
     });
   } catch (e: any) {
@@ -220,7 +284,6 @@ export async function connectWS(forceNew = false) {
     }
 
     backoffMs = 4000;
-
     const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
     const socket = new WebSocket(url);
     ws = socket;
@@ -233,7 +296,7 @@ export async function connectWS(forceNew = false) {
         }
       }, 25_000) as unknown as number;
 
-      // Optional hint; server may ignore
+      // optional hint
       try { socket.send(JSON.stringify({ type: "request_dashboard_snapshot" })); } catch {}
     };
 
@@ -242,17 +305,29 @@ export async function connectWS(forceNew = false) {
       const msg = safeJSON<any>(ev.data);
       if (!msg) return;
 
-      // Ignore frames for other sites (defensive)
+      // Ignore frames for other sites
       const msgSite = String(msg?.site_id ?? "");
       if (state.siteId && msgSite && msgSite !== String(state.siteId)) return;
 
       if (msg.type === "dashboard_analytics") {
         const frame = msg.payload || {};
+        const frameRange = (frame as any)?.range as RangeKey | undefined;
 
-        // Merge: prefer new fields, keep range stable.
-        const merged = { ...(state.data || {}), ...frame, range: state.range } as DashboardPayload;
+        if (frameRange && frameRange !== state.range) {
+          // 🔒 Range mismatch: update KPIs only, keep charts (24h, 7d, etc.) as-is
+          const next = mergeKPIsOnly(state.data, frame);
+          set({
+            data: next,
+            isLoading: false,
+            analyticsVersion: state.analyticsVersion + 1,
+            // ❌ do NOT bump frameKey; charts must NOT remount for mismatched frames
+            error: null,
+          });
+          return;
+        }
 
-        // If a frame has any time series (or the merge does), bump frameKey so charts re-animate.
+        // Same range: merge normally and (if series changed) bump frameKey so charts re-animate
+        const merged = mergeSameRange(state.data, frame);
         const bump = hasSeries(frame) || hasSeries(merged);
         set({
           data: merged,
@@ -273,9 +348,6 @@ export async function connectWS(forceNew = false) {
         const c = Number(msg?.payload?.count ?? 0) || 0;
         set({ liveCount: c });
       }
-
-      // We deliberately do NOT fetch snapshots on 'new_event'.
-      // WS frames should drive charts; snapshot is for initial seed only.
     };
 
     socket.onerror = (e) => console.error("❌ [WS] error:", e);
@@ -299,7 +371,6 @@ export function init(initialRange: RangeKey = "24h") {
         if (document.visibilityState === "visible") scheduleReconnect(800);
       });
       window.addEventListener("online", () => scheduleReconnect(500));
-      window.addEventListener("offline", () => {/* noop; visual indicator handled in UI if needed */});
     }
     bootstrapped = true;
   }
@@ -333,7 +404,7 @@ export function setRange(range: RangeKey) {
   if (state.siteId) {
     emitCachedSnapshotIfAny(state.siteId, range);
     void fetchSnapshot();   // one seed for the new range
-    void connectWS(false);  // keep WS; server frames are range-agnostic
+    void connectWS(false);  // WS stays open; server may stream any range
   }
 }
 
