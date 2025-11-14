@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBilling } from "@/hooks/useBilling";
 import UpgradePlanModal from "./UpgradePlanModal";
 import InvoicesTable from "./InvoicesTable";
+import UpdateCardModal from "./UpdateCardModal";
 
 export default function BillingAndPlans() {
   const {
@@ -15,13 +16,15 @@ export default function BillingAndPlans() {
     isFreePlan,
     isFreeForever,
     startEmbeddedCheckout,
+    startUpdateCardEmbedded,
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
   } = useBilling();
 
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [showApplied, setShowApplied] = useState(false); // ✅ NEW: applied confirmation
+  const [showApplied, setShowApplied] = useState(false);
+  const [showUpdateCard, setShowUpdateCard] = useState(false);
 
   const currentPlanAmount = useMemo(
     () => (isFreePlan ? 0 : info?.price || 0),
@@ -232,14 +235,27 @@ export default function BillingAndPlans() {
               setShowUpgrade(false);
             });
 
-            // 🔔 If server applied instantly (e.g., Monthly → Yearly with card on file)
             if (result === "server_applied") {
               setShowUpgrade(false);
-              setShowApplied(true); // show confirmation dialog
+              setShowApplied(true);
+            } else if (result === "require_update") {
+              // user must re-auth / update card
+              setShowUpgrade(false);
+              setShowUpdateCard(true);
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            // keep modal open so the user can retry
+            // Bootstrap parity: if Stripe/API indicates reauth/update is needed, open update-card modal
+            const msg = String(err?.message || err || "");
+            if (
+              msg.toLowerCase().includes("re-authenticate") ||
+              msg.toLowerCase().includes("reauthenticate") ||
+              msg.toLowerCase().includes("card declined") ||
+              msg.toLowerCase().includes("card expired")
+            ) {
+              setShowUpgrade(false);
+              setShowUpdateCard(true);
+            }
           }
         }}
       />
@@ -270,6 +286,13 @@ export default function BillingAndPlans() {
           </div>
         </div>
       )}
+
+      {/* 🔁 Update-card embedded modal */}
+      <UpdateCardModal
+        open={showUpdateCard}
+        onClose={() => setShowUpdateCard(false)}
+        start={startUpdateCardEmbedded}
+      />
     </div>
   );
 }
