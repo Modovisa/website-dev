@@ -9,11 +9,9 @@ type Props = {
   range: RangeKey;
   loading?: boolean;
   hasData?: boolean;
-
-  /** Optional: bumps when you want to recompute datasets/options without remounting */
+  /** Optional: recompute datasets/options without forcing remount */
   version?: number;
-
-  /** 🔑 CRITICAL: pass the WS-driven frameKey from useDashboardRealtime to re-animate on each live frame */
+  /** 🔑 Remount-on-frame for WS animation */
   frameKey?: number;
 };
 
@@ -25,10 +23,8 @@ export default function TimeGroupedVisits({
   version,
   frameKey,
 }: Props) {
-  // base chart options shared across charts
   const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
 
-  // map buckets → arrays
   const labels = useMemo(() => (data || []).map((d) => d.label), [data, version]);
   const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data, version]);
   const views = useMemo(() => (data || []).map((d) => d.views || 0), [data, version]);
@@ -38,7 +34,6 @@ export default function TimeGroupedVisits({
     const approxStep = Math.ceil(maxValue / 5 || 1);
     const stepSize = Math.pow(10, Math.floor(Math.log10(approxStep)));
 
-    // adjust bar width by bucket count (keeps dense ranges readable)
     const totalBars = labels.length;
     const barPct =
       totalBars > 30 ? 0.5 :
@@ -70,7 +65,7 @@ export default function TimeGroupedVisits({
 
     const options = {
       ...base,
-      animation: { duration: 600 }, // plays on mount (remount is driven by frameKey)
+      animation: { duration: 600 }, // plays on remount
       scales: {
         x: {
           ...(base as any).scales.x,
@@ -89,9 +84,7 @@ export default function TimeGroupedVisits({
       plugins: {
         ...base.plugins,
         legend: { position: "bottom" as const },
-        tooltip: {
-          callbacks: { label: (ctx: any) => `${ctx.dataset.label}: ${ctx.raw}` },
-        },
+        tooltip: { callbacks: { label: (ctx: any) => `${ctx.dataset.label}: ${ctx.raw}` } },
       },
       responsive: true,
       maintainAspectRatio: false,
@@ -116,7 +109,7 @@ export default function TimeGroupedVisits({
       hasData={hasData}
       height={360}
     >
-      {/* 🔑 This forces Chart.js to remount on each WS frame → fresh animation, Bootstrap-style */}
+      {/* Force re-mount per WS frame → fresh animation */}
       <Bar key={frameKey ?? version ?? 0} data={ds} options={options} />
     </ChartCard>
   );

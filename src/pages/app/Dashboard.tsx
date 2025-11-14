@@ -1,4 +1,3 @@
-// src/pages/app/Dashboard.tsx
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -62,7 +61,8 @@ export default function Dashboard() {
   useEffect(() => {
     rtInit(range);
     rtSetRange(range);
-  }, []); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // After websites load, select site and seed/reconnect
   useEffect(() => {
@@ -75,7 +75,8 @@ export default function Dashboard() {
       localStorage.setItem("current_website_id", String(chosen));
     }
     rtSetSite(chosen);
-  }, [websites]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [websites]);
 
   // When the user changes site
   useEffect(() => {
@@ -98,7 +99,7 @@ export default function Dashboard() {
     isLoading,
     error,
     analyticsVersion,
-    frameKey,           // ← NEW
+    frameKey,           // ← WS-driven bump for chart remounts
     refreshSnapshot,
     reconnectWS,
     restart,
@@ -295,11 +296,11 @@ export default function Dashboard() {
                     loading={false}
                     hasData={!!data.time_grouped_visits?.length}
                     version={analyticsVersion}
-                    frameKey={frameKey}                 {/* ← pass frameKey */}
+                    frameKey={frameKey}                 // ← WS frame key
                   />
                 </div>
                 <EventVolume
-                  key={`evt-${frameKey}`}               {/* ← remount on every WS frame */}
+                  key={`evt-${frameKey}`}               // ← remount on WS frame
                   data={data.events_timeline ?? []}
                   loading={false}
                   hasData={!!data.events_timeline?.length}
