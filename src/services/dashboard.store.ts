@@ -1,5 +1,10 @@
 // src/services/dashboard.store.ts
 // Single source of truth for dashboard state: REST seed + WS frames.
+// Changes:
+// - Hardened WS connect with single-flight ticketing + jittered backoff
+// - No duplicate reconnects on range/site changes
+// - Emits cached snapshot instantly
+// - Thicker ticket throttle to avoid 429 loops
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -33,10 +38,9 @@ export type TrackingWebsite = { id: number; website_name: string; domain: string
 /* ---------------- Consts ---------------- */
 const API = "https://api.modovisa.com";
 const BACKOFF_MAX = 60_000;
-// Push throttle a bit higher than your Bootstrap to dodge 429s under tab-jitter
-const TICKET_THROTTLE_MS = 8000;
+const TICKET_THROTTLE_MS = 10_000; // ↑ thicker than DO limit bursts
 
-/* ---------------- Internal mutable state ---------------- */
+/* ---------------- Internal state ---------------- */
 let state: StoreState = {
   data: null,
   liveCount: null,
@@ -60,23 +64,21 @@ const safeJSON = <T = any,>(x: string): T | null => { try { return JSON.parse(x)
 
 function normalizeCities(payload: any): GeoCityPoint[] {
   const arr = Array.isArray(payload) ? payload : [];
-  return arr
-    .map((v: any) => ({
-      city: String(v.city || "Unknown"),
-      country: String(v.country || "Unknown"),
-      lat: Number.isFinite(Number(v.lat)) ? Number(v.lat) : 0,
-      lng: Number.isFinite(Number(v.lng)) ? Number(v.lng) : 0,
-      count: Number.isFinite(Number(v.count)) ? Number(v.count) : 0,
-      debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
-    }))
-    .filter((p) => p.lat !== 0 || p.lng !== 0);
+  return arr.map((v: any) => ({
+    city: String(v.city || "Unknown"),
+    country: String(v.country || "Unknown"),
+    lat: Number(v.lat) || 0,
+    lng: Number(v.lng) || 0,
+    count: Number(v.count) || 0,
+    debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
+  })).filter((p) => p.lat !== 0 || p.lng !== 0);
 }
 
-// Build a compact fingerprint of all visible series that drive chart renders.
-// We keep it small but sensitive: last 24 buckets of the main timelines + totals.
+function cap(arr: any[] | undefined, n = 24) { return Array.isArray(arr) ? arr.slice(-n) : []; }
+function sum(a: any[], k: string) { return a.reduce((s, x) => s + (Number(x?.[k] ?? x?.value ?? x?.count) || 0), 0); }
+
 function seriesSignature(d: DashboardPayload | null, range: RangeKey): string {
   if (!d) return "";
-  const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
   const tgv = cap((d as any).time_grouped_visits);
   const evt = cap((d as any).events_timeline);
   const uv  = cap((d as any).unique_visitors_timeline);
@@ -84,9 +86,7 @@ function seriesSignature(d: DashboardPayload | null, range: RangeKey): string {
   const clk = cap((d as any).clicks_timeline);
   const src = cap((d as any).search_visitors_timeline);
   const cnv = cap((d as any).conversions_timeline);
-
-  const sum = (a: any[], k: string) => a.reduce((s, x) => s + (Number(x?.[k] ?? x?.value ?? x?.count) || 0), 0);
-  const sigObj = {
+  return JSON.stringify({
     r: range,
     tgvL: tgv.length, tgvV: sum(tgv, "visitors"), tgvW: sum(tgv, "views"),
     evtL: evt.length, evtC: sum(evt, "count"),
@@ -95,8 +95,7 @@ function seriesSignature(d: DashboardPayload | null, range: RangeKey): string {
     clkL: clk.length, clkC: sum(clk, "count"),
     srcL: src.length, srcC: sum(src, "count"),
     cnvL: cnv.length, cnvC: sum(cnv, "count"),
-  };
-  return JSON.stringify(sigObj);
+  });
 }
 
 function saveSnapshotToCache(siteId: number, range: RangeKey, data: DashboardPayload) {
@@ -121,48 +120,13 @@ function emitCachedSnapshotIfAny(siteId: number, range: RangeKey) {
       error: null,
     });
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
-/* ---------- Range-guard parity with Bootstrap ---------- */
-const RANGE_SERIES_KEYS = new Set<string>([
-  "time_grouped_visits",
-  "events_timeline",
-  "unique_vs_returning",
-  "calendar_density",
-  "funnel",
-  "browsers",
-  "devices",
-  "os",
-  "referrers",
-  "utm_campaigns",
-  "utm_sources",
-  "countries",
-  "top_pages",
-  "page_flow",
-  "impressions_timeline",
-  "impressions_previous_timeline",
-  "clicks_timeline",
-  "clicks_previous_timeline",
-  "search_visitors_timeline",
-  "search_visitors_previous_timeline",
-  "conversions_timeline",
-  "conversions_previous_timeline",
-  "unique_visitors_timeline",
-  "previous_unique_visitors_timeline",
-]);
-
+/* ---------- Merge policy (range-aware) ---------- */
 const KPI_KEYS = new Set<string>([
-  "live_visitors",
-  "unique_visitors",
-  "bounce_rate",
-  "bounce_rate_delta",
-  "avg_duration",
-  "avg_duration_delta",
-  "multi_page_visits",
-  "multi_page_visits_delta",
+  "live_visitors","unique_visitors","bounce_rate","bounce_rate_delta",
+  "avg_duration","avg_duration_delta","multi_page_visits","multi_page_visits_delta",
 ]);
 
 function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardPayload>): DashboardPayload {
@@ -170,12 +134,9 @@ function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardP
   (merged as any).range = state.range;
   return merged;
 }
-
 function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPayload>): DashboardPayload {
   const next = { ...(base || {}) } as any;
-  for (const k of Object.keys(frame || {})) {
-    if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
-  }
+  for (const k of Object.keys(frame || {})) if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
   next.range = state.range;
   return next as DashboardPayload;
 }
@@ -201,9 +162,7 @@ export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
 export async function fetchSnapshot() {
   if (!state.siteId) return;
   const tz = String(new Date().getTimezoneOffset());
-  const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(state.range)}&tz_offset=${encodeURIComponent(
-    tz
-  )}&site_id=${encodeURIComponent(state.siteId)}`;
+  const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(state.range)}&tz_offset=${encodeURIComponent(tz)}&site_id=${encodeURIComponent(state.siteId)}`;
 
   try {
     const res = await secureFetch(url, { method: "GET" });
@@ -269,29 +228,24 @@ async function getWSTicket(): Promise<string> {
 }
 
 function scheduleReconnect(ms: number) {
-  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+  if (reconnectTimer) return; // already scheduled
   const jitter = 250 + Math.floor(Math.random() * 500);
-  reconnectTimer = window.setTimeout(() => { void connectWS(true); }, ms + jitter) as unknown as number;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    void connectWS(true);
+  }, ms + jitter) as unknown as number;
 }
 
-// Compute & apply store updates in one place
-function applyAnalyticsFrame(frame: Partial<DashboardPayload>, fromWS = false) {
+function applyAnalyticsFrame(frame: Partial<DashboardPayload>) {
   const frameRange = (frame as any)?.range as RangeKey | undefined;
+  const nextData = (frameRange && frameRange !== state.range)
+    ? mergeKPIsOnly(state.data, frame)
+    : mergeSameRange(state.data, frame);
 
-  let nextData: DashboardPayload;
-  if (frameRange && frameRange !== state.range) {
-    // ✅ KPI-only merge on mismatch (Bootstrap parity)
-    nextData = mergeKPIsOnly(state.data, frame);
-  } else {
-    nextData = mergeSameRange(state.data, frame);
-  }
-
-  // live_grouped side-channel → update liveCount mirror
   let liveCount = state.liveCount;
   if (Array.isArray(state.liveCities) && state.liveCities.length) {
     liveCount = state.liveCities.reduce((s, p) => s + (p.count || 0), 0);
   } else if ((nextData as any).live_visitors != null) {
-    // fallback if backend sends live_visitors on analytics frame
     liveCount = Number((nextData as any).live_visitors) || liveCount || 0;
   }
 
@@ -311,18 +265,21 @@ function applyAnalyticsFrame(frame: Partial<DashboardPayload>, fromWS = false) {
 
 export async function connectWS(forceNew = false) {
   if (!state.siteId) return;
-  if (ws && ws.readyState === WebSocket.OPEN && !forceNew) return;
+  if (!forceNew && ws && ws.readyState === WebSocket.OPEN) return;
   if (wsConnecting) return;
-  wsConnecting = true;
+  if (reconnectTimer && !forceNew) return;
 
+  wsConnecting = true;
   if (pingTimer) { window.clearInterval(pingTimer); pingTimer = null; }
+
   try {
     try { ws?.close(); } catch {}
     ws = null;
 
     let ticket: string;
-    try { ticket = await getWSTicket(); }
-    catch (e: any) {
+    try {
+      ticket = await getWSTicket();
+    } catch (e: any) {
       console.warn("❌ [WS] ticket failed:", e?.message || e);
       backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX);
       scheduleReconnect(backoffMs);
@@ -336,6 +293,8 @@ export async function connectWS(forceNew = false) {
 
     socket.onopen = () => {
       console.log("✅ [WS] Connected", { siteId: state.siteId, range: state.range });
+      if (reconnectTimer) { window.clearTimeout(reconnectTimer); reconnectTimer = null; }
+
       pingTimer = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
           try { socket.send(JSON.stringify({ type: "ping" })); } catch {}
@@ -350,13 +309,11 @@ export async function connectWS(forceNew = false) {
       const msg = safeJSON<any>(ev.data);
       if (!msg) return;
 
-      // Site-guard
       const msgSite = String(msg?.site_id ?? "");
       if (state.siteId && msgSite && msgSite !== String(state.siteId)) return;
 
       if (msg.type === "dashboard_analytics") {
-        const frame = msg.payload || {};
-        applyAnalyticsFrame(frame, true);
+        applyAnalyticsFrame(msg.payload || {});
       }
 
       if (msg.type === "live_visitor_location_grouped") {
@@ -425,6 +382,7 @@ export function setRange(range: RangeKey) {
   if (state.siteId) {
     emitCachedSnapshotIfAny(state.siteId, range);
     void fetchSnapshot();
+    // NOTE: do not forceNew here; the next ping or server push is fine.
     void connectWS(false);
   }
 }

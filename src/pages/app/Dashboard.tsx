@@ -31,7 +31,6 @@ import {
   connectWS as dsReconnect,
   getTrackingWebsites,
 } from "@/services/dashboard.store";
-
 import { nf } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
@@ -46,10 +45,18 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
+  // Boot the store only after auth is ready
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    dsInit(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
     staleTime: 5 * 60 * 1000,
+    enabled: isAuthenticated, // don’t fire until auth is ready
   });
 
   const websites: Website[] = (websitesRaw || []).map((p: any) => ({
@@ -58,39 +65,35 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // Boot the store once with the initial range
+  // After websites load, select site and seed/reconnect once
   useEffect(() => {
-    dsInit(range);
-    dsSetRange(range);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // After websites load, select site and seed/reconnect
-  useEffect(() => {
+    if (!isAuthenticated) return;
     if (!websites || websites.length === 0) return;
+
     const saved = Number(localStorage.getItem("current_website_id") || 0);
     const savedExists = websites.some((w) => w.id === saved);
     const chosen = savedExists ? saved : websites[0].id;
+
     if (siteId !== chosen) {
       setSiteId(chosen);
       localStorage.setItem("current_website_id", String(chosen));
     }
     dsSetSite(chosen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [websites]);
+  }, [websites, isAuthenticated]);
 
   // When the user changes site
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!siteId) return;
     dsSetSite(siteId);
-  }, [siteId]);
+  }, [siteId, isAuthenticated]);
 
   // When the user changes range
   useEffect(() => {
-    dsSetRange(range);
-    dsFetchSnapshot(); // seed snapshot for the new range
-    dsReconnect();     // ensure live stream is active
-  }, [range]);
+    if (!isAuthenticated) return;
+    dsSetRange(range);        // store handles cache→fetch→(non-forced) WS connect
+  }, [range, isAuthenticated]);
 
   // Subscribe to store
   const {
@@ -104,7 +107,7 @@ export default function Dashboard() {
     seriesSig,
   } = useDashboard();
 
-  // First paint gating
+  // First paint gating (skeletons)
   const [firstPaintDone, setFirstPaintDone] = useState(false);
   useEffect(() => {
     if (data && !firstPaintDone) setFirstPaintDone(true);
@@ -126,8 +129,8 @@ export default function Dashboard() {
     }
   }, [range]);
 
-  const showKpiSkeleton = !firstPaintDone;
-  const showPageSkeleton = !firstPaintDone;
+  const showKpiSkeleton = !firstPaintDone || isLoading;
+  const showPageSkeleton = !firstPaintDone || isLoading;
 
   const topCards = [
     { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null as number | null },
@@ -137,18 +140,7 @@ export default function Dashboard() {
     { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? "--", icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
   ];
 
-  if (authLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <p className="text-lg text-muted-foreground">Verifying authentication...</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  // If not authenticated at all, don’t render sensitive UI
   if (!isAuthenticated) return null;
 
   return (
@@ -167,7 +159,6 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                dsFetchSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
             >
@@ -182,13 +173,7 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select
-              value={range}
-              onValueChange={(v: RangeKey) => {
-                setRange(v);
-                dsFetchSnapshot();
-              }}
-            >
+            <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -203,7 +188,7 @@ export default function Dashboard() {
 
             <Button
               variant="outline"
-              onClick={() => { dsFetchSnapshot(); dsReconnect(); }}
+              onClick={() => { dsFetchSnapshot(); dsReconnect(true); }}
               disabled={!siteId}
               className="gap-2"
               title="Refresh snapshot and retry live stream"
@@ -222,12 +207,7 @@ export default function Dashboard() {
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => { dsReconnect(); dsFetchSnapshot(); }}
-                  disabled={!siteId}
-                >
+                <Button variant="secondary" size="sm" onClick={() => { dsReconnect(true); dsFetchSnapshot(); }} disabled={!siteId}>
                   Try again
                 </Button>
               </div>
