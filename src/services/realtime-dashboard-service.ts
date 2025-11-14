@@ -6,18 +6,18 @@ import { secureFetch } from "@/lib/auth";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 /* ---------- Types ---------- */
-export type TrackingWebsite = { 
-  id: number; 
-  website_name: string; 
-  domain: string; 
+export type TrackingWebsite = {
+  id: number;
+  website_name: string;
+  domain: string;
 };
 
 type TrackingWebsitesAPI = {
-  projects: Array<{ 
-    id: number; 
-    website_name?: string; 
-    name?: string; 
-    domain?: string; 
+  projects: Array<{
+    id: number;
+    website_name?: string;
+    name?: string;
+    domain?: string;
   }>;
 };
 
@@ -63,6 +63,27 @@ let initialized = false; // Prevent double initialization
 let ticketLock = false;
 let lastTicketAt = 0;
 const TICKET_THROTTLE_MS = 1500;
+
+/* ---------- Debounced REST refresh (to make charts “feel” live) ---------- */
+let refreshTimer: number | null = null;
+const REFRESH_DEBOUNCE_MS = 2000;
+
+function scheduleSnapshotRefresh(reason: string) {
+  if (!currentSiteId) return;
+  if (refreshTimer) window.clearTimeout(refreshTimer);
+  refreshTimer = window.setTimeout(async () => {
+    try {
+      // Pull a fresh, full snapshot for the *selected* range
+      const snap = await getDashboardSnapshot({
+        siteId: currentSiteId!,
+        range: selectedRange,
+      });
+      mvBus.emit("mv:dashboard:snapshot", snap);
+    } catch (e) {
+      console.error("❌ [Service] Snapshot refresh failed:", e);
+    }
+  }, REFRESH_DEBOUNCE_MS) as unknown as number;
+}
 
 /* ---------- Utilities ---------- */
 function safeJSON<T = any>(x: string): T | null {
@@ -151,10 +172,10 @@ export async function getDashboardSnapshot(args: {
   }
 
   const data = await res.json();
-  
-  // Ensure range matches what we requested
-  data.range = args.range;
-  
+
+  // Ensure range matches what we requested (this is REST; it should respect the chosen range)
+  (data as any).range = args.range;
+
   console.log("✅ [REST] Snapshot received, emitting to mvBus");
   return data as DashboardPayload;
 }
@@ -198,13 +219,10 @@ async function getWSTicket(): Promise<string> {
 function scheduleReconnect(ms: number = 4000) {
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   const jitter = 500 + Math.floor(Math.random() * 500);
-  reconnectTimer = window.setTimeout(
-    () => connectWS(true),
-    ms + jitter
-  ) as unknown as number;
+  reconnectTimer = window.setTimeout(() => connectWS(true), ms + jitter) as unknown as number;
 }
 
-async function connectWS(forceNewTicket = false) {
+async function connectWS(_forceNewTicket = false) {
   if (!currentSiteId) {
     console.warn("⚠️ [WS] Cannot connect - no siteId");
     return;
@@ -224,15 +242,13 @@ async function connectWS(forceNewTicket = false) {
   try {
     ticket = await getWSTicket();
   } catch (e: any) {
-    console.error("❌ [WS] Failed to get ticket:", e.message);
+    console.error("❌ [WS] Failed to get ticket:", e?.message || e);
     mvBus.emit("mv:error", { message: e?.message || "ticket_failed" });
     scheduleReconnect();
     return;
   }
 
-  const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(
-    ticket
-  )}`;
+  const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
   const socket = new WebSocket(url);
   ws = socket;
 
@@ -242,7 +258,7 @@ async function connectWS(forceNewTicket = false) {
       range: selectedRange,
     });
 
-    // CRITICAL: Just ping - NO subscription messages (matches bootstrap)
+    // CRITICAL: Just ping - NO subscription messages (parity with bootstrap)
     pingTimer = window.setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
         try {
@@ -267,62 +283,58 @@ async function connectWS(forceNewTicket = false) {
 
     const msgSite = String(msg?.site_id ?? "");
     if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
-      console.log(
-        "⏭️ [WS] Skipping message for different site:",
-        msgSite,
-        "current:",
-        currentSiteId
-      );
+      console.log("⏭️ [WS] Skipping message for different site:", msgSite, "current:", currentSiteId);
       return;
     }
 
-    // Dashboard analytics stream
+    // 📊 Dashboard analytics stream
     if (msg.type === "dashboard_analytics") {
-      const data = msg.payload;
-      if (!data) return;
+      const data = msg.payload || {};
 
-      // 🔥 CRITICAL: Like bootstrap, we DON'T override the range!
-      // If backend sends wrong range, the hook will REJECT the chart data
-      // and only update the live count (just like bootstrap does)
-      
+      // DO NOT override range on WS frames; let the hook enforce range guard (bootstrap parity)
+      const hasSeries =
+        Array.isArray(data.time_grouped_visits) ||
+        Array.isArray(data.events_timeline) ||
+        Array.isArray(data.unique_vs_returning);
+
       console.log("📊 [WS] Dashboard analytics received:", {
         backendRange: data.range,
         clientRange: selectedRange,
         dataPoints: data.time_grouped_visits?.length || 0,
-        willMatch: data.range === selectedRange
+        willMatch: data.range === selectedRange,
       });
-      
+
+      // Fan-out a lightweight frame; hook decides acceptance and merges immutably
       mvBus.emit("mv:dashboard:frame", data);
+
+      // If the frame is "thin" (no array data), queue a REST refresh for the selected range
+      if (!hasSeries) scheduleSnapshotRefresh("thin_dashboard_frame");
     }
 
-    // Grouped live visitor locations (for world map)
+    // 🌍 Grouped live visitor locations (for world map)
     if (msg.type === "live_visitor_location_grouped") {
-      console.log("🌍 [WS] Received live_visitor_location_grouped message!");
       const points = normalizeCities(msg.payload || []);
       const total = points.reduce((s, p) => s + (p.count || 0), 0);
       console.log("🌍 [WS] Emitting live cities update:", {
         total,
         pointsCount: points.length,
-        points: points.slice(0, 3), // Log first 3 for debugging
+        sample: points.slice(0, 3),
       });
       mvBus.emit("mv:live:cities", { points, total });
 
-      // Also update live count from city data
-      if (total > 0) {
-        mvBus.emit("mv:live:count", { count: total });
-      }
+      // Also update live count from city clusters
+      if (total >= 0) mvBus.emit("mv:live:count", { count: total });
     }
 
-    // Live visitor count update
+    // 👥 Live visitor count update
     if (msg.type === "live_visitor_update") {
       const c = Number(msg?.payload?.count ?? 0) || 0;
-      console.log("👥 [WS] Emitting live count update:", c);
       mvBus.emit("mv:live:count", { count: c });
     }
 
-    // New event (for debugging)
+    // 📝 New event ping → schedule compact refresh (debounced)
     if (msg.type === "new_event") {
-      console.log("📝 [WS] New event received (not processed)");
+      scheduleSnapshotRefresh("new_event");
     }
   };
 
@@ -332,14 +344,11 @@ async function connectWS(forceNewTicket = false) {
   };
 
   socket.onclose = (ev) => {
-    console.warn("🔌 [WS] WebSocket closed:", {
-      code: ev.code,
-      reason: ev.reason,
-    });
+    console.warn("🔌 [WS] WebSocket closed:", { code: ev.code, reason: ev.reason });
     scheduleReconnect();
   };
 
-  // Focus → reconnect with fresh ticket
+  // Focus/visibility → reconnect with fresh ticket
   if (visHandler) document.removeEventListener("visibilitychange", visHandler);
   visHandler = () => {
     if (document.visibilityState === "visible") {
@@ -459,5 +468,6 @@ export function cleanup() {
   if (pingTimer) window.clearInterval(pingTimer);
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   if (visHandler) document.removeEventListener("visibilitychange", visHandler);
+  if (refreshTimer) window.clearTimeout(refreshTimer);
   initialized = false;
 }

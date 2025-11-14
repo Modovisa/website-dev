@@ -1,224 +1,253 @@
 // src/hooks/useDashboardRealtime.ts
-import { useEffect, useState, useRef } from "react";
+// Mirrors the Bootstrap dashboard WS behavior in React.
+// - Fetches short-lived WS ticket per site
+// - Connects to wss://api.modovisa.com/ws/visitor-tracking?ticket=...
+// - Handles: dashboard_analytics, live_visitor_location_grouped, live_visitor_update
+// - Ignores snapshots for a different range
+// - Emits events via mvBus so your existing chart/map code stays unchanged
+// - Reconnects with jitter, pings every 25s, throttles ticket requests
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { mvBus } from "@/lib/mvBus";
-import type { RangeKey, DashboardPayload } from "@/types/dashboard";
-import * as DashboardService from "@/services/realtime-dashboard-service";
+import { secureFetch } from "@/lib/auth";
 
-type GeoCityPoint = {
-  city: string;
-  country: string;
-  lat: number;
-  lng: number;
-  count: number;
-  debug_ids?: string[];
+type DashboardSnapshot = Record<string, any>;
+type LivePoint = { city?: string; country?: string; lat: number; lng: number; count: number; debug_ids?: string[] };
+
+type HookArgs = {
+  siteId: number | string | null;
+  range: "24h" | "7d" | "30d" | "90d" | "12mo";
+  /** Called once after the very first successful socket open (good time to refresh REST data with a skeleton) */
+  onInitialOpen?: () => void;
 };
 
-type State = {
-  data: DashboardPayload | null;
-  liveCities: GeoCityPoint[];
+type HookReturn = {
+  status: "idle" | "connecting" | "open" | "closed" | "error";
   liveCount: number | null;
-  error: string | null;
+  /** Manually force reconnect (rarely needed) */
+  reconnect: () => void;
 };
 
-export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
-  const [state, setState] = useState<State>({
-    data: null,
-    liveCities: [],
-    liveCount: null,
-    error: null,
-  });
-  const [analyticsVersion, setAnalyticsVersion] = useState(0);
-  
-  const isFirstMount = useRef(true);
-  const initialRange = useRef(range);
-  const initialSite = useRef(siteId);
+export function useDashboardRealtime({ siteId, range, onInitialOpen }: HookArgs): HookReturn {
+  const [status, setStatus] = useState<HookReturn["status"]>("idle");
+  const [liveCount, setLiveCount] = useState<number | null>(null);
 
+  const socketRef = useRef<WebSocket | null>(null);
+  const pingTimerRef = useRef<any>(null);
+  const hasFiredInitialOpenRef = useRef(false);
+
+  const activeSiteRef = useRef<string>("");
+  const desiredRangeRef = useRef(range);
+  const closingRef = useRef(false);
+
+  // ticket throttling
+  const ticketLockRef = useRef(false);
+  const lastTicketAtRef = useRef(0);
+  const throttleMs = 1500;
+  const retryTimerRef = useRef<any>(null);
+
+  // range changes should be visible inside handlers
   useEffect(() => {
-    console.log("🎬 [Hook] Initializing dashboard service");
-    DashboardService.initialize(range).catch((e) => {
-      console.error("❌ [Hook] Initialization failed:", e);
-    });
+    desiredRangeRef.current = range;
+  }, [range]);
 
-    return () => {
-      console.log("🎬 [Hook] Cleaning up dashboard service");
-      DashboardService.cleanup();
-    };
+  const clearPing = () => {
+    if (pingTimerRef.current) {
+      clearInterval(pingTimerRef.current);
+      pingTimerRef.current = null;
+    }
+  };
+
+  const closeSocket = useCallback(() => {
+    closingRef.current = true;
+    try {
+      socketRef.current?.close();
+    } catch {}
+    clearPing();
+    setStatus("closed");
+    closingRef.current = false;
   }, []);
 
-  useEffect(() => {
-    if (isFirstMount.current && range === initialRange.current) return;
-    
-    console.log("🎯 [Hook] Range changed to:", range);
-    DashboardService.setRange(range);
-    DashboardService.fetchSnapshot().catch(() => {});
-  }, [range]);
+  const connect = useCallback(async () => {
+    if (!siteId) return;
 
-  useEffect(() => {
-    if (isFirstMount.current && siteId === initialSite.current) {
-      isFirstMount.current = false;
+    // make “only one connect per siteId” decision
+    const normalized = String(siteId);
+    activeSiteRef.current = normalized;
+
+    setStatus("connecting");
+
+    // throttle ticket calls
+    const now = Date.now();
+    const since = now - (lastTicketAtRef.current || 0);
+    if (ticketLockRef.current || since < throttleMs) {
+      const wait = ticketLockRef.current ? 400 : Math.max(200, throttleMs - since);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(connect, wait);
       return;
     }
-    
-    if (siteId) {
-      console.log("🌐 [Hook] Site changed to:", siteId);
-      DashboardService.setSite(siteId).catch(() => {});
-    }
-  }, [siteId]);
+    ticketLockRef.current = true;
+    lastTicketAtRef.current = now;
 
-  useEffect(() => {
-    console.log("📡 [Hook] Subscribing to mvBus events for range:", range);
-
-    const offSnapshot = mvBus.on<DashboardPayload>(
-      "mv:dashboard:snapshot",
-      (payload) => {
-        console.log("📊 [Hook] Received snapshot event, updating state");
-        if (payload.time_grouped_visits) {
-          console.log("📊 [Hook] Snapshot data points:", payload.time_grouped_visits.length, "range:", payload.range);
-        }
-        setState((s) => ({ ...s, data: payload, error: null }));
-        setAnalyticsVersion((v) => v + 1);
+    // fetch ticket
+    let ticket: string | undefined;
+    try {
+      const tRes = await secureFetch("https://api.modovisa.com/api/ws-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_id: siteId })
+      });
+      if (tRes.status === 401) {
+        // rely on your global logout handler if present
+        (window as any).logoutAndRedirect?.("401");
+        ticketLockRef.current = false;
+        return;
       }
-    );
+      if (!tRes.ok) {
+        console.error("ws-ticket error:", await tRes.text());
+        ticketLockRef.current = false;
+        setStatus("error");
+        return;
+      }
+      ({ ticket } = await tRes.json());
+    } catch (e) {
+      console.error("ws-ticket fetch failed:", e);
+      ticketLockRef.current = false;
+      setStatus("error");
+      return;
+    } finally {
+      ticketLockRef.current = false;
+    }
 
-    const offFrame = mvBus.on<DashboardPayload>(
-      "mv:dashboard:frame",
-      (incoming) => {
-        console.log("📊 [Hook] Received frame event for range:", range);
-        
-        if (incoming.time_grouped_visits) {
-          console.log("📊 [Hook] WebSocket data points:", incoming.time_grouped_visits.length, "backend range:", incoming.range);
+    // guard if site switched while fetching ticket
+    if (activeSiteRef.current !== normalized) return;
+
+    // close any previous socket first
+    try { socketRef.current?.close(); } catch {}
+    clearPing();
+
+    const wsUrl = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket!)}`;
+    const ws = new WebSocket(wsUrl);
+    socketRef.current = ws;
+
+    ws.onopen = () => {
+      if (activeSiteRef.current !== normalized) return; // stale
+      setStatus("open");
+
+      // 25s ping
+      pingTimerRef.current = setInterval(() => {
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          socketRef.current.send(JSON.stringify({ type: "ping" }));
         }
-        
-        if (incoming.range && incoming.range !== range) {
-          console.warn(`⚠️ [Hook] Range mismatch! Backend sent "${incoming.range}" but we want "${range}"`);
-          setState((s) => ({
-            ...s,
-            data: {
-              ...s.data!,
-              live_visitors: incoming.live_visitors ?? s.data?.live_visitors,
-            } as DashboardPayload,
-          }));
-          console.log("📊 [Hook] Updated live_visitors only, rejected all other data");
+      }, 25000);
+
+      // ask caller to refresh REST charts with skeleton once (mirrors Bootstrap)
+      if (!hasFiredInitialOpenRef.current) {
+        hasFiredInitialOpenRef.current = true;
+        onInitialOpen?.();
+      }
+    };
+
+    ws.onmessage = (ev) => {
+      // ignore if site switched or socket closing
+      if (activeSiteRef.current !== normalized || socketRef.current?.readyState !== WebSocket.OPEN) return;
+
+      let msg: any;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+
+      // must match site id
+      if (!msg?.site_id || String(msg.site_id) !== activeSiteRef.current) return;
+
+      // ---- live city clusters (authoritative for map effect scatter)
+      if (msg.type === "live_visitor_location_grouped") {
+        const points: LivePoint[] = (msg.payload || []).map((v: any) => ({
+          city: v.city, country: v.country, lat: v.lat, lng: v.lng,
+          count: Number(v.count) || 0, debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : []
+        }));
+        mvBus.emit("map:live_points", { siteId: activeSiteRef.current, points });
+        // also update the consolidated live count (sum of clusters)
+        const total = points.reduce((s, p) => s + (p.count || 0), 0);
+        setLiveCount(total);
+        mvBus.emit("live:visitors_count", { count: total });
+      }
+
+      // ---- basic live count (if server sends a simple aggregate)
+      if (msg.type === "live_visitor_update") {
+        const count = Number(msg.payload?.count) || 0;
+        setLiveCount(count);
+        mvBus.emit("live:visitors_count", { count });
+      }
+
+      // ---- streaming dashboard snapshots (identical to Bootstrap contract)
+      if (msg.type === "dashboard_analytics") {
+        const snapshot: DashboardSnapshot = msg.payload || {};
+        const wantRange = desiredRangeRef.current;
+
+        // Ignore if server sent a snapshot for a different selected range
+        if (snapshot?.range && snapshot.range !== wantRange) {
+          // still update just the cards if present (parity with Bootstrap)
+          if (snapshot.live_visitors != null || snapshot.unique_visitors != null) {
+            mvBus.emit("dashboard:cards", snapshot);
+          }
           return;
         }
-        
-        console.log(`✅ [Hook] Range matches - accepting all data for range "${range}"`);
-        
-        setState((s) => {
-          // CRITICAL FIX: Clone arrays to create new references
-          // This forces Chart.js to see data as changed even if values are same
-          const merged: DashboardPayload = {
-            ...(s.data || {}),
-            ...incoming,
-            time_grouped_visits: incoming.time_grouped_visits 
-              ? [...incoming.time_grouped_visits]
-              : s.data?.time_grouped_visits ? [...s.data.time_grouped_visits] : undefined,
-            unique_vs_returning: incoming.unique_vs_returning
-              ? [...incoming.unique_vs_returning]
-              : s.data?.unique_vs_returning ? [...s.data.unique_vs_returning] : undefined,
-            funnel: incoming.funnel 
-              ? [...incoming.funnel]
-              : s.data?.funnel ? [...s.data.funnel] : undefined,
-            referrers: incoming.referrers
-              ? [...incoming.referrers]
-              : s.data?.referrers ? [...s.data.referrers] : undefined,
-            browsers: incoming.browsers
-              ? [...incoming.browsers]
-              : s.data?.browsers ? [...s.data.browsers] : undefined,
-            devices: incoming.devices
-              ? [...incoming.devices]
-              : s.data?.devices ? [...s.data.devices] : undefined,
-            os: incoming.os
-              ? [...incoming.os]
-              : s.data?.os ? [...s.data.os] : undefined,
-            countries: incoming.countries
-              ? [...incoming.countries]
-              : s.data?.countries ? [...s.data.countries] : undefined,
-            events_timeline: incoming.events_timeline
-              ? [...incoming.events_timeline]
-              : s.data?.events_timeline ? [...s.data.events_timeline] : undefined,
-            utm_campaigns: incoming.utm_campaigns
-              ? [...incoming.utm_campaigns]
-              : s.data?.utm_campaigns ? [...s.data.utm_campaigns] : undefined,
-            utm_sources: incoming.utm_sources
-              ? [...incoming.utm_sources]
-              : s.data?.utm_sources ? [...s.data.utm_sources] : undefined,
-            calendar_density: incoming.calendar_density
-              ? [...incoming.calendar_density]
-              : s.data?.calendar_density ? [...s.data.calendar_density] : undefined,
-            top_pages: incoming.top_pages
-              ? [...incoming.top_pages]
-              : s.data?.top_pages ? [...s.data.top_pages] : undefined,
-            page_flow: incoming.page_flow
-              ? {...incoming.page_flow}
-              : s.data?.page_flow ? {...s.data.page_flow} : undefined,
-          } as DashboardPayload;
-          
-          if (merged.time_grouped_visits) {
-            console.log("📊 [Hook] After merge, data points:", merged.time_grouped_visits.length, "range:", merged.range);
-          }
-          
-          return { ...s, data: merged, error: null };
-        });
-        
-        console.log("🔄 [Hook] Incrementing version to trigger re-render (like bootstrap)");
-        setAnalyticsVersion((v) => v + 1);
+
+        // Emit one event that your React charts can consume (or a bridge can fan out)
+        mvBus.emit("dashboard:snapshot", snapshot);
       }
-    );
+    };
 
-    const offCities = mvBus.on<{ points: GeoCityPoint[]; total: number }>(
-      "mv:live:cities",
-      ({ points, total }) => {
-        console.log("🌍 [Hook] Received live cities event:", { total, pointsCount: points.length });
-        setState((s) => ({ ...s, liveCities: points, liveCount: total }));
+    ws.onerror = (err) => {
+      console.error("WebSocket error", err);
+      setStatus("error");
+    };
+
+    ws.onclose = () => {
+      clearPing();
+      if (closingRef.current) return;
+      setStatus("closed");
+      // jittered reconnect (mirrors Bootstrap)
+      const jitter = 500 + Math.floor(Math.random() * 500);
+      setTimeout(() => {
+        // if user didn’t switch site meanwhile, reconnect (pulls a fresh ticket)
+        if (activeSiteRef.current === normalized) connect();
+      }, 4000 + jitter);
+    };
+  }, [siteId, onInitialOpen]);
+
+  // main effect
+  useEffect(() => {
+    if (!siteId) return;
+    hasFiredInitialOpenRef.current = false; // new site → re-fire onInitialOpen once
+    connect();
+
+    // reconnect on tab visibility change (Bootstrap parity)
+    const onVis = () => {
+      if (!siteId) return;
+      if (document.visibilityState === "visible") {
+        try { socketRef.current?.close(); } catch {}
+        clearPing();
+        connect();
+      } else {
+        try { socketRef.current?.close(); } catch {}
+        clearPing();
       }
-    );
-
-    const offCount = mvBus.on<{ count: number }>("mv:live:count", ({ count }) => {
-      console.log("👥 [Hook] Received live count event:", count);
-      setState((s) => ({ ...s, liveCount: count }));
-    });
-
-    const offErr = mvBus.on<{ message: string }>("mv:error", ({ message }) => {
-      console.error("❌ [Hook] Received error event:", message);
-      setState((s) => ({ ...s, error: message || "error" }));
-    });
+    };
+    document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      console.log("📡 [Hook] Unsubscribing from mvBus events");
-      offSnapshot();
-      offFrame();
-      offCities();
-      offCount();
-      offErr();
+      document.removeEventListener("visibilitychange", onVis);
+      closeSocket();
     };
-  }, [range]);
-
-  const refreshSnapshot = () => {
-    console.log("🔄 [Hook] Manually refreshing snapshot");
-    DashboardService.fetchSnapshot().catch(() => {});
-  };
-
-  const reconnectWS = () => {
-    console.log("🔄 [Hook] Manually reconnecting WebSocket");
-    DashboardService.reconnectWebSocket().catch(() => {});
-  };
-
-  const restart = () => {
-    console.log("🔄 [Hook] Restarting service");
-    DashboardService.fetchSnapshot().catch(() => {});
-    DashboardService.reconnectWebSocket().catch(() => {});
-  };
+  }, [siteId, connect, closeSocket]);
 
   return {
-    data: state.data,
-    liveCities: state.liveCities,
-    liveCount: state.liveCount,
-    error: state.error,
-    isLoading: !state.data,
-    analyticsVersion,
-    refreshSnapshot,
-    reconnectWS,
-    restart,
+    status,
+    liveCount,
+    reconnect: () => {
+      try { socketRef.current?.close(); } catch {}
+      clearPing();
+      connect();
+    }
   };
 }
