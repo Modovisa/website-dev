@@ -144,6 +144,8 @@ function emitCached(siteId: number, range: RangeKey) {
 const KPI_KEYS = new Set<string>([
   "live_visitors","unique_visitors","bounce_rate","bounce_rate_delta",
   "avg_duration","avg_duration_delta","multi_page_visits","multi_page_visits_delta",
+  // allow country list to refresh even when off-range
+  "countries",
 ]);
 
 function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardPayload>) {
@@ -151,6 +153,7 @@ function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardP
   (merged as any).range = state.range;
   return merged;
 }
+
 function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPayload>) {
   const next = { ...(base || {}) } as any;
   for (const k of Object.keys(frame || {})) if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
@@ -352,6 +355,7 @@ export async function connectWS(forceNew = false) {
             time_grouped_visits_delta?: any[];
             tgv_delta?: any[];
             tgv?: any[];
+            range?: RangeKey;
           };
 
           // Normalize/patch any partial TGV payload first
@@ -363,7 +367,6 @@ export async function connectWS(forceNew = false) {
           } else if (Array.isArray(frameRaw.tgv_delta) && frameRaw.tgv_delta.length) {
             patchedTgv = applyTgvPatch(baseTgv, frameRaw.tgv_delta);
           } else if (Array.isArray(frameRaw.tgv) && frameRaw.tgv.length) {
-            // some servers might send `tgv` as alias
             const arr = frameRaw.tgv.map((x:any)=>({
               label: String(x.label ?? ""),
               visitors: Number(x.visitors ?? 0),
@@ -387,8 +390,13 @@ export async function connectWS(forceNew = false) {
           const frame: Partial<DashboardPayload> = { ...frameRaw };
           if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
 
+          // ---------- Range mismatch guard ----------
+          // If server sent range != current selection (or omitted range), only merge KPIs (and countries).
           const frameRange = (frame as any)?.range as RangeKey | undefined;
-          const next = frameRange && frameRange !== state.range
+          const selected = (W.selectedRange as RangeKey) ?? state.range;
+          const useKpiOnly = !frameRange || frameRange !== selected;
+
+          const next = useKpiOnly
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
@@ -405,7 +413,7 @@ export async function connectWS(forceNew = false) {
 
           const tgvChanged = JSON.stringify(prevTgv || []) !== JSON.stringify(nextTgv || []);
           if (tgvChanged) lastTgvAt = Date.now();
-          else if (kpiChanged && Date.now() - lastTgvAt > 75_000) {
+          else if (!useKpiOnly && kpiChanged && Date.now() - lastTgvAt > 75_000) {
             console.warn("⚠️ [WS] KPIs moving but series stale >75s — requesting series frame…");
             requestSeries();
           }
@@ -471,6 +479,8 @@ export function init(initialRange: RangeKey = "24h") {
   }
 
   set({ range: initialRange });
+  // keep a window mirror so non-React handlers can read current selection
+  W.selectedRange = initialRange;
 
   const saved = localStorage.getItem("current_website_id");
   if (saved) set({ siteId: Number(saved) });
@@ -494,6 +504,8 @@ export function setSite(siteId: number) {
 export function setRange(range: RangeKey) {
   if (state.range === range) return;
   set({ range, data: null, isLoading: true, error: null, seriesSig: "" });
+  // mirror to window for any imperative DOM listeners
+  W.selectedRange = range;
 
   if (state.siteId) {
     emitCached(state.siteId, range);
