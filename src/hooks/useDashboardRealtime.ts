@@ -111,21 +111,15 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
         }
         
         // CRITICAL: Check if backend range matches our selected range
-        // This is what bootstrap does - reject chart data if range doesn't match
-        // Also reject if backend didn't send a range field (undefined)
-        if (!incoming.range || incoming.range !== range) {
-          if (!incoming.range) {
-            console.log(
-              `⏭️ [Hook] Backend sent no range field (metrics-only update). Accepting metrics only.`
-            );
-          } else {
-            console.warn(
-              `⚠️ [Hook] Range mismatch! Backend sent "${incoming.range}" but we want "${range}"`,
-              `Backend sent wrong time period data. Only updating live visitor count (like bootstrap).`
-            );
-          }
+        // This is what bootstrap does - reject chart data ONLY if range is defined AND doesn't match
+        // Bootstrap accepts undefined range and tries to render with whatever data is there
+        if (incoming.range && incoming.range !== range) {
+          console.warn(
+            `⚠️ [Hook] Range mismatch! Backend sent "${incoming.range}" but we want "${range}"`,
+            `Backend sent wrong time period data. Only updating live visitor count (like bootstrap).`
+          );
           
-          // CRITICAL: Like bootstrap, ONLY update live_visitors when range doesn't match or is missing
+          // CRITICAL: Like bootstrap, ONLY update live_visitors when range doesn't match
           // Don't update charts, lists, or other metrics - they might be for the wrong time period!
           setState((s) => ({
             ...s,
