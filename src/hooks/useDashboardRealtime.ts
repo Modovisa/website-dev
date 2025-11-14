@@ -105,47 +105,21 @@ export function useDashboardRealtime(siteId: number | null, range: RangeKey) {
         if (incoming.range && incoming.range !== range) {
           console.warn(
             `⚠️ [Hook] Range mismatch! Backend sent "${incoming.range}" but we want "${range}"`,
-            `This means backend sent wrong time period data (e.g., 30 days instead of 24 hours).`,
-            `Updating metrics only, keeping existing chart data.`
+            `Backend sent wrong time period data. Only updating live visitor count (like bootstrap).`
           );
           
-          // Partial merge: Accept metrics/lists, reject chart arrays
-          setState((s) => {
-            const merged: DashboardPayload = {
-              ...(s.data || {}),
-              ...incoming,
-              
-              // REJECT: Keep old chart data (wrong time period)
-              time_grouped_visits: s.data?.time_grouped_visits,
-              unique_vs_returning: s.data?.unique_vs_returning,
-              events_timeline: s.data?.events_timeline,
-              funnel: s.data?.funnel,
-              calendar_density: s.data?.calendar_density,
-              
-              // ACCEPT: Update metrics and lists
-              unique_visitors: incoming.unique_visitors ?? s.data?.unique_visitors,
+          // CRITICAL: Like bootstrap, ONLY update live_visitors when range doesn't match
+          // Don't update charts, lists, or other metrics - they're all for the wrong time period!
+          setState((s) => ({
+            ...s,
+            data: {
+              ...s.data!,
               live_visitors: incoming.live_visitors ?? s.data?.live_visitors,
-              bounce_rate: incoming.bounce_rate ?? s.data?.bounce_rate,
-              avg_duration: incoming.avg_duration ?? s.data?.avg_duration,
-              multi_page_visits: incoming.multi_page_visits ?? s.data?.multi_page_visits,
-              referrers: incoming.referrers ?? s.data?.referrers,
-              browsers: incoming.browsers ?? s.data?.browsers,
-              devices: incoming.devices ?? s.data?.devices,
-              os: incoming.os ?? s.data?.os,
-              countries: incoming.countries ?? s.data?.countries,
-              top_pages: incoming.top_pages ?? s.data?.top_pages,
-              utm_campaigns: incoming.utm_campaigns ?? s.data?.utm_campaigns,
-              utm_sources: incoming.utm_sources ?? s.data?.utm_sources,
-              page_flow: incoming.page_flow ?? s.data?.page_flow,
-              
-              // Keep the correct range
-              range: s.data?.range,
-            } as DashboardPayload;
-            
-            console.log("📊 [Hook] Partial merge: kept chart data from", s.data?.range, "updated metrics");
-            return { ...s, data: merged, error: null };
-          });
-          setAnalyticsVersion((v) => v + 1);
+            } as DashboardPayload,
+          }));
+          
+          console.log("📊 [Hook] Updated live_visitors only, rejected all other data");
+          // Don't increment version - chart shouldn't re-render
           return; // Skip full merge
         }
         
