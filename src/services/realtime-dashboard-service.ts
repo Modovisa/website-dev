@@ -53,86 +53,32 @@ const API = "https://api.modovisa.com";
 /* ---------- State (Singleton Pattern) ---------- */
 let selectedRange: RangeKey = "24h";
 let currentSiteId: number | null = null;
+
 let ws: WebSocket | null = null;
+let wsConnecting = false;
+
 let pingTimer: number | null = null;
 let reconnectTimer: number | null = null;
 let visHandler: any = null;
 let onlineHandler: any = null;
 let offlineHandler: any = null;
+
 let initialized = false;
 
-// WS ticket management
+// WS ticket management + backoff
 let ticketLock = false;
 let lastTicketAt = 0;
-const TICKET_THROTTLE_MS = 1500;
+let backoffMs = 4000;
+const BACKOFF_MAX = 60000;
+const TICKET_THROTTLE_MS = 5000;
 
-/* ---------- Debounced REST refresh (to make charts “feel” live) ---------- */
+// REST refresh debounce
 let refreshTimer: number | null = null;
 const REFRESH_DEBOUNCE_MS = 2000;
 
-function scheduleSnapshotRefresh(_reason: string) {
-  if (!currentSiteId) return;
-  if (refreshTimer) window.clearTimeout(refreshTimer);
-  refreshTimer = window.setTimeout(async () => {
-    try {
-      const snap = await getDashboardSnapshot({
-        siteId: currentSiteId!,
-        range: selectedRange,
-      });
-      mvBus.emit("mv:dashboard:snapshot", snap);
-    } catch (e) {
-      console.error("❌ [Service] Snapshot refresh failed:", e);
-    }
-  }, REFRESH_DEBOUNCE_MS) as unknown as number;
-}
-
-/* ---------- OPTIONAL: REST geo fallback (disabled by default) ---------- */
-// Flip to true to enable a periodic REST fetch for city clusters (when WS is thin/idle).
-const GEO_FALLBACK_ENABLED = false;
-let geoFallbackTimer: number | null = null;
-const GEO_FALLBACK_MS = 20000;
-
-async function fetchLiveCitiesREST(siteId: number, range: RangeKey) {
-  try {
-    // If you already expose a REST endpoint for grouped cities, wire it here.
-    // Example (adjust to your real route/params if different):
-    const url =
-      `${API}/api/live-visitor-location-grouped` +
-      `?site_id=${encodeURIComponent(siteId)}` +
-      `&range=${encodeURIComponent(range)}`;
-
-    const res = await secureFetch(url, { method: "GET" });
-    if (res.status === 401) throw new UnauthorizedError();
-    if (!res.ok) {
-      console.warn("⚠️ [REST-geo] non-OK:", res.status);
-      return;
-    }
-    const payload = await res.json();
-    const points = normalizeCities(payload || []);
-    const total = points.reduce((s, p) => s + (p.count || 0), 0);
-    mvBus.emit("mv:live:cities", { points, total });
-    if (typeof total === "number" && total >= 0) {
-      mvBus.emit("mv:live:count", { count: total });
-    }
-  } catch (err) {
-    console.warn("⚠️ [REST-geo] failed:", err);
-  }
-}
-
-function startGeoFallback() {
-  if (!GEO_FALLBACK_ENABLED) return;
-  if (geoFallbackTimer) window.clearInterval(geoFallbackTimer);
-  geoFallbackTimer = window.setInterval(() => {
-    if (currentSiteId) fetchLiveCitiesREST(currentSiteId, selectedRange);
-  }, GEO_FALLBACK_MS) as unknown as number;
-}
-
-function stopGeoFallback() {
-  if (geoFallbackTimer) {
-    window.clearInterval(geoFallbackTimer);
-    geoFallbackTimer = null;
-  }
-}
+// Once we see a proper WS analytics frame (with series) for the current site+range,
+// we stop scheduling REST refreshes from "new_event" etc. until site/range changes.
+let seriesSeenForCurrentSelection = false;
 
 /* ---------- Utilities ---------- */
 function safeJSON<T = any>(x: string): T | null {
@@ -160,6 +106,23 @@ function normalizeCities(payload: any): GeoCityPoint[] {
       };
     })
     .filter((p) => p.lat !== 0 || p.lng !== 0);
+}
+
+function scheduleSnapshotRefresh(_reason: string) {
+  if (!currentSiteId) return;
+  if (seriesSeenForCurrentSelection) return; // WS already driving; skip REST
+  if (refreshTimer) window.clearTimeout(refreshTimer);
+  refreshTimer = window.setTimeout(async () => {
+    try {
+      const snap = await getDashboardSnapshot({
+        siteId: currentSiteId!,
+        range: selectedRange,
+      });
+      mvBus.emit("mv:dashboard:snapshot", snap);
+    } catch (e) {
+      console.error("❌ [Service] Snapshot refresh failed:", e);
+    }
+  }, REFRESH_DEBOUNCE_MS) as unknown as number;
 }
 
 /* ---------- REST API ---------- */
@@ -229,11 +192,11 @@ export async function getDashboardSnapshot(args: {
 }
 
 /* ---------- WebSocket Ticket ---------- */
-
 async function getWSTicket(): Promise<string> {
   const now = Date.now();
   if (ticketLock || now - lastTicketAt < TICKET_THROTTLE_MS) {
-    await new Promise((r) => setTimeout(r, TICKET_THROTTLE_MS));
+    const wait = Math.max(TICKET_THROTTLE_MS - (now - lastTicketAt), 300);
+    await new Promise((r) => setTimeout(r, wait));
   }
   ticketLock = true;
   lastTicketAt = Date.now();
@@ -246,6 +209,13 @@ async function getWSTicket(): Promise<string> {
     if (res.status === 401) {
       (window as any).logoutAndRedirect?.("401");
       throw new Error("unauthorized");
+    }
+    if (res.status === 429) {
+      const body = await res.text().catch(() => "");
+      const err = new Error("ticket_failed_429") as any;
+      err.status = 429;
+      err.body = body;
+      throw err;
     }
     if (!res.ok) {
       const errorBody = await res.text().catch(() => "");
@@ -264,186 +234,175 @@ async function getWSTicket(): Promise<string> {
 
 /* ---------- WebSocket Connection ---------- */
 
-function scheduleReconnect(ms: number = 4000) {
+function scheduleReconnect(ms: number) {
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
-  const jitter = 500 + Math.floor(Math.random() * 500);
-  reconnectTimer = window.setTimeout(() => connectWS(true), ms + jitter) as unknown as number;
+  const jitter = 250 + Math.floor(Math.random() * 500);
+  reconnectTimer = window.setTimeout(() => {
+    void connectWS(true);
+  }, ms + jitter) as unknown as number;
 }
 
-async function connectWS(_forceNewTicket = false) {
+async function connectWS(forceNewTicket = false) {
   if (!currentSiteId) {
     console.warn("⚠️ [WS] Cannot connect - no siteId");
     return;
   }
+  if (ws && ws.readyState === WebSocket.OPEN && !forceNewTicket) {
+    return; // already open
+  }
+  if (wsConnecting) return; // single-flight
+  wsConnecting = true;
 
-  // Close any prior connection
-  try {
-    ws?.close();
-  } catch {}
-  ws = null;
+  // Clean previous timers
   if (pingTimer) {
     window.clearInterval(pingTimer);
     pingTimer = null;
   }
-
-  let ticket: string;
   try {
-    ticket = await getWSTicket();
-  } catch (e: any) {
-    console.error("❌ [WS] Failed to get ticket:", e?.message || e);
-    mvBus.emit("mv:error", { message: e?.message || "ticket_failed" });
-    scheduleReconnect();
-    return;
-  }
-
-  const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
-  const socket = new WebSocket(url);
-  ws = socket;
-
-  socket.onopen = () => {
-    console.log("✅ [WS] Connected", { siteId: currentSiteId, range: selectedRange });
-
-    // CRITICAL: Just ping - NO subscription messages (parity with bootstrap)
-    pingTimer = window.setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        try {
-          socket.send(JSON.stringify({ type: "ping" }));
-        } catch {}
-      }
-    }, 25000) as unknown as number;
-
-    // (Re)start optional geo fallback while connected
-    startGeoFallback();
-  };
-
-  socket.onmessage = (ev) => {
-    if (socket.readyState !== WebSocket.OPEN) return;
-    const msg = safeJSON<any>(ev.data);
-    if (!msg) {
-      console.warn("⚠️ [WS] Received invalid JSON:", ev.data);
-      return;
-    }
-
-    if (msg.type !== "ping" && msg.type !== "pong") {
-      console.log("📥 [WS] Message:", msg.type);
-    }
-
-    const msgSite = String(msg?.site_id ?? "");
-    if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
-      console.log("⏭️ [WS] Skipping other site:", msgSite, "current:", currentSiteId);
-      return;
-    }
-
-    // 📊 Dashboard analytics stream
-    if (msg.type === "dashboard_analytics") {
-      const data = msg.payload || {};
-      const hasSeries =
-        Array.isArray(data.time_grouped_visits) ||
-        Array.isArray(data.events_timeline) ||
-        Array.isArray(data.unique_vs_returning);
-
-      mvBus.emit("mv:dashboard:frame", data);
-
-      if (!hasSeries) scheduleSnapshotRefresh("thin_dashboard_frame");
-    }
-
-    // 🌍 Grouped live visitor locations (for world map)
-    if (msg.type === "live_visitor_location_grouped") {
-      const points = normalizeCities(msg.payload || []);
-      const total = points.reduce((s, p) => s + (p.count || 0), 0);
-      mvBus.emit("mv:live:cities", { points, total });
-
-      if (typeof total === "number" && total >= 0) {
-        mvBus.emit("mv:live:count", { count: total });
-      }
-    }
-
-    // 👥 Live visitor count update
-    if (msg.type === "live_visitor_update") {
-      const c = Number(msg?.payload?.count ?? 0) || 0;
-      mvBus.emit("mv:live:count", { count: c });
-    }
-
-    // 📝 New event ping → schedule compact refresh (debounced)
-    if (msg.type === "new_event") {
-      scheduleSnapshotRefresh("new_event");
-    }
-  };
-
-  socket.onerror = (err) => {
-    console.error("❌ [WS] WebSocket error:", err);
-    scheduleReconnect();
-  };
-
-  socket.onclose = (ev) => {
-    console.warn("🔌 [WS] Closed:", { code: ev.code, reason: ev.reason });
-    stopGeoFallback();
-    scheduleReconnect();
-  };
-
-  // Focus/visibility → reconnect with fresh ticket
-  if (visHandler) document.removeEventListener("visibilitychange", visHandler);
-  visHandler = () => {
-    if (document.visibilityState === "visible") {
-      console.log("👁️ [WS] Tab visible - reconnecting");
-      try {
-        socket.close();
-      } catch {}
-      if (pingTimer) {
-        window.clearInterval(pingTimer);
-        pingTimer = null;
-      }
-      connectWS(true);
-    } else {
-      console.log("👁️ [WS] Tab hidden - closing connection");
-      try {
-        socket.close();
-      } catch {}
-      if (pingTimer) {
-        window.clearInterval(pingTimer);
-        pingTimer = null;
-      }
-    }
-  };
-  document.addEventListener("visibilitychange", visHandler);
-
-  // Online/offline awareness
-  if (onlineHandler) window.removeEventListener("online", onlineHandler);
-  if (offlineHandler) window.removeEventListener("offline", offlineHandler);
-  onlineHandler = () => {
-    console.log("🌐 [WS] Browser online - reconnect");
-    scheduleReconnect(500);
-  };
-  offlineHandler = () => {
-    console.log("🌐 [WS] Browser offline - closing WS");
+    // Close previous socket if any (without triggering cascaded reconnects)
     try {
-      socket.close();
+      ws?.close();
     } catch {}
-  };
-  window.addEventListener("online", onlineHandler);
-  window.addEventListener("offline", offlineHandler);
+    ws = null;
+
+    // Ticket with backoff
+    let ticket: string;
+    try {
+      ticket = await getWSTicket();
+    } catch (e: any) {
+      console.error("❌ [WS] Failed to get ticket:", e?.message || e);
+      mvBus.emit("mv:error", { message: e?.message || "ticket_failed" });
+      // Exponential backoff on 429; otherwise use default backoff
+      if (e?.status === 429) {
+        backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX);
+      } else {
+        backoffMs = Math.min(backoffMs + 2000, BACKOFF_MAX);
+      }
+      scheduleReconnect(backoffMs);
+      return;
+    }
+
+    // Reset backoff after successful ticket
+    backoffMs = 4000;
+
+    const url = `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`;
+    const socket = new WebSocket(url);
+    ws = socket;
+
+    socket.onopen = () => {
+      console.log("✅ [WS] Connected", { siteId: currentSiteId, range: selectedRange });
+
+      // CRITICAL: Just ping — no subscription message needed
+      pingTimer = window.setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send(JSON.stringify({ type: "ping" }));
+          } catch {}
+        }
+      }, 25000) as unknown as number;
+    };
+
+    socket.onmessage = (ev) => {
+      if (socket.readyState !== WebSocket.OPEN) return;
+      const msg = safeJSON<any>(ev.data);
+      if (!msg) return;
+
+      if (msg.type !== "ping" && msg.type !== "pong") {
+        console.log("📥 [WS] Message:", msg.type);
+      }
+
+      const msgSite = String(msg?.site_id ?? "");
+      if (currentSiteId && msgSite && msgSite !== String(currentSiteId)) {
+        // Ignore frames for a different site
+        return;
+      }
+
+      if (msg.type === "dashboard_analytics") {
+        const data = msg.payload || {};
+        const hasSeries =
+          (Array.isArray(data.time_grouped_visits) && data.time_grouped_visits.length > 0) ||
+          (Array.isArray(data.events_timeline) && data.events_timeline.length > 0) ||
+          (Array.isArray(data.unique_vs_returning) && data.unique_vs_returning.length > 0);
+
+        mvBus.emit("mv:dashboard:frame", data);
+
+        if (hasSeries) {
+          seriesSeenForCurrentSelection = true;
+          if (refreshTimer) {
+            window.clearTimeout(refreshTimer);
+            refreshTimer = null;
+          }
+        } else {
+          // Thin frame — only schedule REST refresh if WS hasn't delivered series yet
+          scheduleSnapshotRefresh("thin_dashboard_frame");
+        }
+      }
+
+      if (msg.type === "live_visitor_location_grouped") {
+        const points = normalizeCities(msg.payload || []);
+        const total = points.reduce((s, p) => s + (p.count || 0), 0);
+        mvBus.emit("mv:live:cities", { points, total });
+        mvBus.emit("mv:live:count", { count: total >= 0 ? total : 0 });
+      }
+
+      if (msg.type === "live_visitor_update") {
+        const c = Number(msg?.payload?.count ?? 0) || 0;
+        mvBus.emit("mv:live:count", { count: c });
+      }
+
+      if (msg.type === "new_event") {
+        // Only schedule a REST refresh if we haven't seen a WS series yet
+        if (!seriesSeenForCurrentSelection) {
+          scheduleSnapshotRefresh("new_event");
+        }
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.error("❌ [WS] WebSocket error:", err);
+    };
+
+    socket.onclose = (ev) => {
+      console.warn("🔌 [WS] Closed:", { code: ev.code, reason: ev.reason });
+      // Reconnect with backoff
+      scheduleReconnect(backoffMs);
+      backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX);
+    };
+  } finally {
+    wsConnecting = false;
+  }
 }
 
 /* ---------- Public API ---------- */
 
 export function setRange(range: RangeKey) {
+  if (selectedRange === range) return; // no-op
   console.log("🎯 [Service] Setting range:", range);
   selectedRange = range;
+  seriesSeenForCurrentSelection = false;
 }
 
 export async function setSite(siteId: number) {
+  if (currentSiteId === siteId) {
+    // Avoid duplicate REST + WS churn
+    console.log("🌐 [Service] setSite no-op (already on site):", siteId);
+    return;
+  }
   console.log("🌐 [Service] Setting site:", siteId);
   currentSiteId = siteId;
+  seriesSeenForCurrentSelection = false;
   try {
     localStorage.setItem("current_website_id", String(siteId));
     mvBus.emit("mv:site:changed", { siteId });
 
-    // Fetch new snapshot and reconnect WebSocket
+    // Seed UI from REST once
     const data = await getDashboardSnapshot({
       siteId: currentSiteId,
       range: selectedRange,
     });
     mvBus.emit("mv:dashboard:snapshot", data);
+
+    // Then connect WS to take over (single-flight, with backoff)
     await connectWS(true);
   } catch (e: any) {
     console.error("❌ [Service] Failed to set site:", e);
@@ -478,7 +437,6 @@ export async function initialize(initialRange: RangeKey = "24h") {
     console.warn("⚠️ [Service] Already initialized - skipping");
     return;
   }
-
   console.log("🚀 [Service] Initializing realtime dashboard service");
   initialized = true;
   selectedRange = initialRange;
@@ -489,6 +447,31 @@ export async function initialize(initialRange: RangeKey = "24h") {
     console.log("📍 [Service] Loaded site from localStorage:", currentSiteId);
   }
 
+  // Visibility/online handlers (do NOT close WS on hidden to avoid ticket churn)
+  if (visHandler) document.removeEventListener("visibilitychange", visHandler);
+  visHandler = () => {
+    if (document.visibilityState === "visible") {
+      // If socket isn't open, reconnect with gentle backoff
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        scheduleReconnect(800);
+      }
+    }
+  };
+  document.addEventListener("visibilitychange", visHandler);
+
+  if (onlineHandler) window.removeEventListener("online", onlineHandler);
+  if (offlineHandler) window.removeEventListener("offline", offlineHandler);
+  onlineHandler = () => {
+    console.log("🌐 [WS] Browser online - reconnect");
+    scheduleReconnect(500);
+  };
+  offlineHandler = () => {
+    console.log("🌐 [WS] Browser offline");
+  };
+  window.addEventListener("online", onlineHandler);
+  window.addEventListener("offline", offlineHandler);
+
+  // If we have a site, seed from REST once, then WS takes over
   if (currentSiteId) {
     try {
       const data = await getDashboardSnapshot({
@@ -506,7 +489,6 @@ export async function initialize(initialRange: RangeKey = "24h") {
 }
 
 /* ---------- Cleanup ---------- */
-
 export function cleanup() {
   console.log("🧹 [Service] Cleaning up");
   try {
@@ -518,6 +500,5 @@ export function cleanup() {
   if (onlineHandler) window.removeEventListener("online", onlineHandler);
   if (offlineHandler) window.removeEventListener("offline", offlineHandler);
   if (refreshTimer) window.clearTimeout(refreshTimer);
-  stopGeoFallback();
   initialized = false;
 }

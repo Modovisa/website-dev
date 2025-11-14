@@ -59,18 +59,17 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // ---------- CRITICAL BOOTSTRAP ----------
-  // Start the consolidated realtime service (guarded by auth)
+  // ---------- Boot ----------
   useEffect(() => {
     if (!isAuthenticated) return;
-    rtInit(range);
-    rtSetRange(range);
+    rtInit(range); // init service; it will seed from REST if a saved site exists
     return () => {
       rtCleanup();
     };
   }, [isAuthenticated]); // eslint-disable-line
 
-  // After websites load, pick a site (saved or first) and point the service at it
+  // After websites load, pick persisted or first site.
+  // IMPORTANT: only call rtSetSite once (avoid double REST + ws-ticket spam).
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!websites || websites.length === 0) return;
@@ -82,24 +81,26 @@ export default function Dashboard() {
     if (siteId !== chosen) {
       setSiteId(chosen);
       localStorage.setItem("current_website_id", String(chosen));
+      return; // the siteId effect below will call rtSetSite
     }
 
-    rtSetSite(chosen); // triggers REST snapshot + WS connect
+    // If our state already matches, ensure the service is pointed there exactly once
+    rtSetSite(chosen);
   }, [websites, isAuthenticated]); // eslint-disable-line
 
-  // When the user changes the site from the dropdown
+  // When the user changes the site from the dropdown (or initial chosen above)
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!siteId) return;
-    rtSetSite(siteId); // REST snapshot + WS reconnect
+    rtSetSite(siteId); // REST seed + WS connect (de-duped inside service)
   }, [siteId, isAuthenticated]);
 
   // When the user changes the date range
   useEffect(() => {
     if (!isAuthenticated) return;
-    rtSetRange(range);
-    rtFetchSnapshot(); // fresh arrays for the chosen range
-    rtReconnect();     // optional: re-handshake stream
+    rtSetRange(range);   // reset WS-series gate
+    rtFetchSnapshot();   // fetch arrays for the chosen range
+    // Do NOT reconnect WS on range change — ticket is site-bound, not range-bound.
   }, [range, isAuthenticated]);
 
   // Hook that listens to mvBus updates produced by the service
@@ -179,8 +180,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                // pull a fresh snapshot for the newly selected site
-                refreshSnapshot();
+                // No immediate REST/WS calls here — the siteId effect handles it (de-duped).
               }}
               disabled={sitesLoading || websites.length === 0}
             >
@@ -197,7 +197,7 @@ export default function Dashboard() {
 
             <Select value={range} onValueChange={(v: RangeKey) => {
               setRange(v);
-              refreshSnapshot();
+              // Service will REST-fetch in the range effect; no WS reconnect needed.
             }}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
@@ -214,8 +214,9 @@ export default function Dashboard() {
             <Button
               variant="outline"
               onClick={() => {
-                refreshSnapshot();
-                reconnectWS();
+                // Manual refresh + optional WS reconnect for recovery
+                rtFetchSnapshot();
+                rtReconnect();
               }}
               disabled={!siteId}
               className="gap-2"
