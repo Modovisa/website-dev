@@ -1,4 +1,3 @@
-// src/components/profile/BillingAndPlans.tsx
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,14 +13,14 @@ export default function BillingAndPlans() {
     invoices,
     isFreePlan,
     isFreeForever,
-    startEmbeddedCheckout, // ← single path (no update-card flow)
+    startEmbeddedCheckout,
+    startUpdateCard,
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
   } = useBilling();
 
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [showApplied, setShowApplied] = useState(false);
 
   const currentPlanAmount = useMemo(
     () => (isFreePlan ? 0 : info?.price || 0),
@@ -57,7 +56,7 @@ export default function BillingAndPlans() {
 
           {info && (
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* Left */}
+              {/* Left block */}
               <div>
                 <div className="mb-4">
                   <h6 className="mb-1">
@@ -72,6 +71,7 @@ export default function BillingAndPlans() {
                       <>Your Current Plan is {info.plan_name}</>
                     )}
                   </h6>
+                  <p className="text-muted-foreground" />
                 </div>
 
                 <div className="mb-4">
@@ -123,7 +123,7 @@ export default function BillingAndPlans() {
                 )}
               </div>
 
-              {/* Right */}
+              {/* Right block */}
               <div>
                 {!isFreePlan && (
                   <>
@@ -209,6 +209,12 @@ export default function BillingAndPlans() {
                     Cancel Downgrade
                   </Button>
                 )}
+
+                {hasActiveSubscription && (
+                  <Button variant="outline" onClick={startUpdateCard}>
+                    Update Card
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -222,68 +228,38 @@ export default function BillingAndPlans() {
         onClose={() => setShowUpgrade(false)}
         tiers={tiers}
         currentPlanAmount={currentPlanAmount}
-        onUpgrade={async ({ tierId, interval }) => {
-          try {
-            const result = await startEmbeddedCheckout(tierId, interval, () => {
-              // when Stripe UI mounts, we hide the upgrade modal
-              setShowUpgrade(false);
-            });
-
-            if (result === "server_applied") {
-              setShowUpgrade(false);
-              setShowApplied(true);
-              return;
-            }
-
-            if (result === "require_update") {
-              // Bootstrap behavior: just re-run the same embedded checkout flow
-              await startEmbeddedCheckout(tierId, interval, () => setShowUpgrade(false));
-              return;
-            }
-
-            // "mounted" => Stripe has taken over; nothing else to do here.
-          } catch (err: any) {
-            console.error("[billing] startUpgrade error:", err);
-            const msg = String(err?.message || err || "");
-            // If Stripe/card requires re-auth, retry via the same embedded session
-            if (
-              msg.toLowerCase().includes("re-authenticate") ||
-              msg.toLowerCase().includes("reauthenticate") ||
-              msg.toLowerCase().includes("card declined") ||
-              msg.toLowerCase().includes("card expired")
-            ) {
-              await startEmbeddedCheckout(tierId, interval, () => setShowUpgrade(false));
-            }
-            // For Unauthorized, let your global auth guard handle redirect/refresh
-          }
+        onUpgrade={({ tierId, interval }) => {
+          // Start checkout. We’ll close the Upgrade modal only after Stripe mount succeeds.
+          startEmbeddedCheckout(tierId, interval, () => {
+            setShowUpgrade(false);
+          }).catch((err) => {
+            console.error("[billing] startEmbeddedCheckout error:", err);
+            // Leave the upgrade modal open so the user can retry / see errors.
+          });
         }}
       />
 
-      {/* Embedded Checkout container (used by useBilling.startEmbeddedCheckout) */}
+      {/* 🔒 Embedded Stripe container lives OUTSIDE the upgrade modal to avoid unmounting */}
       <div
         id="react-billing-embedded-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
       >
         <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
           <div id="react-billing-stripe-element" />
+          {/* Optional debug line—leave for Firefox until confirmed stable */}
           <div id="react-billing-stripe-debug" className="mt-3 text-xs text-muted-foreground"></div>
         </div>
       </div>
 
-      {showApplied && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-xl">
-            <h3 className="text-xl font-semibold mb-2">Plan updated</h3>
-            <p className="text-muted-foreground">
-              Your subscription change has been applied. You’ll see the updated billing period and invoices reflected
-              shortly.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <Button onClick={() => setShowApplied(false)}>OK</Button>
-            </div>
-          </div>
+      {/* Update-card modal container */}
+      <div
+        id="react-billing-updatecard-modal"
+        className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
+      >
+        <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
+          <div id="react-billing-updatecard-element" />
         </div>
-      )}
+      </div>
     </div>
   );
 }

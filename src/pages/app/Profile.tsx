@@ -228,10 +228,11 @@ const Profile = () => {
                     <span className="text-muted-foreground">Plan:</span>
                     {isFreeForever ? (
                       <>
-                        <Badge className="ml-2 bg-success text-primary-foreground text-xs">Free Forever</Badge>
+                        <span className="ml-2">Free</span>
+                        <Badge className="ml-2 bg-success text-xs">Forever</Badge>
                       </>
                     ) : (
-                      <Badge className="ml-2 bg-[#eae8fd] text-[#7367f0]">{billingInfo?.plan_name || "Free"}</Badge>
+                      <span className="ml-2">{billingInfo?.plan_name || "Free"}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">

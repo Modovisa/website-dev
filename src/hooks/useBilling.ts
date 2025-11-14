@@ -1,4 +1,3 @@
-// src/hooks/useBilling.ts
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiBase } from "@/lib/api";
@@ -12,8 +11,6 @@ export type PricingTier = {
   max_events: number;
   monthly_price: number;
   is_popular?: boolean;
-  stripe_price_id_month?: string;
-  stripe_price_id_year?: string;
 };
 
 export type BillingInfo = {
@@ -63,9 +60,11 @@ async function jsonSecure<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 async function resolvePublishableKey(): Promise<string> {
+  // 1) Prefer Vite env override for local/dev
   const envPk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
   if (envPk && envPk.trim()) return envPk;
 
+  // 2) Admin runtime config (Test/Live)
   try {
     const j = await jsonSecure<RuntimeStripeConfig>(`${apiBase()}/api/stripe/runtime-config`, {
       cache: "no-store",
@@ -78,11 +77,12 @@ async function resolvePublishableKey(): Promise<string> {
         : (j as any).test_pk || (j as any).testPublishableKey;
     if (pick && typeof pick === "string") return pick;
   } catch {
-    /* noop */
+    /* noop – fall through */
   }
   return "";
 }
 
+/** Wait for window.Stripe injected by basil script, with a short timeout for Firefox / ETP quirks. */
 function waitForStripeGlobal(maxMs = 6000, stepMs = 120): Promise<void> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
@@ -99,7 +99,9 @@ const getStripe = () => {
   if (!stripePromise) {
     stripePromise = (async () => {
       const pk = await resolvePublishableKey();
-      if (!pk) console.warn("[billing] Stripe publishable key could not be resolved.");
+      if (!pk) {
+        console.warn("[billing] Stripe publishable key could not be resolved.");
+      }
       await waitForStripeGlobal().catch((e) => {
         console.error("[billing] window.Stripe not ready:", e);
         return null;
@@ -125,29 +127,25 @@ function hide(id: string) {
   if (el) el.classList.add("hidden");
 }
 
-// Normalize a selector or HTMLElement to a selector string
-function toMountSelector(target: string | HTMLElement): string {
-  if (typeof target === "string") return target;
-  if (!target.id) target.id = "react-stripe-mount-" + Math.random().toString(36).slice(2);
-  return "#" + target.id;
-}
-
 /* ---------------- Hook ---------------- */
 export function useBilling() {
   const qc = useQueryClient();
 
+  // Current billing info
   const infoQ = useQuery({
     queryKey: ["billing:info"],
     queryFn: async () => jsonSecure<BillingInfo>(`${apiBase()}/api/user-billing-info`),
     staleTime: 30_000,
   });
 
+  // Pricing tiers (array)
   const tiersQ = useQuery({
     queryKey: ["billing:tiers"],
     queryFn: async () => jsonSecure<PricingTier[]>(`${apiBase()}/api/billing-pricing-tiers`),
     staleTime: 60_000,
   });
 
+  // Invoices ({ data: [...] })
   const invoicesQ = useQuery({
     queryKey: ["billing:invoices"],
     queryFn: async () =>
@@ -155,60 +153,47 @@ export function useBilling() {
     staleTime: 30_000,
   });
 
-  const isReauthMessage = (msg: unknown) => {
-    const s = String(msg || "").toLowerCase();
-    return (
-      s.includes("re-authenticate") ||
-      s.includes("reauthenticate") ||
-      s.includes("card declined") ||
-      s.includes("card expired") ||
-      s.includes("requires_payment_method") ||
-      s.includes("authentication")
-    );
-  };
+  /* -------- Actions -------- */
 
-  /**
-   * Launch embedded checkout or short-circuit when server applies change (card on file).
-   * Returns:
-   *  - "server_applied"  → backend applied immediately (e.g., monthly → yearly with saved card)
-   *  - "mounted"         → embedded checkout was mounted
-   *  - "require_update"  → payment method must be re-authed/updated
-   */
+  /** Stripe Embedded Checkout inside #react-billing-embedded-modal */
   const startEmbeddedCheckout = useCallback(
-    async (
-      tierId: number,
-      interval: "month" | "year",
-      onMounted?: () => void
-    ): Promise<"server_applied" | "mounted" | "require_update"> => {
+    async (tierId: number, interval: "month" | "year", onMounted?: () => void) => {
       const stripe = await getStripe();
-      if (!stripe) throw new Error("Stripe failed to load");
+      if (!stripe) {
+        console.error("[billing] Stripe failed to load/initialize.");
+        // Do not close anything here — caller decides UI.
+        throw new Error("Stripe failed to load");
+      }
 
+      // Ask backend for an Embedded Checkout client_secret for this tier/interval
       const resp = await jsonSecure<any>(`${apiBase()}/api/stripe/embedded-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier_id: tierId, interval }),
       });
 
+      // ✅ If server handled the upgrade without a checkout (card on file), treat as success
       if (resp?.success === true || resp?.embedded_handled === true) {
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["billing:info"] }),
           qc.invalidateQueries({ queryKey: ["billing:invoices"] }),
         ]);
-        return "server_applied";
+        onMounted?.();
+        return;
       }
 
-      if (resp?.require_payment_update === true) {
-        return "require_update";
-      }
-
+      // Normal embedded flow
       const clientSecret: string | undefined = resp?.client_secret || resp?.clientSecret;
       if (!clientSecret) {
-        if (isReauthMessage(resp?.error)) return "require_update";
+        console.error("[billing] Missing Stripe client secret in response:", resp);
+        // Keep the UI as-is so user sees the state; surface error upward.
         throw new Error(resp?.error || "Missing Stripe client secret");
       }
 
+      // Show the modal shell; keep it open even on mount errors (debuggable)
       show("react-billing-embedded-modal");
 
+      // Mount Embedded Checkout
       let checkout: any | null = null;
       try {
         checkout = await stripe.initEmbeddedCheckout({ clientSecret });
@@ -216,26 +201,73 @@ export function useBilling() {
         onMounted?.();
       } catch (e) {
         console.error("[billing] initEmbeddedCheckout/mount failed:", e);
+        // ❗ Do NOT auto-close; leave modal visible for diagnostics.
         throw e;
       }
 
+      // Close handlers: overlay click or Escape
       const modalEl = document.getElementById("react-billing-embedded-modal");
       const cleanup = () => {
-        try { checkout?.destroy?.(); } catch {}
+        try { checkout?.destroy(); } catch {}
         hide("react-billing-embedded-modal");
         window.removeEventListener("keydown", onKey);
         qc.invalidateQueries({ queryKey: ["billing:info"] });
         qc.invalidateQueries({ queryKey: ["billing:invoices"] });
       };
-      const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") cleanup(); };
-      modalEl?.addEventListener("click", (e) => { if (e.target === modalEl) cleanup(); });
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") cleanup();
+      };
+      modalEl?.addEventListener("click", (e) => {
+        if (e.target === modalEl) cleanup();
+      });
       window.addEventListener("keydown", onKey);
-
-      return "mounted";
     },
     [qc]
   );
 
+  /** Update card via SetupIntent + Payment Element in #react-billing-updatecard-modal */
+  const startUpdateCard = useCallback(async () => {
+    const stripe = await getStripe();
+    if (!stripe) throw new Error("Stripe failed to load");
+
+    const { client_secret } = await jsonSecure<{ client_secret: string }>(
+      `${apiBase()}/api/stripe/update-payment-method`,
+      { method: "POST", headers: { "Content-Type": "application/json" } }
+    );
+
+    show("react-billing-updatecard-modal");
+
+    const elements = stripe.elements({ clientSecret: client_secret, appearance: { theme: "stripe" } });
+    const paymentElement = elements.create("payment");
+    paymentElement.mount("#react-billing-updatecard-element");
+
+    const submit = async () => {
+      const { error } = await stripe.confirmSetup({ elements, redirect: "if_required" });
+      if (error) return;
+      hide("react-billing-updatecard-modal");
+      elements?.destroy();
+    };
+
+    const modalEl = document.getElementById("react-billing-updatecard-modal");
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        hide("react-billing-updatecard-modal");
+        elements?.destroy();
+        window.removeEventListener("keydown", onKey);
+      }
+      if (ev.key === "Enter") submit();
+    };
+    modalEl?.addEventListener("click", (e) => {
+      if (e.target === modalEl) {
+        hide("react-billing-updatecard-modal");
+        elements?.destroy();
+        window.removeEventListener("keydown", onKey);
+      }
+    });
+    window.addEventListener("keydown", onKey);
+  }, []);
+
+  // Note: endpoints without /stripe prefix per your billingService.ts
   const cancelSubscription = useCallback(async () => {
     await jsonSecure(`${apiBase()}/api/cancel-subscription`, { method: "POST" });
     await qc.invalidateQueries({ queryKey: ["billing:info"] });
@@ -251,6 +283,7 @@ export function useBilling() {
     await qc.invalidateQueries({ queryKey: ["billing:info"] });
   }, [qc]);
 
+  /* -------- Exports -------- */
   const loading = useMemo(
     () => infoQ.isLoading || tiersQ.isLoading || invoicesQ.isLoading,
     [infoQ.isLoading, tiersQ.isLoading, invoicesQ.isLoading]
@@ -260,14 +293,17 @@ export function useBilling() {
   const isFreeForever = String(infoQ.data?.is_free_forever) === "1" || infoQ.data?.is_free_forever === true;
 
   return {
+    // state
     loading,
     info: infoQ.data,
     tiers: tiersQ.data || [],
     invoices: invoicesQ.data || [],
     isFreePlan,
     isFreeForever,
+
+    // actions
     startEmbeddedCheckout,
-    startUpdateCardEmbedded,
+    startUpdateCard,
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,

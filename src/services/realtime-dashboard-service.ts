@@ -1,23 +1,17 @@
 // src/services/realtime-dashboard-service.ts
-// Consolidated dashboard service - Single source of truth for REST + WebSocket
-
 import { mvBus } from "@/lib/mvBus";
 import { secureFetch } from "@/lib/auth";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
-/* ---------- Types ---------- */
 export type TrackingWebsite = { id: number; website_name: string; domain: string };
 type TrackingWebsitesAPI = { projects: Array<{ id: number; website_name?: string; name?: string; domain?: string }> };
 export type GeoCityPoint = { city: string; country: string; lat: number; lng: number; count: number; debug_ids?: string[] };
 
-/* ---------- Errors ---------- */
 export class HttpError extends Error { status: number; body?: string; constructor(status: number, message: string, body?: string){ super(message); this.status = status; this.body = body; } }
 export class UnauthorizedError extends HttpError { constructor(body?: string){ super(401, "unauthorized", body); } }
 
-/* ---------- Constants ---------- */
 const API = "https://api.modovisa.com";
 
-/* ---------- State ---------- */
 let selectedRange: RangeKey = "24h";
 let currentSiteId: number | null = null;
 
@@ -54,7 +48,6 @@ function emitCachedSnapshotIfAny(siteId: number, range: RangeKey): boolean {
     const obj = JSON.parse(raw) as { ts: number; data: DashboardPayload };
     if (!obj?.data) return false;
 
-    // Optionally enforce TTL (paint anyway if present; we revalidate in background)
     const age = Date.now() - (obj.ts || 0);
     if (age > SNAPSHOT_TTL_MS) {
       console.log("🗄️ [REST] Cache exists but stale; painting anyway and revalidating", { ageMs: age });
@@ -63,16 +56,14 @@ function emitCachedSnapshotIfAny(siteId: number, range: RangeKey): boolean {
     }
 
     const data = obj.data as DashboardPayload;
-    (data as any).range = range; // ensure UI guards pass
+    (data as any).range = range;
     mvBus.emit("mv:dashboard:snapshot", data);
     return true;
   } catch { return false; }
 }
 
 function saveSnapshotToCache(siteId: number, range: RangeKey, data: DashboardPayload) {
-  try {
-    localStorage.setItem(cacheKey(siteId, range), JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
+  try { localStorage.setItem(cacheKey(siteId, range), JSON.stringify({ ts: Date.now(), data })); } catch {}
 }
 
 /* ---------- Utils ---------- */
@@ -80,16 +71,14 @@ function safeJSON<T = any>(x: string): T | null { try { return JSON.parse(x) as 
 function normalizeCities(payload: any): GeoCityPoint[] {
   const arr = Array.isArray(payload) ? payload : [];
   return arr.map((v: any) => ({
-      city: String(v.city || "Unknown"),
-      country: String(v.country || "Unknown"),
-      lat: Number.isFinite(Number(v.lat)) ? Number(v.lat) : 0,
-      lng: Number.isFinite(Number(v.lng)) ? Number(v.lng) : 0,
-      count: Number.isFinite(Number(v.count)) ? Number(v.count) : 0,
-      debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
-    }))
-    .filter(p => p.lat !== 0 || p.lng !== 0);
+    city: String(v.city || "Unknown"),
+    country: String(v.country || "Unknown"),
+    lat: Number.isFinite(Number(v.lat)) ? Number(v.lat) : 0,
+    lng: Number.isFinite(Number(v.lng)) ? Number(v.lng) : 0,
+    count: Number.isFinite(Number(v.count)) ? Number(v.count) : 0,
+    debug_ids: Array.isArray(v.debug_ids) ? v.debug_ids : undefined,
+  })).filter(p => p.lat !== 0 || p.lng !== 0);
 }
-
 function hasSeries(data: any) {
   return (
     (Array.isArray(data.time_grouped_visits) && data.time_grouped_visits.length > 0) ||
@@ -97,10 +86,9 @@ function hasSeries(data: any) {
     (Array.isArray(data.unique_vs_returning) && data.unique_vs_returning.length > 0)
   );
 }
-
 function scheduleSnapshotRefresh(_reason: string) {
   if (!currentSiteId) return;
-  if (seriesSeenForCurrentSelection) return; // WS already driving
+  if (seriesSeenForCurrentSelection) return;
   if (refreshTimer) window.clearTimeout(refreshTimer);
   refreshTimer = window.setTimeout(async () => {
     try {
@@ -116,7 +104,7 @@ export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   const res = await secureFetch(`${API}/api/tracking-websites`, { method: "POST", headers: { "Content-Type": "application/json" } });
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) { const body = await res.text().catch(()=>""); throw new HttpError(res.status, "failed_tracking_websites", body); }
-  const j = (await res.json()) as TrackingWebsitesAPI;
+  const j = (await res.json()) as any as TrackingWebsitesAPI;
   return (j.projects || []).map(p => ({ id: Number(p.id), website_name: String(p.website_name || p.name || `Site ${p.id}`), domain: String(p.domain || "") }));
 }
 
@@ -195,7 +183,6 @@ async function connectWS(forceNewTicket = false) {
         }
       }, 25000) as unknown as number;
 
-      // Optional hint to server (safe if ignored)
       try { socket.send(JSON.stringify({ type: "request_dashboard_snapshot" })); } catch {}
     };
 
@@ -211,6 +198,8 @@ async function connectWS(forceNewTicket = false) {
       if (msg.type === "dashboard_analytics") {
         const data = msg.payload || {};
         mvBus.emit("mv:dashboard:frame", data);
+        // 🔔 NEW: tell React charts to re-mount (Bootstrap style)
+        mvBus.emit("mv:dashboard:tick", { ts: Date.now() });
 
         if (hasSeries(data)) {
           seriesSeenForCurrentSelection = true;
@@ -249,10 +238,7 @@ export function setRange(range: RangeKey) {
   selectedRange = range;
   seriesSeenForCurrentSelection = false;
 
-  if (currentSiteId) {
-    emitCachedSnapshotIfAny(currentSiteId, selectedRange); // instant paint
-    // Do NOT force WS reconnect on range change to avoid ticket spam.
-  }
+  if (currentSiteId) emitCachedSnapshotIfAny(currentSiteId, selectedRange);
 }
 
 export async function setSite(siteId: number) {
@@ -266,7 +252,6 @@ export async function setSite(siteId: number) {
   localStorage.setItem("current_website_id", String(siteId));
   mvBus.emit("mv:site:changed", { siteId });
 
-  // Instant cache paint (if any), then parallel WS + REST seed
   emitCachedSnapshotIfAny(siteId, selectedRange);
   void connectWS(true);
 
@@ -305,7 +290,6 @@ export async function initialize(initialRange: RangeKey = "24h") {
   const saved = localStorage.getItem("current_website_id");
   if (saved) { currentSiteId = Number(saved); console.log("📍 [Service] Loaded site from localStorage:", currentSiteId); }
 
-  // Visibility & network handlers (don’t auto-close; reconnect when possible)
   if (visHandler) document.removeEventListener("visibilitychange", visHandler);
   visHandler = () => { if (document.visibilityState === "visible") { if (!ws || ws.readyState !== WebSocket.OPEN) scheduleReconnect(800); } };
   document.addEventListener("visibilitychange", visHandler);
@@ -318,10 +302,10 @@ export async function initialize(initialRange: RangeKey = "24h") {
   window.addEventListener("offline", offlineHandler);
 
   if (currentSiteId) {
-    emitCachedSnapshotIfAny(currentSiteId, selectedRange); // instant
-    void connectWS(true); // live
+    emitCachedSnapshotIfAny(currentSiteId, selectedRange);
+    void connectWS(true);
     try {
-      const data = await getDashboardSnapshot({ siteId: currentSiteId, range: selectedRange }); // revalidate
+      const data = await getDashboardSnapshot({ siteId: currentSiteId, range: selectedRange });
       mvBus.emit("mv:dashboard:snapshot", data);
     } catch (e: any) { console.error("❌ [Service] Initialization failed:", e); }
   } else {
@@ -329,7 +313,6 @@ export async function initialize(initialRange: RangeKey = "24h") {
   }
 }
 
-/* ---------- Cleanup ---------- */
 export function cleanup() {
   console.log("🧹 [Service] Cleaning up");
   try { ws?.close(); } catch {}
