@@ -1,8 +1,8 @@
 // src/services/dashboard.store.ts
-// First-load REST seed (once per siteId:range) + 100% WebSocket realtime thereafter.
-// - No periodic polling
-// - No REST on reconnects, range changes, or site changes (WS-only after seed)
-// - Delta logs show source (WS vs REST)
+// One-time REST seed per (siteId:range) + 100% WS stream thereafter.
+// - Merges partial TGV frames (time_grouped_visits_delta or tiny arrays)
+// - Watchdog pings WS for series if KPIs move but TGV stalls
+// - Clear delta logs with source tags (WS / REST)
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -140,7 +140,7 @@ function emitCached(siteId: number, range: RangeKey) {
   } catch { return false; }
 }
 
-/* ---------- Merge policy ---------- */
+/* ---------- Merge policy & TGV patching ---------- */
 const KPI_KEYS = new Set<string>([
   "live_visitors","unique_visitors","bounce_rate","bounce_rate_delta",
   "avg_duration","avg_duration_delta","multi_page_visits","multi_page_visits_delta",
@@ -158,26 +158,32 @@ function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPa
   return next as DashboardPayload;
 }
 
-function debugDelta(prev: DashboardPayload | null, next: DashboardPayload | null) {
-  if (!W.__mvDashDbg) return;
-  const p = prev?.time_grouped_visits || [];
-  const n = next?.time_grouped_visits || [];
-  const pV = sumBy(p, "views");
-  const nV = sumBy(n, "views");
-  const pU = sumBy(p, "visitors");
-  const nU = sumBy(n, "visitors");
-  if (nV !== pV || nU !== pU) {
-    const last = n[n.length - 1];
-    console.debug(
-      `💹 [frame] views Δ=${nV - pV}, visitors Δ=${nU - pU}` +
-      (last ? ` | last="${last.label}" v=${last.visitors} w=${last.views}` : "")
-    );
+/** Replace or append patch labels; clamp size to original length (if known) */
+function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
+  const out = Array.isArray(base) ? base.map(b => ({ ...b })) : [];
+  const labels = out.map(b => String(b.label));
+  for (const p of patch) {
+    const lbl = String((p as any)?.label ?? "");
+    if (!lbl) continue;
+    const v = Number((p as any)?.visitors ?? 0);
+    const w = Number((p as any)?.views ?? 0);
+    const idx = labels.indexOf(lbl);
+    if (idx >= 0) {
+      out[idx] = { ...out[idx], label: lbl, visitors: v, views: w };
+    } else {
+      out.push({ label: lbl, visitors: v, views: w });
+      labels.push(lbl);
+    }
   }
+  const max = Array.isArray(base) && base.length ? base.length : out.length;
+  while (out.length > max) out.shift();
+  return out;
 }
 
-/* ---------------- REST (seed once per siteId:range) ---------------- */
+/* ---------------- REST seed (once per siteId:range) ---------------- */
 const seeded = new Set<string>();
 let seedInFlight = false;
+let lastTgvAt = 0; // updated whenever we actually change the series
 const seedKey = () => (state.siteId ? `${state.siteId}:${state.range}` : "");
 
 /** One-time seed fetch for the current (siteId:range). */
@@ -200,7 +206,6 @@ export async function fetchSnapshotSeedOnce() {
     const data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
 
-    // Source-tagged delta log (REST)
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
     saveSnapshot(state.siteId, state.range, data);
@@ -215,6 +220,7 @@ export async function fetchSnapshotSeedOnce() {
       error: null,
     });
 
+    lastTgvAt = Date.now();
     seeded.add(key);
     if (W.__mvDashDbg) console.debug("✅ [REST] Seed snapshot completed once for", key);
   } catch (e: any) {
@@ -225,10 +231,8 @@ export async function fetchSnapshotSeedOnce() {
   }
 }
 
-/** COMPAT: Dashboard.tsx expects this symbol. It just proxies to the one-time seed. */
-export async function fetchSnapshot() {
-  return fetchSnapshotSeedOnce();
-}
+/** COMPAT alias for Dashboard.tsx */
+export async function fetchSnapshot() { return fetchSnapshotSeedOnce(); }
 
 /** Still needed by the sites dropdown in Dashboard.tsx */
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
@@ -288,6 +292,10 @@ async function getWSTicket(): Promise<string> {
   }
 }
 
+function requestSeries() {
+  try { ws?.send(JSON.stringify({ type: "request_series", range: state.range })); } catch {}
+}
+
 export async function connectWS(forceNew = false) {
   if (!state.siteId) return;
   if (!forceNew && ws && ws.readyState === WebSocket.OPEN) return;
@@ -326,7 +334,7 @@ export async function connectWS(forceNew = false) {
         }
       }, 25_000) as unknown as number;
 
-      // Seed exactly once per siteId:range, never again (no seeds on reconnects)
+      // One-time seed after socket opens (per siteId:range)
       void fetchSnapshotSeedOnce();
     };
 
@@ -339,20 +347,68 @@ export async function connectWS(forceNew = false) {
       switch (msg.type) {
         case "dashboard_analytics":
         case "analytics_frame": {
-          const frame = (msg.payload || {}) as Partial<DashboardPayload>;
+          const frameRaw = (msg.payload || {}) as Partial<DashboardPayload> & {
+            time_grouped_visits?: any[];
+            time_grouped_visits_delta?: any[];
+            tgv_delta?: any[];
+            tgv?: any[];
+          };
+
+          // Normalize/patch any partial TGV payload first
+          const baseTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;
+          let patchedTgv: any[] | undefined;
+
+          if (Array.isArray(frameRaw.time_grouped_visits_delta) && frameRaw.time_grouped_visits_delta.length) {
+            patchedTgv = applyTgvPatch(baseTgv, frameRaw.time_grouped_visits_delta);
+          } else if (Array.isArray(frameRaw.tgv_delta) && frameRaw.tgv_delta.length) {
+            patchedTgv = applyTgvPatch(baseTgv, frameRaw.tgv_delta);
+          } else if (Array.isArray(frameRaw.tgv) && frameRaw.tgv.length) {
+            // some servers might send `tgv` as alias
+            const arr = frameRaw.tgv.map((x:any)=>({
+              label: String(x.label ?? ""),
+              visitors: Number(x.visitors ?? 0),
+              views: Number(x.views ?? 0),
+            }));
+            // treat tiny arrays as patches
+            if (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
+              patchedTgv = applyTgvPatch(baseTgv, arr);
+            } else {
+              patchedTgv = arr;
+            }
+          } else if (Array.isArray(frameRaw.time_grouped_visits) && frameRaw.time_grouped_visits.length) {
+            const incoming = frameRaw.time_grouped_visits;
+            if (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
+              patchedTgv = applyTgvPatch(baseTgv, incoming);
+            } else {
+              patchedTgv = incoming;
+            }
+          }
+
+          const frame: Partial<DashboardPayload> = { ...frameRaw };
+          if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
+
           const frameRange = (frame as any)?.range as RangeKey | undefined;
           const next = frameRange && frameRange !== state.range
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
-          // Optional verbose delta
-          debugDelta(state.data, next);
+          // WS delta & staleness handling
+          const prevTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;
+          const nextTgv = (next as any)?.time_grouped_visits as any[] | undefined;
 
-          // Source-tagged delta (WS)
-          logTgvDelta("WS",
-            state.data?.time_grouped_visits as any[],
-            (next as any)?.time_grouped_visits as any[]
-          );
+          logTgvDelta("WS", prevTgv, nextTgv);
+
+          // If KPIs changed but TGV didn't for >75s, nudge server
+          const kpiChanged =
+            (frame as any)?.unique_visitors !== undefined && (frame as any)?.unique_visitors !== (state.data as any)?.unique_visitors ||
+            (frame as any)?.multi_page_visits !== undefined && (frame as any)?.multi_page_visits !== (state.data as any)?.multi_page_visits;
+
+          const tgvChanged = JSON.stringify(prevTgv || []) !== JSON.stringify(nextTgv || []);
+          if (tgvChanged) lastTgvAt = Date.now();
+          else if (kpiChanged && Date.now() - lastTgvAt > 75_000) {
+            console.warn("⚠️ [WS] KPIs moving but series stale >75s — requesting series frame…");
+            requestSeries();
+          }
 
           // recompute live count if not provided explicitly
           let liveCount = state.liveCount;
@@ -422,7 +478,7 @@ export function init(initialRange: RangeKey = "24h") {
   if (state.siteId) {
     emitCached(state.siteId, state.range);
     void connectWS(true);
-    // no direct REST here — WS onopen will seed once if not already seeded
+    // WS onopen triggers one-time seed
   }
 }
 
@@ -433,7 +489,6 @@ export function setSite(siteId: number) {
 
   emitCached(siteId, state.range);
   void connectWS(true);
-  // no REST seed here (WS onopen handles one-time seed)
 }
 
 export function setRange(range: RangeKey) {
@@ -442,7 +497,7 @@ export function setRange(range: RangeKey) {
 
   if (state.siteId) {
     emitCached(state.siteId, range);
-    // Keep socket; rely on stream frames. Seed for new range happens only once if you force reconnect.
+    // keep socket; rely on stream frames; WS onopen (if reconnect) seeds once
     void connectWS(false);
   }
 }
@@ -462,6 +517,6 @@ export function useDashboard() {
   );
 }
 
-/* ---------------- Expose for debugging ---------------- */
+/* ---------------- Debug hooks ---------------- */
 // @ts-ignore
 if (typeof window !== "undefined") window.__mvDashSeeded = seeded;
