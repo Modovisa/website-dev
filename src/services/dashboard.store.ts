@@ -180,6 +180,7 @@ const seeded = new Set<string>();
 let seedInFlight = false;
 const seedKey = () => (state.siteId ? `${state.siteId}:${state.range}` : "");
 
+/** One-time seed fetch for the current (siteId:range). */
 export async function fetchSnapshotSeedOnce() {
   if (!state.siteId) return;
   const key = seedKey();
@@ -222,6 +223,26 @@ export async function fetchSnapshotSeedOnce() {
   } finally {
     seedInFlight = false;
   }
+}
+
+/** COMPAT: Dashboard.tsx expects this symbol. It just proxies to the one-time seed. */
+export async function fetchSnapshot() {
+  return fetchSnapshotSeedOnce();
+}
+
+/** Still needed by the sites dropdown in Dashboard.tsx */
+export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
+  const res = await secureFetch(`${API}/api/tracking-websites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`tracking_websites_${res.status}:${await res.text().catch(()=> "")}`);
+  const j = (await res.json()) as { projects: Array<{ id: number; website_name?: string; name?: string; domain?: string }> };
+  return (j.projects || []).map((p) => ({
+    id: Number(p.id),
+    website_name: String(p.website_name || p.name || `Site ${p.id}`),
+    domain: String(p.domain || ""),
+  }));
 }
 
 /* ---------------- WS (stream) ---------------- */
@@ -401,7 +422,7 @@ export function init(initialRange: RangeKey = "24h") {
   if (state.siteId) {
     emitCached(state.siteId, state.range);
     void connectWS(true);
-    // ❌ no direct REST here — WS onopen will seed once if not already seeded
+    // no direct REST here — WS onopen will seed once if not already seeded
   }
 }
 
@@ -412,7 +433,7 @@ export function setSite(siteId: number) {
 
   emitCached(siteId, state.range);
   void connectWS(true);
-  // ❌ no REST seed here (WS onopen handles one-time seed)
+  // no REST seed here (WS onopen handles one-time seed)
 }
 
 export function setRange(range: RangeKey) {
@@ -421,10 +442,7 @@ export function setRange(range: RangeKey) {
 
   if (state.siteId) {
     emitCached(state.siteId, range);
-    // Keep the same socket (ticket is site-scoped); WS onopen is not called.
-    // If you want a seed on new range, it will happen once when connectWS(true) is used.
-    // We’ll rely on stream frames for range updates; to force a seed for new range:
-    // void fetchSnapshotSeedOnce();  // <- keep commented to stay 100% stream after initial
+    // Keep socket; rely on stream frames. Seed for new range happens only once if you force reconnect.
     void connectWS(false);
   }
 }
