@@ -1,5 +1,4 @@
 // src/pages/app/Dashboard.tsx
-
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -7,9 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock, Target, DollarSign } from "lucide-react";
+import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock } from "lucide-react";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
-// ❌ REMOVED: import { initDashboardCompat, setCompatRange } from "@/compat/bootstrap-bridge";
 import type { RangeKey } from "@/types/dashboard";
 
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
@@ -25,9 +23,16 @@ import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
 
-// ✅ FIXED: Updated to use new consolidated service
 import { getTrackingWebsites } from "@/services/realtime-dashboard-service";
-import { nf, pct } from "@/lib/format";
+import {
+  initialize as rtInit,
+  setSite as rtSetSite,
+  setRange as rtSetRange,
+  fetchSnapshot as rtFetchSnapshot,
+  reconnectWebSocket as rtReconnect,
+} from "@/services/realtime-dashboard-service";
+
+import { nf } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
 type Website = { id: number; website_name: string; domain: string };
@@ -41,11 +46,6 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // ❌ REMOVED: init legacy-compat once
-  // useEffect(() => {
-  //   setCompatRange(range);
-  // }, [range]);
-
   const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
@@ -58,13 +58,43 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
+  // ---------- CRITICAL BOOTSTRAP ----------
+  // Start the consolidated realtime service once for this page
   useEffect(() => {
-    if (websites.length && (siteId == null || Number.isNaN(siteId))) {
-      setSiteId(websites[0].id);
-      localStorage.setItem("current_website_id", String(websites[0].id));
-    }
-  }, [websites, siteId]);
+    rtInit(range);
+    rtSetRange(range);
+  }, []); // eslint-disable-line
 
+  // After websites load, pick a site (saved or first) and point the service at it
+  useEffect(() => {
+    if (!websites || websites.length === 0) return;
+
+    const saved = Number(localStorage.getItem("current_website_id") || 0);
+    const savedExists = websites.some((w) => w.id === saved);
+    const chosen = savedExists ? saved : websites[0].id;
+
+    if (siteId !== chosen) {
+      setSiteId(chosen);
+      localStorage.setItem("current_website_id", String(chosen));
+    }
+
+    rtSetSite(chosen); // triggers REST snapshot + WS connect
+  }, [websites]); // eslint-disable-line
+
+  // When the user changes the site from the dropdown
+  useEffect(() => {
+    if (!siteId) return;
+    rtSetSite(siteId); // REST snapshot + WS reconnect
+  }, [siteId]);
+
+  // When the user changes the date range
+  useEffect(() => {
+    rtSetRange(range);
+    rtFetchSnapshot(); // fresh arrays for the chosen range
+    rtReconnect();     // optional: re-handshake stream
+  }, [range]);
+
+  // Hook that listens to mvBus updates produced by the service
   const {
     data,
     liveCount,
@@ -77,15 +107,13 @@ export default function Dashboard() {
     restart,
   } = useDashboardRealtime(siteId ?? null, range);
 
-  /* ---------- Skeleton gating (no flicker on REST/WS) ---------- */
+  // ---------- Skeleton gating ----------
   const [firstPaintDone, setFirstPaintDone] = useState(false);
 
-  // mark first paint when any payload arrives
   useEffect(() => {
     if (data && !firstPaintDone) setFirstPaintDone(true);
   }, [data, firstPaintDone]);
 
-  // reset only when site or range actually changes
   const prevSiteRef = useRef<number | null>(siteId);
   useEffect(() => {
     if (prevSiteRef.current !== siteId) {
@@ -105,13 +133,12 @@ export default function Dashboard() {
   const showKpiSkeleton = !firstPaintDone;
   const showPageSkeleton = !firstPaintDone;
 
-  // Only 5 KPI cards as requested
   const topCards = [
-    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null },
+    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null as number | null },
     { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
-    { key: "bounce", name: "Bounce Rate", value: `${data?.bounce_rate ?? 0}%`, icon: TrendingUp, change: data?.bounce_rate_delta ?? null, reverseColor: true },
+    { key: "bounce", name: "Bounce Rate", value: (data?.bounce_rate ?? 0) + "%", icon: TrendingUp, change: data?.bounce_rate_delta ?? null, reverseColor: true },
     { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: Clock, change: data?.avg_duration_delta ?? null },
-    { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? '--', icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
+    { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? "--", icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
   ];
 
   if (authLoading) {
@@ -144,7 +171,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                // do not reset firstPaintDone here; hook takes care when siteId changes
+                // pull a fresh snapshot for the newly selected site
                 refreshSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
@@ -162,7 +189,6 @@ export default function Dashboard() {
 
             <Select value={range} onValueChange={(v: RangeKey) => {
               setRange(v);
-              // hook will reset firstPaintDone and prime snapshot
               refreshSnapshot();
             }}>
               <SelectTrigger className="w-[160px]">
@@ -180,7 +206,6 @@ export default function Dashboard() {
             <Button
               variant="outline"
               onClick={() => {
-                // manual refresh must NOT blank the page
                 refreshSnapshot();
                 reconnectWS();
               }}
@@ -215,7 +240,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* KPI Cards - 5 cards in one row */}
+        {/* KPI Cards */}
         <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
           {topCards.map((stat) => (
             <Card key={stat.key}>
