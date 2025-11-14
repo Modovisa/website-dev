@@ -28,7 +28,6 @@ import {
   setSite as dsSetSite,
   setRange as dsSetRange,
   fetchSnapshot as dsFetchSnapshot,
-  connectWS as dsReconnect,
   getTrackingWebsites,
 } from "@/services/dashboard.store";
 import { nf } from "@/lib/format";
@@ -45,7 +44,7 @@ export default function Dashboard() {
   });
   const [range, setRange] = useState<RangeKey>("24h");
 
-  // Boot the store only after auth is ready
+  // Boot the store exactly once after auth
   useEffect(() => {
     if (!isAuthenticated) return;
     dsInit(range);
@@ -56,7 +55,7 @@ export default function Dashboard() {
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
     staleTime: 5 * 60 * 1000,
-    enabled: isAuthenticated, // don’t fire until auth is ready
+    enabled: isAuthenticated,
   });
 
   const websites: Website[] = (websitesRaw || []).map((p: any) => ({
@@ -65,34 +64,32 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // After websites load, select site and seed/reconnect once
+  // Pick initial site once websites arrive (no WS calls here)
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!websites || websites.length === 0) return;
 
     const saved = Number(localStorage.getItem("current_website_id") || 0);
-    const savedExists = websites.some((w) => w.id === saved);
-    const chosen = savedExists ? saved : websites[0].id;
+    const picked = websites.some((w) => w.id === saved) ? saved : websites[0].id;
 
-    if (siteId !== chosen) {
-      setSiteId(chosen);
-      localStorage.setItem("current_website_id", String(chosen));
+    if (siteId !== picked) {
+      setSiteId(picked);
+      localStorage.setItem("current_website_id", String(picked));
     }
-    dsSetSite(chosen);
+    // no dsSetSite here — let the siteId effect below fire exactly once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [websites, isAuthenticated]);
 
-  // When the user changes site
+  // When the user changes site → single source of truth for WS/subscription
   useEffect(() => {
-    if (!isAuthenticated) return;
-    if (!siteId) return;
+    if (!isAuthenticated || !siteId) return;
     dsSetSite(siteId);
   }, [siteId, isAuthenticated]);
 
-  // When the user changes range
+  // When the user changes range → store handles cache + REST + WS set_range
   useEffect(() => {
     if (!isAuthenticated) return;
-    dsSetRange(range);        // store handles cache→fetch→(non-forced) WS connect
+    dsSetRange(range);
   }, [range, isAuthenticated]);
 
   // Subscribe to store
@@ -140,7 +137,6 @@ export default function Dashboard() {
     { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? "--", icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
   ];
 
-  // If not authenticated at all, don’t render sensitive UI
   if (!isAuthenticated) return null;
 
   return (
@@ -186,12 +182,13 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
+            {/* Refresh: snapshot only (no forced WS reconnect to avoid extra tickets) */}
             <Button
               variant="outline"
-              onClick={() => { dsFetchSnapshot(); dsReconnect(true); }}
+              onClick={() => dsFetchSnapshot()}
               disabled={!siteId}
               className="gap-2"
-              title="Refresh snapshot and retry live stream"
+              title="Refresh snapshot"
             >
               <RefreshCcw className="h-4 w-4" />
               Refresh
@@ -207,7 +204,7 @@ export default function Dashboard() {
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => { dsReconnect(true); dsFetchSnapshot(); }} disabled={!siteId}>
+                <Button variant="secondary" size="sm" onClick={() => dsFetchSnapshot()} disabled={!siteId}>
                   Try again
                 </Button>
               </div>
