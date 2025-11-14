@@ -16,10 +16,9 @@ type Props = {
 };
 
 function niceStep(maxValue: number) {
-  // “nice” ticks (1/2/5 × 10^k) so small bumps actually show
   const approx = Math.max(1, Math.ceil((maxValue || 0) / 5));
   const pow10 = Math.pow(10, Math.floor(Math.log10(approx)));
-  const cands = [1, 2, 5, 10].map(m => m * pow10);
+  const cands = [1, 2, 5, 10].map((m) => m * pow10);
   for (const s of cands) if (approx <= s) return s;
   return cands[cands.length - 1] || 1;
 }
@@ -35,8 +34,8 @@ export default function TimeGroupedVisits({
   const base = useBaseOptions({ stacked: true, yBeginAtZero: true, showLegend: true });
 
   const labels = useMemo(() => (data || []).map((d) => d.label), [data, version]);
-  const visitors = useMemo(() => (data || []).map((d) => d.visitors || 0), [data, version]);
-  const views = useMemo(() => (data || []).map((d) => d.views || 0), [data, version]);
+  const visitors = useMemo(() => (data || []).map((d) => Number(d.visitors) || 0), [data, version]);
+  const views = useMemo(() => (data || []).map((d) => Number(d.views) || 0), [data, version]);
 
   // Optional debug: set window.__mvDashDbg = true in console
   useEffect(() => {
@@ -44,8 +43,9 @@ export default function TimeGroupedVisits({
       const vSum = visitors.reduce((s, n) => s + (n || 0), 0);
       const wSum = views.reduce((s, n) => s + (n || 0), 0);
       const last = labels[labels.length - 1];
-      // Emits whenever the chart remounts due to frameKey/version
-      console.debug(`📊 [TGV] range=${range} points=${labels.length} last="${last}" visitorsSum=${vSum} viewsSum=${wSum}`);
+      console.debug(
+        `📊 [TGV] range=${range} points=${labels.length} last="${last}" visitorsSum=${vSum} viewsSum=${wSum}`
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameKey, version]);
@@ -56,9 +56,7 @@ export default function TimeGroupedVisits({
 
     const totalBars = labels.length;
     const barPct =
-      totalBars > 30 ? 0.5 :
-      totalBars > 20 ? 0.6 :
-      totalBars > 10 ? 0.7 : 0.8;
+      totalBars > 30 ? 0.5 : totalBars > 20 ? 0.6 : totalBars > 10 ? 0.7 : 0.8;
 
     const datasets = [
       {
@@ -70,7 +68,6 @@ export default function TimeGroupedVisits({
         stack: "stack1",
         barPercentage: barPct,
         categoryPercentage: 0.9,
-        parsing: false as const,
       },
       {
         datasetIdKey: "views",
@@ -81,7 +78,6 @@ export default function TimeGroupedVisits({
         stack: "stack1",
         barPercentage: barPct,
         categoryPercentage: 0.9,
-        parsing: false as const,
       },
     ];
 
