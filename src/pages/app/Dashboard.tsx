@@ -61,8 +61,9 @@ export default function Dashboard() {
   // Boot the store once with the initial range
   useEffect(() => {
     dsInit(range);
-    dsSetRange(range); // make sure store starts in sync with UI
-  }, []); // eslint-disable-line
+    dsSetRange(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // After websites load, select site and seed/reconnect
   useEffect(() => {
@@ -75,7 +76,8 @@ export default function Dashboard() {
       localStorage.setItem("current_website_id", String(chosen));
     }
     dsSetSite(chosen);
-  }, [websites]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [websites]);
 
   // When the user changes site
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function Dashboard() {
   // When the user changes range
   useEffect(() => {
     dsSetRange(range);
-    dsFetchSnapshot(); // one seed for the new range
+    dsFetchSnapshot(); // seed snapshot for the new range
     dsReconnect();     // ensure live stream is active
   }, [range]);
 
@@ -99,11 +101,14 @@ export default function Dashboard() {
     error,
     analyticsVersion,
     frameKey,
+    seriesSig,
   } = useDashboard();
 
   // First paint gating
   const [firstPaintDone, setFirstPaintDone] = useState(false);
-  useEffect(() => { if (data && !firstPaintDone) setFirstPaintDone(true); }, [data, firstPaintDone]);
+  useEffect(() => {
+    if (data && !firstPaintDone) setFirstPaintDone(true);
+  }, [data, firstPaintDone]);
 
   const prevSiteRef = useRef<number | null>(siteId);
   useEffect(() => {
@@ -177,10 +182,13 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={range} onValueChange={(v: RangeKey) => {
-              setRange(v);
-              dsFetchSnapshot();
-            }}>
+            <Select
+              value={range}
+              onValueChange={(v: RangeKey) => {
+                setRange(v);
+                dsFetchSnapshot();
+              }}
+            >
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -214,7 +222,14 @@ export default function Dashboard() {
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => { dsReconnect(); dsFetchSnapshot(); }} disabled={!siteId}>Try again</Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { dsReconnect(); dsFetchSnapshot(); }}
+                  disabled={!siteId}
+                >
+                  Try again
+                </Button>
               </div>
             </div>
           </div>
@@ -243,11 +258,13 @@ export default function Dashboard() {
                       {typeof stat.value === "number" ? nf(stat.value) : stat.value}
                     </div>
                     {stat.change != null && (
-                      <p className={`text-xs mt-1 ${
-                        (stat as any).reverseColor
-                          ? (Number(stat.change) <= 0 ? "text-green-600" : "text-red-600")
-                          : (Number(stat.change) >= 0 ? "text-green-600" : "text-red-600")
-                      }`}>
+                      <p
+                        className={`text-xs mt-1 ${
+                          (stat as any).reverseColor
+                            ? (Number(stat.change) <= 0 ? "text-green-600" : "text-red-600")
+                            : (Number(stat.change) >= 0 ? "text-green-600" : "text-red-600")
+                        }`}
+                      >
                         {Number(stat.change) >= 0 ? "↑" : "↓"} {Math.abs(Number(stat.change)).toFixed(1)}% from last period
                       </p>
                     )}
@@ -284,16 +301,17 @@ export default function Dashboard() {
               <div className="grid gap-6 md:grid-cols-3">
                 <div className="md:col-span-2">
                   <TimeGroupedVisits
+                    key={`tgv-${frameKey}-${seriesSig}-${range}-${siteId}`}
                     data={data.time_grouped_visits ?? []}
                     range={range}
                     loading={false}
                     hasData={!!data.time_grouped_visits?.length}
                     version={analyticsVersion}
-                    frameKey={frameKey}                 // ← re-animate on WS frames
+                    frameKey={frameKey}
                   />
                 </div>
                 <EventVolume
-                  key={`evt-${frameKey}`}               // ← remount on every WS frame
+                  key={`evt-${frameKey}-${seriesSig}-${range}-${siteId}`}
                   data={data.events_timeline ?? []}
                   loading={false}
                   hasData={!!data.events_timeline?.length}
@@ -331,7 +349,12 @@ export default function Dashboard() {
                       </p>
                     </CardHeader>
                     <CardContent className="pt-2 h-[540px]">
-                      <WorldMap countries={data.countries ?? []} cities={liveCities} height={540} />
+                      <WorldMap
+                        key={`map-${siteId}-${range}`}
+                        countries={data.countries ?? []}
+                        cities={liveCities}
+                        height={540}
+                      />
                     </CardContent>
                   </Card>
                 </div>
@@ -351,15 +374,23 @@ export default function Dashboard() {
                   <CardTitle>Visitor Density Calendar</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <VisitorsHeatmap key={`heat-${frameKey}`} data={data.calendar_density ?? []} height={220} />
+                  <VisitorsHeatmap
+                    key={`heat-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                    data={data.calendar_density ?? []}
+                    height={220}
+                  />
                 </CardContent>
               </Card>
 
               {/* Lines */}
               <div className="grid gap-6 md:grid-cols-2">
-                <UniqueReturning key={`ur-${frameKey}`} data={data.unique_vs_returning ?? []} version={analyticsVersion} />
+                <UniqueReturning
+                  key={`ur-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  data={data.unique_vs_returning ?? []}
+                  version={analyticsVersion}
+                />
                 <PerformanceLine
-                  key={`conv-${frameKey}`}
+                  key={`conv-${frameKey}-${seriesSig}-${range}-${siteId}`}
                   title="Conversions"
                   current={data.conversions_timeline ?? []}
                   previous={data.conversions_previous_timeline ?? []}
@@ -370,17 +401,49 @@ export default function Dashboard() {
               </div>
 
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <PerformanceLine key={`imp-${frameKey}`} title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled version={analyticsVersion} />
-                <PerformanceLine key={`clk-${frameKey}`} title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled version={analyticsVersion} />
-                <PerformanceLine key={`srch-${frameKey}`} title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled version={analyticsVersion} />
-                <PerformanceLine key={`all-${frameKey}`} title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled version={analyticsVersion} />
+                <PerformanceLine
+                  key={`imp-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="Impressions"
+                  current={data.impressions_timeline ?? []}
+                  previous={data.impressions_previous_timeline ?? []}
+                  color="#22c55e"
+                  filled
+                  version={analyticsVersion}
+                />
+                <PerformanceLine
+                  key={`clk-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="Clicks"
+                  current={data.clicks_timeline ?? []}
+                  previous={data.clicks_previous_timeline ?? []}
+                  color="#3b82f6"
+                  filled
+                  version={analyticsVersion}
+                />
+                <PerformanceLine
+                  key={`srch-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="Visitors from Search"
+                  current={data.search_visitors_timeline ?? []}
+                  previous={data.search_visitors_previous_timeline ?? []}
+                  color="#f59e0b"
+                  filled
+                  version={analyticsVersion}
+                />
+                <PerformanceLine
+                  key={`all-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="All Visitors"
+                  current={(data as any)?.unique_visitors_timeline ?? []}
+                  previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+                  color="#0ea5e9"
+                  filled
+                  version={analyticsVersion}
+                />
               </div>
 
               {/* Donuts + UTMs */}
               <div className="grid gap-6 md:grid-cols-3">
-                <Donut key={`br-${frameKey}`} title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
-                <Donut key={`dev-${frameKey}`}  title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
-                <Donut key={`os-${frameKey}`}   title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
+                <Donut key={`br-${frameKey}-${seriesSig}`} title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
+                <Donut key={`dev-${frameKey}-${seriesSig}`} title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
+                <Donut key={`os-${frameKey}-${seriesSig}`}  title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
               </div>
 
               <div className="grid gap-6 md:grid-cols-3">

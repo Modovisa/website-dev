@@ -1,8 +1,5 @@
 // src/services/dashboard.store.ts
 // Single source of truth for dashboard state: REST seed + WS frames.
-// React charts keep the selected range (e.g., "24h"). If a WS frame arrives
-// for a different range (e.g., "30d"), we IGNORE its time-series and only
-// update KPIs — exactly like your Bootstrap page.
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -24,13 +21,9 @@ export type StoreState = {
   liveCities: GeoCityPoint[];
   isLoading: boolean;
   error: string | null;
-
-  // bumps on any analytics change (snapshot or frame)
-  analyticsVersion: number;
-
-  // bumps on each WS frame that affects visible series (and first snapshot)
-  frameKey: number;
-
+  analyticsVersion: number;   // bumps on any analytics change
+  frameKey: number;           // bump => charts re-mount/re-animate
+  seriesSig: string;          // fingerprint of visible series
   siteId: number | null;
   range: RangeKey;
 };
@@ -39,9 +32,9 @@ export type TrackingWebsite = { id: number; website_name: string; domain: string
 
 /* ---------------- Consts ---------------- */
 const API = "https://api.modovisa.com";
-const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
 const BACKOFF_MAX = 60_000;
-const TICKET_THROTTLE_MS = 5_000;
+// Push throttle a bit higher than your Bootstrap to dodge 429s under tab-jitter
+const TICKET_THROTTLE_MS = 8000;
 
 /* ---------------- Internal mutable state ---------------- */
 let state: StoreState = {
@@ -52,6 +45,7 @@ let state: StoreState = {
   error: null,
   analyticsVersion: 0,
   frameKey: 0,
+  seriesSig: "",
   siteId: null,
   range: "24h",
 };
@@ -78,17 +72,35 @@ function normalizeCities(payload: any): GeoCityPoint[] {
     .filter((p) => p.lat !== 0 || p.lng !== 0);
 }
 
-function hasSeries(d: any) {
-  return (
-    (Array.isArray(d?.time_grouped_visits) && d.time_grouped_visits.length > 0) ||
-    (Array.isArray(d?.events_timeline) && d.events_timeline.length > 0) ||
-    (Array.isArray(d?.unique_vs_returning) && d.unique_vs_returning.length > 0) ||
-    (Array.isArray(d?.calendar_density) && d.calendar_density.length > 0) ||
-    (Array.isArray(d?.impressions_timeline) && d.impressions_timeline.length > 0) ||
-    (Array.isArray(d?.clicks_timeline) && d.clicks_timeline.length > 0) ||
-    (Array.isArray(d?.search_visitors_timeline) && d.search_visitors_timeline.length > 0) ||
-    (Array.isArray(d?.conversions_timeline) && d.conversions_timeline.length > 0)
-  );
+// Build a compact fingerprint of all visible series that drive chart renders.
+// We keep it small but sensitive: last 24 buckets of the main timelines + totals.
+function seriesSignature(d: DashboardPayload | null, range: RangeKey): string {
+  if (!d) return "";
+  const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
+  const tgv = cap((d as any).time_grouped_visits);
+  const evt = cap((d as any).events_timeline);
+  const uv  = cap((d as any).unique_visitors_timeline);
+  const imp = cap((d as any).impressions_timeline);
+  const clk = cap((d as any).clicks_timeline);
+  const src = cap((d as any).search_visitors_timeline);
+  const cnv = cap((d as any).conversions_timeline);
+
+  const sum = (a: any[], k: string) => a.reduce((s, x) => s + (Number(x?.[k] ?? x?.value ?? x?.count) || 0), 0);
+  const sigObj = {
+    r: range,
+    tgvL: tgv.length, tgvV: sum(tgv, "visitors"), tgvW: sum(tgv, "views"),
+    evtL: evt.length, evtC: sum(evt, "count"),
+    uvL:  uv.length,  uvC:  sum(uv,  "count"),
+    impL: imp.length, impC: sum(imp, "count"),
+    clkL: clk.length, clkC: sum(clk, "count"),
+    srcL: src.length, srcC: sum(src, "count"),
+    cnvL: cnv.length, cnvC: sum(cnv, "count"),
+  };
+  return JSON.stringify(sigObj);
+}
+
+function saveSnapshotToCache(siteId: number, range: RangeKey, data: DashboardPayload) {
+  try { localStorage.setItem(cacheKey(siteId, range), JSON.stringify({ ts: Date.now(), data })); } catch {}
 }
 
 function emitCachedSnapshotIfAny(siteId: number, range: RangeKey) {
@@ -99,11 +111,13 @@ function emitCachedSnapshotIfAny(siteId: number, range: RangeKey) {
     if (!obj?.data) return false;
     const data = obj.data as DashboardPayload;
     (data as any).range = range;
+    const sig = seriesSignature(data, range);
     set({
       data,
       isLoading: false,
       analyticsVersion: state.analyticsVersion + 1,
       frameKey: state.frameKey + 1,
+      seriesSig: sig,
       error: null,
     });
     return true;
@@ -112,12 +126,7 @@ function emitCachedSnapshotIfAny(siteId: number, range: RangeKey) {
   }
 }
 
-function saveSnapshotToCache(siteId: number, range: RangeKey, data: DashboardPayload) {
-  try { localStorage.setItem(cacheKey(siteId, range), JSON.stringify({ ts: Date.now(), data })); } catch {}
-}
-
-/* ---------- Range-mismatch guard (Bootstrap parity) ---------- */
-// Keys we will *never* take from a mismatched WS frame.
+/* ---------- Range-guard parity with Bootstrap ---------- */
 const RANGE_SERIES_KEYS = new Set<string>([
   "time_grouped_visits",
   "events_timeline",
@@ -145,7 +154,6 @@ const RANGE_SERIES_KEYS = new Set<string>([
   "previous_unique_visitors_timeline",
 ]);
 
-// KPI fields we *do* allow to update regardless of range (cards).
 const KPI_KEYS = new Set<string>([
   "live_visitors",
   "unique_visitors",
@@ -168,12 +176,11 @@ function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPa
   for (const k of Object.keys(frame || {})) {
     if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
   }
-  // keep current selected range & existing series unchanged
   next.range = state.range;
   return next as DashboardPayload;
 }
 
-/* ---------------- Public: small REST helper ---------------- */
+/* ---------------- REST ---------------- */
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   const res = await secureFetch(`${API}/api/tracking-websites`, {
     method: "POST",
@@ -191,7 +198,6 @@ export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   }));
 }
 
-/* ---------------- REST: snapshot (seed once) ---------------- */
 export async function fetchSnapshot() {
   if (!state.siteId) return;
   const tz = String(new Date().getTimezoneOffset());
@@ -210,14 +216,17 @@ export async function fetchSnapshot() {
     const data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
     saveSnapshotToCache(state.siteId, state.range, data);
-    console.log("✅ [REST] Snapshot received");
+
+    const sig = seriesSignature(data, state.range);
     set({
       data,
       isLoading: false,
       analyticsVersion: state.analyticsVersion + 1,
-      frameKey: state.frameKey + 1, // animate first paint
+      frameKey: state.frameKey + 1,
+      seriesSig: sig,
       error: null,
     });
+    console.log("✅ [REST] Snapshot received");
   } catch (e: any) {
     console.error("❌ [REST] Snapshot error:", e?.message || e);
     set({ error: "snapshot_error", isLoading: false });
@@ -235,11 +244,13 @@ let backoffMs = 4000;
 
 async function getWSTicket(): Promise<string> {
   const now = Date.now();
-  if (ticketLock || now - lastTicketAt < TICKET_THROTTLE_MS) {
-    const wait = Math.max(TICKET_THROTTLE_MS - (now - lastTicketAt), 300);
+  const since = now - lastTicketAt;
+  if (ticketLock || since < TICKET_THROTTLE_MS) {
+    const wait = Math.max(TICKET_THROTTLE_MS - since, 500);
     await new Promise((r) => setTimeout(r, wait));
   }
-  ticketLock = true; lastTicketAt = Date.now();
+  ticketLock = true;
+  lastTicketAt = Date.now();
   try {
     const res = await secureFetch(`${API}/api/ws-ticket`, {
       method: "POST",
@@ -261,6 +272,41 @@ function scheduleReconnect(ms: number) {
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   const jitter = 250 + Math.floor(Math.random() * 500);
   reconnectTimer = window.setTimeout(() => { void connectWS(true); }, ms + jitter) as unknown as number;
+}
+
+// Compute & apply store updates in one place
+function applyAnalyticsFrame(frame: Partial<DashboardPayload>, fromWS = false) {
+  const frameRange = (frame as any)?.range as RangeKey | undefined;
+
+  let nextData: DashboardPayload;
+  if (frameRange && frameRange !== state.range) {
+    // ✅ KPI-only merge on mismatch (Bootstrap parity)
+    nextData = mergeKPIsOnly(state.data, frame);
+  } else {
+    nextData = mergeSameRange(state.data, frame);
+  }
+
+  // live_grouped side-channel → update liveCount mirror
+  let liveCount = state.liveCount;
+  if (Array.isArray(state.liveCities) && state.liveCities.length) {
+    liveCount = state.liveCities.reduce((s, p) => s + (p.count || 0), 0);
+  } else if ((nextData as any).live_visitors != null) {
+    // fallback if backend sends live_visitors on analytics frame
+    liveCount = Number((nextData as any).live_visitors) || liveCount || 0;
+  }
+
+  const newSig = seriesSignature(nextData, state.range);
+  const bump = newSig !== state.seriesSig;
+
+  set({
+    data: nextData,
+    isLoading: false,
+    analyticsVersion: state.analyticsVersion + 1,
+    frameKey: bump ? state.frameKey + 1 : state.frameKey,
+    seriesSig: newSig,
+    liveCount,
+    error: null,
+  });
 }
 
 export async function connectWS(forceNew = false) {
@@ -296,7 +342,6 @@ export async function connectWS(forceNew = false) {
         }
       }, 25_000) as unknown as number;
 
-      // optional hint
       try { socket.send(JSON.stringify({ type: "request_dashboard_snapshot" })); } catch {}
     };
 
@@ -305,37 +350,13 @@ export async function connectWS(forceNew = false) {
       const msg = safeJSON<any>(ev.data);
       if (!msg) return;
 
-      // Ignore frames for other sites
+      // Site-guard
       const msgSite = String(msg?.site_id ?? "");
       if (state.siteId && msgSite && msgSite !== String(state.siteId)) return;
 
       if (msg.type === "dashboard_analytics") {
         const frame = msg.payload || {};
-        const frameRange = (frame as any)?.range as RangeKey | undefined;
-
-        if (frameRange && frameRange !== state.range) {
-          // 🔒 Range mismatch: update KPIs only, keep charts (24h, 7d, etc.) as-is
-          const next = mergeKPIsOnly(state.data, frame);
-          set({
-            data: next,
-            isLoading: false,
-            analyticsVersion: state.analyticsVersion + 1,
-            // ❌ do NOT bump frameKey; charts must NOT remount for mismatched frames
-            error: null,
-          });
-          return;
-        }
-
-        // Same range: merge normally and (if series changed) bump frameKey so charts re-animate
-        const merged = mergeSameRange(state.data, frame);
-        const bump = hasSeries(frame) || hasSeries(merged);
-        set({
-          data: merged,
-          isLoading: false,
-          analyticsVersion: state.analyticsVersion + 1,
-          frameKey: bump ? state.frameKey + 1 : state.frameKey,
-          error: null,
-        });
+        applyAnalyticsFrame(frame, true);
       }
 
       if (msg.type === "live_visitor_location_grouped") {
@@ -381,16 +402,16 @@ export function init(initialRange: RangeKey = "24h") {
   if (saved) set({ siteId: Number(saved) });
 
   if (state.siteId) {
-    emitCachedSnapshotIfAny(state.siteId, state.range); // instant paint
-    void connectWS(true);                               // live stream
-    void fetchSnapshot();                               // single seed
+    emitCachedSnapshotIfAny(state.siteId, state.range);
+    void connectWS(true);
+    void fetchSnapshot();
   }
 }
 
 export function setSite(siteId: number) {
   if (state.siteId === siteId) return;
   localStorage.setItem("current_website_id", String(siteId));
-  set({ siteId, data: null, isLoading: true, liveCities: [], error: null });
+  set({ siteId, data: null, isLoading: true, liveCities: [], liveCount: null, error: null, seriesSig: "" });
 
   emitCachedSnapshotIfAny(siteId, state.range);
   void connectWS(true);
@@ -399,12 +420,12 @@ export function setSite(siteId: number) {
 
 export function setRange(range: RangeKey) {
   if (state.range === range) return;
-  set({ range, data: null, isLoading: true, error: null });
+  set({ range, data: null, isLoading: true, error: null, seriesSig: "" });
 
   if (state.siteId) {
     emitCachedSnapshotIfAny(state.siteId, range);
-    void fetchSnapshot();   // one seed for the new range
-    void connectWS(false);  // WS stays open; server may stream any range
+    void fetchSnapshot();
+    void connectWS(false);
   }
 }
 
