@@ -236,52 +236,6 @@ export function useBilling() {
     [qc]
   );
 
-  /**
-   * Embedded “Update Card” (SetupIntent) flow.
-   * Accepts a selector string or an HTMLElement as mount target.
-   */
-  const startUpdateCardEmbedded = useCallback(
-    async (mountTarget: string | HTMLElement, onComplete?: () => void) => {
-      const stripe = await getStripe();
-      if (!stripe) throw new Error("Stripe failed to load");
-
-      let res: Response | null = null;
-      try {
-        res = await secureFetch(`${apiBase()}/api/stripe/update-payment-method`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch {
-        throw new Error("Network error starting update-card session");
-      }
-
-      if (res?.status === 404) {
-        throw new Error("Update-card endpoint not available (404). Check /api/stripe/update-payment-method route.");
-      }
-
-      const data = await res!.json().catch(() => ({}));
-      const clientSecret = data?.client_secret || data?.clientSecret;
-      if (!clientSecret) throw new Error(data?.error || "Missing clientSecret");
-
-      const checkout = await stripe.initEmbeddedCheckout({
-        clientSecret,
-        onComplete: async () => {
-          await Promise.all([
-            qc.invalidateQueries({ queryKey: ["billing:info"] }),
-            qc.invalidateQueries({ queryKey: ["billing:invoices"] }),
-          ]);
-          onComplete?.();
-        },
-      });
-
-      await checkout.mount(toMountSelector(mountTarget));
-      return () => {
-        try { (checkout as any)?.destroy?.(); } catch {}
-      };
-    },
-    [qc]
-  );
-
   const cancelSubscription = useCallback(async () => {
     await jsonSecure(`${apiBase()}/api/cancel-subscription`, { method: "POST" });
     await qc.invalidateQueries({ queryKey: ["billing:info"] });

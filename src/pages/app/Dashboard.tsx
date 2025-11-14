@@ -30,7 +30,6 @@ import {
   setRange as rtSetRange,
   fetchSnapshot as rtFetchSnapshot,
   reconnectWebSocket as rtReconnect,
-  cleanup as rtCleanup,
 } from "@/services/realtime-dashboard-service";
 
 import { nf } from "@/lib/format";
@@ -59,19 +58,16 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  // ---------- Boot ----------
+  /* ---------- BOOTSTRAP: init once ---------- */
+  const didInitRef = useRef(false);
   useEffect(() => {
-    if (!isAuthenticated) return;
-    rtInit(range); // init service; it will seed from REST if a saved site exists
-    return () => {
-      rtCleanup();
-    };
-  }, [isAuthenticated]); // eslint-disable-line
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    rtInit(range); // service also uses saved site if present
+  }, []); // eslint-disable-line
 
-  // After websites load, pick persisted or first site.
-  // IMPORTANT: only call rtSetSite once (avoid double REST + ws-ticket spam).
+  /* ---------- Choose site when websites arrive (no double-setting) ---------- */
   useEffect(() => {
-    if (!isAuthenticated) return;
     if (!websites || websites.length === 0) return;
 
     const saved = Number(localStorage.getItem("current_website_id") || 0);
@@ -81,29 +77,30 @@ export default function Dashboard() {
     if (siteId !== chosen) {
       setSiteId(chosen);
       localStorage.setItem("current_website_id", String(chosen));
-      return; // the siteId effect below will call rtSetSite
+      rtSetSite(chosen); // seeds cache paint + parallel WS+REST
     }
+  }, [websites]); // eslint-disable-line
 
-    // If our state already matches, ensure the service is pointed there exactly once
-    rtSetSite(chosen);
-  }, [websites, isAuthenticated]); // eslint-disable-line
-
-  // When the user changes the site from the dropdown (or initial chosen above)
+  /* ---------- User changes site (dropdown) ---------- */
+  const prevSiteRef = useRef<number | null>(siteId);
   useEffect(() => {
-    if (!isAuthenticated) return;
     if (!siteId) return;
-    rtSetSite(siteId); // REST seed + WS connect (de-duped inside service)
-  }, [siteId, isAuthenticated]);
+    if (prevSiteRef.current === siteId) return; // avoid loops
+    prevSiteRef.current = siteId;
+    rtSetSite(siteId);
+  }, [siteId]);
 
-  // When the user changes the date range
+  /* ---------- User changes range ---------- */
+  const prevRangeRef = useRef<RangeKey>(range);
   useEffect(() => {
-    if (!isAuthenticated) return;
-    rtSetRange(range);   // reset WS-series gate
-    rtFetchSnapshot();   // fetch arrays for the chosen range
-    // Do NOT reconnect WS on range change — ticket is site-bound, not range-bound.
-  }, [range, isAuthenticated]);
+    if (prevRangeRef.current === range) return;
+    prevRangeRef.current = range;
+    rtSetRange(range);
+    rtFetchSnapshot(); // fresh arrays for the chosen range (WS keeps flowing)
+    // DO NOT reconnect WS here to avoid ticket 429s.
+  }, [range]);
 
-  // Hook that listens to mvBus updates produced by the service
+  // Hook listening to mvBus (frames + snapshots)
   const {
     data,
     liveCount,
@@ -116,28 +113,10 @@ export default function Dashboard() {
     restart,
   } = useDashboardRealtime(siteId ?? null, range);
 
-  // ---------- Skeleton gating ----------
+  /* ---------- Skeleton gating ---------- */
   const [firstPaintDone, setFirstPaintDone] = useState(false);
-
-  useEffect(() => {
-    if (data && !firstPaintDone) setFirstPaintDone(true);
-  }, [data, firstPaintDone]);
-
-  const prevSiteRef = useRef<number | null>(siteId);
-  useEffect(() => {
-    if (prevSiteRef.current !== siteId) {
-      setFirstPaintDone(false);
-      prevSiteRef.current = siteId;
-    }
-  }, [siteId]);
-
-  const prevRangeRef = useRef<RangeKey>(range);
-  useEffect(() => {
-    if (prevRangeRef.current !== range) {
-      setFirstPaintDone(false);
-      prevRangeRef.current = range;
-    }
-  }, [range]);
+  useEffect(() => { if (data && !firstPaintDone) setFirstPaintDone(true); }, [data, firstPaintDone]);
+  useEffect(() => { setFirstPaintDone(false); }, [siteId, range]); // reset on selection
 
   const showKpiSkeleton = !firstPaintDone;
   const showPageSkeleton = !firstPaintDone;
@@ -180,7 +159,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                // No immediate REST/WS calls here — the siteId effect handles it (de-duped).
+                // No manual refresh here; rtSetSite handles seed+live.
               }}
               disabled={sitesLoading || websites.length === 0}
             >
@@ -195,10 +174,7 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={range} onValueChange={(v: RangeKey) => {
-              setRange(v);
-              // Service will REST-fetch in the range effect; no WS reconnect needed.
-            }}>
+            <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -214,7 +190,6 @@ export default function Dashboard() {
             <Button
               variant="outline"
               onClick={() => {
-                // Manual refresh + optional WS reconnect for recovery
                 rtFetchSnapshot();
                 rtReconnect();
               }}

@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBilling } from "@/hooks/useBilling";
 import UpgradePlanModal from "./UpgradePlanModal";
 import InvoicesTable from "./InvoicesTable";
-import UpdateCardModal from "./UpdateCardModal";
 
 export default function BillingAndPlans() {
   const {
@@ -15,8 +14,7 @@ export default function BillingAndPlans() {
     invoices,
     isFreePlan,
     isFreeForever,
-    startEmbeddedCheckout,       // ← from useBilling (uses secureFetch)
-    startUpdateCardEmbedded,     // ← from useBilling (uses secureFetch)
+    startEmbeddedCheckout, // ← single path (no update-card flow)
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
@@ -24,7 +22,6 @@ export default function BillingAndPlans() {
 
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showApplied, setShowApplied] = useState(false);
-  const [showUpdateCard, setShowUpdateCard] = useState(false);
 
   const currentPlanAmount = useMemo(
     () => (isFreePlan ? 0 : info?.price || 0),
@@ -228,42 +225,36 @@ export default function BillingAndPlans() {
         onUpgrade={async ({ tierId, interval }) => {
           try {
             const result = await startEmbeddedCheckout(tierId, interval, () => {
-              // called once Embedded Checkout mounts; we keep modal hidden while Stripe UI is visible
+              // when Stripe UI mounts, we hide the upgrade modal
               setShowUpgrade(false);
             });
 
             if (result === "server_applied") {
-              // BE applied change using card on file (e.g., monthly → yearly)
               setShowUpgrade(false);
               setShowApplied(true);
               return;
             }
+
             if (result === "require_update") {
-              // BE said payment method needs re-auth/update → open update-card modal
-              // (this will mount the setup flow and retry after completion)
-              // keep upgrade modal closed to avoid two modals
-              setShowUpgrade(false);
-              setShowUpdateCard(true);
+              // Bootstrap behavior: just re-run the same embedded checkout flow
+              await startEmbeddedCheckout(tierId, interval, () => setShowUpgrade(false));
               return;
             }
-            // "mounted" => Stripe UI has taken over; nothing else to do here.
+
+            // "mounted" => Stripe has taken over; nothing else to do here.
           } catch (err: any) {
             console.error("[billing] startUpgrade error:", err);
             const msg = String(err?.message || err || "");
-            if (msg.toLowerCase().includes("unauthorized")) {
-              // Keep the modal open so the user can retry after re-auth
-              // (your global auth guard should redirect if the token is totally invalid)
-              return;
-            }
+            // If Stripe/card requires re-auth, retry via the same embedded session
             if (
               msg.toLowerCase().includes("re-authenticate") ||
               msg.toLowerCase().includes("reauthenticate") ||
               msg.toLowerCase().includes("card declined") ||
               msg.toLowerCase().includes("card expired")
             ) {
-              setShowUpgrade(false);
-              setShowUpdateCard(true);
+              await startEmbeddedCheckout(tierId, interval, () => setShowUpgrade(false));
             }
+            // For Unauthorized, let your global auth guard handle redirect/refresh
           }
         }}
       />
@@ -293,15 +284,6 @@ export default function BillingAndPlans() {
           </div>
         </div>
       )}
-
-      <UpdateCardModal
-        open={showUpdateCard}
-        onClose={() => setShowUpdateCard(false)}
-        start={async (container) => {
-          // Mount the Setup (update card) flow; your hook will retry the upgrade after success
-          await startUpdateCardEmbedded(container, () => setShowUpdateCard(false));
-        }}
-      />
     </div>
   );
 }
