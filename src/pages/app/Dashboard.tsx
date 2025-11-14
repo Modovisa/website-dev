@@ -58,49 +58,39 @@ export default function Dashboard() {
     domain: String(p.domain || ""),
   }));
 
-  /* ---------- BOOTSTRAP: init once ---------- */
-  const didInitRef = useRef(false);
+  // Boot service once
   useEffect(() => {
-    if (didInitRef.current) return;
-    didInitRef.current = true;
-    rtInit(range); // service also uses saved site if present
+    rtInit(range);
+    rtSetRange(range);
   }, []); // eslint-disable-line
 
-  /* ---------- Choose site when websites arrive (no double-setting) ---------- */
+  // After websites load, select site and seed/reconnect
   useEffect(() => {
     if (!websites || websites.length === 0) return;
-
     const saved = Number(localStorage.getItem("current_website_id") || 0);
     const savedExists = websites.some((w) => w.id === saved);
     const chosen = savedExists ? saved : websites[0].id;
-
     if (siteId !== chosen) {
       setSiteId(chosen);
       localStorage.setItem("current_website_id", String(chosen));
-      rtSetSite(chosen); // seeds cache paint + parallel WS+REST
     }
+    rtSetSite(chosen);
   }, [websites]); // eslint-disable-line
 
-  /* ---------- User changes site (dropdown) ---------- */
-  const prevSiteRef = useRef<number | null>(siteId);
+  // When the user changes site
   useEffect(() => {
     if (!siteId) return;
-    if (prevSiteRef.current === siteId) return; // avoid loops
-    prevSiteRef.current = siteId;
     rtSetSite(siteId);
   }, [siteId]);
 
-  /* ---------- User changes range ---------- */
-  const prevRangeRef = useRef<RangeKey>(range);
+  // When the user changes range
   useEffect(() => {
-    if (prevRangeRef.current === range) return;
-    prevRangeRef.current = range;
     rtSetRange(range);
-    rtFetchSnapshot(); // fresh arrays for the chosen range (WS keeps flowing)
-    // DO NOT reconnect WS here to avoid ticket 429s.
+    rtFetchSnapshot(); // one seed for the new range
+    rtReconnect();     // resume WS
   }, [range]);
 
-  // Hook listening to mvBus (frames + snapshots)
+  // Subscribe to realtime
   const {
     data,
     liveCount,
@@ -108,15 +98,31 @@ export default function Dashboard() {
     isLoading,
     error,
     analyticsVersion,
+    frameKey,           // ← NEW
     refreshSnapshot,
     reconnectWS,
     restart,
   } = useDashboardRealtime(siteId ?? null, range);
 
-  /* ---------- Skeleton gating ---------- */
+  // First paint gating
   const [firstPaintDone, setFirstPaintDone] = useState(false);
   useEffect(() => { if (data && !firstPaintDone) setFirstPaintDone(true); }, [data, firstPaintDone]);
-  useEffect(() => { setFirstPaintDone(false); }, [siteId, range]); // reset on selection
+
+  const prevSiteRef = useRef<number | null>(siteId);
+  useEffect(() => {
+    if (prevSiteRef.current !== siteId) {
+      setFirstPaintDone(false);
+      prevSiteRef.current = siteId;
+    }
+  }, [siteId]);
+
+  const prevRangeRef = useRef<RangeKey>(range);
+  useEffect(() => {
+    if (prevRangeRef.current !== range) {
+      setFirstPaintDone(false);
+      prevRangeRef.current = range;
+    }
+  }, [range]);
 
   const showKpiSkeleton = !firstPaintDone;
   const showPageSkeleton = !firstPaintDone;
@@ -159,7 +165,7 @@ export default function Dashboard() {
                 const n = Number(v);
                 setSiteId(n);
                 localStorage.setItem("current_website_id", String(n));
-                // No manual refresh here; rtSetSite handles seed+live.
+                refreshSnapshot();
               }}
               disabled={sitesLoading || websites.length === 0}
             >
@@ -174,7 +180,10 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
+            <Select value={range} onValueChange={(v: RangeKey) => {
+              setRange(v);
+              refreshSnapshot();
+            }}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -189,10 +198,7 @@ export default function Dashboard() {
 
             <Button
               variant="outline"
-              onClick={() => {
-                rtFetchSnapshot();
-                rtReconnect();
-              }}
+              onClick={() => { refreshSnapshot(); reconnectWS(); }}
               disabled={!siteId}
               className="gap-2"
               title="Refresh snapshot and retry live stream"
@@ -211,13 +217,9 @@ export default function Dashboard() {
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => restart()} disabled={!siteId}>
-                  Try again
-                </Button>
+                <Button variant="secondary" size="sm" onClick={() => restart()} disabled={!siteId}>Try again</Button>
                 {error === "unauthorized" && (
-                  <Button size="sm" onClick={() => (window as any).logoutAndRedirect?.("401")}>
-                    Sign in again
-                  </Button>
+                  <Button size="sm" onClick={() => (window as any).logoutAndRedirect?.("401")}>Sign in again</Button>
                 )}
               </div>
             </div>
@@ -293,9 +295,11 @@ export default function Dashboard() {
                     loading={false}
                     hasData={!!data.time_grouped_visits?.length}
                     version={analyticsVersion}
+                    frameKey={frameKey}                 {/* ← pass frameKey */}
                   />
                 </div>
                 <EventVolume
+                  key={`evt-${frameKey}`}               {/* ← remount on every WS frame */}
                   data={data.events_timeline ?? []}
                   loading={false}
                   hasData={!!data.events_timeline?.length}
@@ -353,14 +357,15 @@ export default function Dashboard() {
                   <CardTitle>Visitor Density Calendar</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <VisitorsHeatmap data={data.calendar_density ?? []} height={220} />
+                  <VisitorsHeatmap key={`heat-${frameKey}`} data={data.calendar_density ?? []} height={220} />
                 </CardContent>
               </Card>
 
               {/* Lines */}
               <div className="grid gap-6 md:grid-cols-2">
-                <UniqueReturning data={data.unique_vs_returning ?? []} version={analyticsVersion} />
+                <UniqueReturning key={`ur-${frameKey}`} data={data.unique_vs_returning ?? []} version={analyticsVersion} />
                 <PerformanceLine
+                  key={`conv-${frameKey}`}
                   title="Conversions"
                   current={data.conversions_timeline ?? []}
                   previous={data.conversions_previous_timeline ?? []}
@@ -371,17 +376,17 @@ export default function Dashboard() {
               </div>
 
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <PerformanceLine title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled version={analyticsVersion} />
-                <PerformanceLine title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled version={analyticsVersion} />
-                <PerformanceLine title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled version={analyticsVersion} />
-                <PerformanceLine title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled version={analyticsVersion} />
+                <PerformanceLine key={`imp-${frameKey}`} title="Impressions" current={data.impressions_timeline ?? []} previous={data.impressions_previous_timeline ?? []} color="#22c55e" filled version={analyticsVersion} />
+                <PerformanceLine key={`clk-${frameKey}`} title="Clicks" current={data.clicks_timeline ?? []} previous={data.clicks_previous_timeline ?? []} color="#3b82f6" filled version={analyticsVersion} />
+                <PerformanceLine key={`srch-${frameKey}`} title="Visitors from Search" current={data.search_visitors_timeline ?? []} previous={data.search_visitors_previous_timeline ?? []} color="#f59e0b" filled version={analyticsVersion} />
+                <PerformanceLine key={`all-${frameKey}`} title="All Visitors" current={(data as any)?.unique_visitors_timeline ?? []} previous={(data as any)?.previous_unique_visitors_timeline ?? []} color="#0ea5e9" filled version={analyticsVersion} />
               </div>
 
               {/* Donuts + UTMs */}
               <div className="grid gap-6 md:grid-cols-3">
-                <Donut title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
-                <Donut title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
-                <Donut title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
+                <Donut key={`br-${frameKey}`} title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
+                <Donut key={`dev-${frameKey}`}  title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
+                <Donut key={`os-${frameKey}`}   title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
               </div>
 
               <div className="grid gap-6 md:grid-cols-3">
