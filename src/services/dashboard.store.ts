@@ -75,7 +75,10 @@ function normalizeCities(payload: any): GeoCityPoint[] {
 }
 
 const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
-const sumBy = (a: any[], k: string) => a.reduce((s, x) => s + (Number(x?.[k] ?? x?.value ?? x?.count) || 0), 0);
+
+// 🔍 sum helper (as requested)
+const sumBy = (arr: any[], k: string) =>
+  Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
 function signature(d: DashboardPayload | null, r: RangeKey): string {
   if (!d) return "";
@@ -310,7 +313,26 @@ export async function connectWS(forceNew = false) {
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
+          // Existing optional debug (guarded by __mvDashDbg)
           debugDelta(state.data, next);
+
+          // ✅ Clear delta log (always prints) — inserted right after computing `next`
+          {
+            const prevTGV = Array.isArray(state.data?.time_grouped_visits) ? (state.data as any).time_grouped_visits : [];
+            const nextTGV = Array.isArray((frame as any)?.time_grouped_visits) ? (frame as any).time_grouped_visits : [];
+
+            if (nextTGV.length) {
+              const pv = sumBy(prevTGV, "views");
+              const nv = sumBy(nextTGV, "views");
+              const pu = sumBy(prevTGV, "visitors");
+              const nu = sumBy(nextTGV, "visitors");
+              if (pv !== nv || pu !== nu) {
+                console.log(`📈 [TGV Δ] views: ${pv} → ${nv}, visitors: ${pu} → ${nu}, buckets: ${nextTGV.length}`);
+              } else {
+                console.log(`⏸ [TGV] no change (views=${nv}, visitors=${nu})`);
+              }
+            }
+          }
 
           // recompute live count if not provided explicitly
           let liveCount = state.liveCount;
