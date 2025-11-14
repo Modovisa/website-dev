@@ -21,6 +21,7 @@ export default function BillingAndPlans() {
   } = useBilling();
 
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showApplied, setShowApplied] = useState(false); // ✅ NEW: applied confirmation
 
   const currentPlanAmount = useMemo(
     () => (isFreePlan ? 0 : info?.price || 0),
@@ -31,7 +32,6 @@ export default function BillingAndPlans() {
   const totalDays = info?.total_days ?? (info?.interval === "year" ? 365 : 30);
   const percent = Math.min(100, Math.round((usedDays / (totalDays || 1)) * 100));
 
-  // Considered “paid & current”
   const hasActiveSubscription = useMemo(
     () =>
       !!(
@@ -187,14 +187,12 @@ export default function BillingAndPlans() {
 
               {/* Actions */}
               <div className="col-span-full mt-2 flex flex-wrap gap-3">
-                {/* Upgrade visible for everything except Free Forever */}
                 {!isFreeForever && (
                   <Button onClick={() => setShowUpgrade(true)} className="mr-2">
                     Upgrade Plan
                   </Button>
                 )}
 
-                {/* Cancel / Reactivate / Cancel Downgrade only for paid active subs */}
                 {hasActiveSubscription && !info.cancel_at_period_end && (
                   <Button variant="outline" className="text-red-600" onClick={cancelSubscription}>
                     Cancel Subscription
@@ -227,28 +225,51 @@ export default function BillingAndPlans() {
         onClose={() => setShowUpgrade(false)}
         tiers={tiers}
         currentPlanAmount={currentPlanAmount}
-        onUpgrade={({ tierId, interval }) => {
-          // Start checkout. Close the Upgrade modal only after Stripe mount succeeds.
-          startEmbeddedCheckout(tierId, interval, () => {
-            setShowUpgrade(false);
-          }).catch((err) => {
+        onUpgrade={async ({ tierId, interval }) => {
+          try {
+            const result = await startEmbeddedCheckout(tierId, interval, () => {
+              // close only when embed actually mounted
+              setShowUpgrade(false);
+            });
+
+            // 🔔 If server applied instantly (e.g., Monthly → Yearly with card on file)
+            if (result === "server_applied") {
+              setShowUpgrade(false);
+              setShowApplied(true); // show confirmation dialog
+            }
+          } catch (err) {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            // Keep modal open so user can retry / see errors.
-          });
+            // keep modal open so the user can retry
+          }
         }}
       />
 
-      {/* 🔒 Embedded Stripe container lives OUTSIDE the upgrade modal to avoid unmounting */}
+      {/* Embedded Stripe lives outside upgrade modal */}
       <div
         id="react-billing-embedded-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
       >
         <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
           <div id="react-billing-stripe-element" />
-          {/* Optional debug line—leave for Firefox until confirmed stable */}
           <div id="react-billing-stripe-debug" className="mt-3 text-xs text-muted-foreground"></div>
         </div>
       </div>
+
+      {/* ✅ Simple “applied” confirmation dialog */}
+      {showApplied && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-xl">
+            <h3 className="text-xl font-semibold mb-2">Plan updated</h3>
+            <p className="text-muted-foreground">
+              Your subscription change has been applied. You’ll see the updated billing period and invoices reflected
+              shortly.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button onClick={() => setShowApplied(false)}>OK</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
