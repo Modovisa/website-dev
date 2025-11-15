@@ -145,7 +145,7 @@ const stageMeta = (stage?: string | null) => {
 
 const LiveTracking = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
+  const { isAuthenticated } = useAuthGuard();
 
   // state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -473,20 +473,7 @@ const LiveTracking = () => {
     }
   }, [selectedVisitorId, visitorDataMap]);
 
-  /* ------------------------- auth loading gate ------------------------ */
-  if (authLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <p className="text-lg text-muted-foreground">Verifying authentication...</p>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
+  // If the auth hook says user is definitely not authenticated, don't render page
   if (!isAuthenticated) return null;
 
   /* ----------------------------- sidebar ------------------------------ */
@@ -928,7 +915,6 @@ const LiveTracking = () => {
         </div>
       </div>
     </AppLayout>
-    
   );
 };
 

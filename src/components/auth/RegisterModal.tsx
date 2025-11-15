@@ -30,7 +30,7 @@ export function RegisterModal({ open, onOpenChange }: RegisterModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-full border-0 bg-transparent p-0 shadow-none">
+      <DialogContent className="max-w-xl w-full border-0 bg-transparent p-0 shadow-none">
         <HomepageRegisterForm onSuccess={handleSuccess} />
       </DialogContent>
     </Dialog>
