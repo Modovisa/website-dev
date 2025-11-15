@@ -17,13 +17,11 @@ const GOOGLE_CLIENT_ID =
 type Feedback = { message: string; type: "success" | "error" | "" };
 
 type RegisterProps = {
-  /** "page" = full /register route, "modal" = homepage modal */
+  /** "page" = full /register route, "modal" = (optional) modal layout */
   mode?: "page" | "modal";
-  /** Optional hook so the homepage modal can run the Stripe pricing flow */
-  onSuccess?: () => void | Promise<void>;
 };
 
-const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
+const RegisterInner = ({ mode = "page" }: RegisterProps) => {
   const navigate = useNavigate();
 
   // Form state
@@ -56,10 +54,9 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
   };
 
   /**
-   * Shared success path:
-   *  - mark mv_new_signup = 1
-   *  - if mode === "modal" → delegate to onSuccess (Stripe flow) and NEVER self-navigate
-   *  - else (page) → legacy behaviour: go to /app/tracking-setup
+   * Shared success path for the /register route:
+   *  - mark mv_new_signup = "1"
+   *  - go to /app/tracking-setup
    */
   const handlePostSuccess = useCallback(async () => {
     try {
@@ -68,21 +65,11 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
       // ignore
     }
 
-    if (mode === "modal") {
-      // Modal variant (homepage pricing flow):
-      // let the caller (RegisterModal) own what happens next (Stripe embed + redirect).
-      if (onSuccess) {
-        await onSuccess();
-      }
-      return;
-    }
-
-    // Plain /register page behaviour
     setLoadingMessage("Setting up your dashboard...");
     setTimeout(() => {
       navigate("/app/tracking-setup");
     }, 150);
-  }, [mode, navigate, onSuccess]);
+  }, [navigate]);
 
   // Check username availability
   const checkUsername = async () => {
@@ -174,7 +161,7 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
         return;
       }
 
-      // ✅ unified success path
+      // ✅ simple success path for /register
       await handlePostSuccess();
     } catch (err) {
       console.error("❌ Register error:", err);
@@ -227,7 +214,6 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
       }
 
       if (res.ok) {
-        // ✅ unified success path (manual + Google)
         setLoadingMessage("Setting up your dashboard...");
         await handlePostSuccess();
       } else {
@@ -257,7 +243,6 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
           auto_select: false,
         });
 
-        // Render button
         const buttonDiv = document.getElementById("google-signin-button");
         if (buttonDiv) {
           window.google.accounts.id.renderButton(buttonDiv, {
@@ -267,7 +252,6 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
           });
         }
 
-        // Prompt only if terms accepted
         if (termsAccepted) {
           window.google.accounts.id.prompt();
         }
@@ -507,17 +491,16 @@ const Register = (props: RegisterProps) => {
   const mode = props.mode ?? "page";
 
   if (mode === "modal") {
-    // For modal we don't wrap with full-page gradient; the modal backdrop handles it
     return (
       <div className="w-full max-w-6xl mx-auto">
-        <RegisterInner mode="modal" onSuccess={props.onSuccess} />
+        <RegisterInner mode="modal" />
       </div>
     );
   }
 
   return (
     <AnimatedGradientBackground layout="full">
-      <RegisterInner mode="page" onSuccess={props.onSuccess} />
+      <RegisterInner mode="page" />
     </AnimatedGradientBackground>
   );
 };

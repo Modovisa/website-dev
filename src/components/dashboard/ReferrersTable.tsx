@@ -45,8 +45,8 @@ export default memo(function ReferrersTable({ rows }: { rows: ReferrerRow[] }) {
                 >
                   <img
                     src={icon}
-                    width={16}
-                    height={16}
+                    width={20}
+                    height={20}
                     className="shrink-0 rounded"
                     onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
                   />
