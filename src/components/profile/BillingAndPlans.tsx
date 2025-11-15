@@ -108,7 +108,9 @@ export default function BillingAndPlans() {
                         <span>Free</span>
                       ) : (
                         <>
-                          ${info.price} Per {info.interval === "year" ? "Year" : "Month"}{" "}
+                          {/* Always display monthly-equivalent price */}
+                          ${info.price}{" "}
+                          <span className="text-sm text-muted-foreground">/ month</span>
                           {info.is_popular ? (
                             <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
                               Popular
@@ -120,7 +122,7 @@ export default function BillingAndPlans() {
                     <p className="mb-0 text-muted-foreground">
                       {info.plan_name ? info.plan_name : "–"}{" "}
                       {!isFreePlan && info.interval ? (
-                        <span className="ml-2 rounded bg-cyan-100 px-2 py-0.5 text-xs text-cyan-700">
+                        <span className="ml-2 rounded bg-cyan-100 px-2 py-0.5 text-md text-cyan-700">
                           {info.interval === "year" ? "Yearly" : "Monthly"}
                         </span>
                       ) : null}
@@ -138,7 +140,7 @@ export default function BillingAndPlans() {
                         <div className="font-medium">Needs attention!</div>
                         <div>
                           Your plan will revert to{" "}
-                          <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
+                            <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
                           <span className="font-semibold text-red-600">
                             {info.active_until
                               ? new Date(info.active_until).toLocaleDateString("en-US", {
@@ -238,23 +240,9 @@ export default function BillingAndPlans() {
                     </Button>
                   )}
 
-                {hasActiveSubscription && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      startUpdateCard().then((res) => {
-                        if (!res) {
-                          alert(
-                            "We tried to start the card update flow, but the API route for updating your card is returning an error.\n\n" +
-                              "You’ll need to update your card from the classic billing page or fix the backend route `/api/stripe/update-payment-method`."
-                          );
-                        }
-                      });
-                    }}
-                  >
-                    Update Card
-                  </Button>
-                )}
+                {/* Standalone "Update Card" button removed – card updates will
+                   only be triggered by the rare `require_payment_update`
+                   path from the upgrade flow. */}
               </div>
             </div>
           )}
@@ -277,7 +265,9 @@ export default function BillingAndPlans() {
               if (!result) return;
 
               if (result.mode === "require_payment_update") {
-                // Same semantics as Bootstrap: card needs to be refreshed
+                // Same semantics as Bootstrap: card needs to be refreshed.
+                // This still uses the embedded update-card flow if/when
+                // the backend starts returning `require_payment_update`.
                 setShowUpgrade(false);
 
                 startUpdateCard().then((updateRes) => {
@@ -313,7 +303,7 @@ export default function BillingAndPlans() {
         </div>
       </div>
 
-      {/* Update-card container */}
+      {/* Update-card container (only used from upgrade fallback, not from a standalone button) */}
       <div
         id="react-billing-updatecard-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
