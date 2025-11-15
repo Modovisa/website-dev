@@ -6,6 +6,7 @@
 // - Normalizes all 24h series to fixed hour order and clamps future hours to 0
 // - Merges partial frames (TGV + 24h count series) and ignores range-mismatch frames for series
 // - Watchdog pings WS for series if KPIs move but TGV stalls; also auto-requests if range mismatches
+// - Uses BROWSER TZ exclusively (Date(), Intl) and includes tz_offset in REST seed
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -76,7 +77,7 @@ const set = (partial: Partial<StoreState>) => { state = { ...state, ...partial }
 
 /* ---------------- Helpers ---------------- */
 const W: any = typeof window !== "undefined" ? window : {};
-const cacheKey = (sid: number, r: RangeKey) => `mv:snapshot:${sid}:${r}`;
+const cacheKey = (sid: number, r: RangeKey, tzOff: number) => `mv:snapshot:${sid}:${r}:${tzOff}`;
 const safeJSON = <T = any,>(x: string): T | null => { try { return JSON.parse(x) as T; } catch { return null; } };
 
 function normalizeCities(payload: any): GeoCityPoint[] {
@@ -120,7 +121,7 @@ function canonHourLabel(s: string): string {
   const m12 = t.match(/^(\d{1,2})(?::\d{2})?\s*(AM|PM)$/);
   if (m12) return `${parseInt(m12[1], 10)} ${m12[2]}`;
 
-  // Keep already canonical labels like "7 AM"
+  // Already canonical labels like "7 AM"
   return t;
 }
 
@@ -132,7 +133,7 @@ const HOUR_IDX: Record<string, number> = HOURS_12.reduce((acc, lbl, i) => {
 /** Accept patches for all elapsed local hours (0..nowHour). */
 function restrictPatchToElapsed<T extends { label?: string }>(arr: T[] | undefined): T[] {
   if (!Array.isArray(arr)) return [];
-  const nowHour = new Date().getHours();
+  const nowHour = new Date().getHours(); // browser TZ
   return arr.filter((p) => {
     const i = HOUR_IDX[canonHourLabel(String(p?.label ?? ""))];
     return i != null && i <= nowHour;
@@ -180,12 +181,16 @@ function signature(d: DashboardPayload | null, r: RangeKey): string {
 }
 
 function saveSnapshot(siteId: number, range: RangeKey, data: DashboardPayload) {
-  try { localStorage.setItem(cacheKey(siteId, range), JSON.stringify({ ts: Date.now(), data })); } catch {}
+  try {
+    const tzOff = new Date().getTimezoneOffset();
+    localStorage.setItem(cacheKey(siteId, range, tzOff), JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
 }
 
 function emitCached(siteId: number, range: RangeKey) {
   try {
-    const raw = localStorage.getItem(cacheKey(siteId, range));
+    const tzOff = new Date().getTimezoneOffset();
+    const raw = localStorage.getItem(cacheKey(siteId, range, tzOff));
     if (!raw) return false;
     const obj = JSON.parse(raw) as { ts: number; data: DashboardPayload };
     if (!obj?.data) return false;
@@ -282,12 +287,12 @@ function maybePatchCounts(base: any[] | undefined, incoming: any[] | undefined, 
 /* ---------- Local-hour guards for 24h (prevents future-hour noise) ---------- */
 function clampCounts(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series) || series.length !== 24) return series;
-  const nowHour = new Date().getHours();
+  const nowHour = new Date().getHours(); // browser TZ
   return series.map((pt, i) => (i > nowHour ? { ...pt, count: 0 } : pt));
 }
 function clampTgv(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series) || series.length !== 24) return series;
-  const nowHour = new Date().getHours();
+  const nowHour = new Date().getHours(); // browser TZ
   return series.map((pt, i) => (i > nowHour ? { ...pt, visitors: 0, views: 0 } : pt));
 }
 function clamp24hAllSeries(payload: Partial<DashboardPayload> | null, range: RangeKey): Partial<DashboardPayload> | null {
@@ -350,7 +355,11 @@ const seeded = new Set<string>();
 let seedInFlight = false;
 let lastTgvAt = 0;
 let lastSeriesRequestAt = 0;
-const seedKey = () => (state.siteId ? `${state.siteId}:${state.range}` : "");
+const seedKey = () => {
+  if (!state.siteId) return "";
+  const tzOff = new Date().getTimezoneOffset(); // ensure local TZ change triggers a fresh seed
+  return `${state.siteId}:${state.range}:${tzOff}`;
+};
 
 /** One-time seed fetch for the current (siteId:range). */
 export async function fetchSnapshotSeedOnce() {
@@ -359,7 +368,7 @@ export async function fetchSnapshotSeedOnce() {
   if (!key || seeded.has(key) || seedInFlight) return;
 
   seedInFlight = true;
-  const tz = String(new Date().getTimezoneOffset());
+  const tz = String(new Date().getTimezoneOffset()); // minutes (browser TZ)
   const r = normalizeRange(state.range);
   const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(r)}&tz_offset=${encodeURIComponent(tz)}&site_id=${encodeURIComponent(state.siteId)}`;
 
@@ -467,7 +476,9 @@ function requestSeries() {
   const now = Date.now();
   if (now - lastSeriesRequestAt < REQUEST_SERIES_THROTTLE_MS) return;
   lastSeriesRequestAt = now;
-  try { ws?.send(JSON.stringify({ type: "request_series", range: normalizeRange(state.range) })); } catch {}
+  try {
+    ws?.send(JSON.stringify({ type: "request_series", range: normalizeRange(state.range) }));
+  } catch {}
 }
 
 export async function connectWS(forceNew = false) {
@@ -501,6 +512,13 @@ export async function connectWS(forceNew = false) {
       if (reconnectTimer) { window.clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (W.__mvDashDbg) console.debug("✅ [WS] Connected", { site: state.siteId, range: normalizeRange(state.range) });
 
+      // Optional: hint TZ to server (safe even if ignored)
+      try {
+        const tzOff = new Date().getTimezoneOffset();
+        const tzIana = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+        socket.send(JSON.stringify({ type: "client_tz", tz_offset: tzOff, tz_iana: tzIana }));
+      } catch {}
+
       // keepalive
       pingTimer = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
@@ -520,7 +538,7 @@ export async function connectWS(forceNew = false) {
 
       /* ---- DIAGNOSTIC (always first) ---- */
       try {
-        const nowHour = new Date().getHours();
+        const nowHour = new Date().getHours(); // browser TZ
         const nowLabel = canonHourLabel(HOURS_12[nowHour]);
         const baseLabels = (state.data?.time_grouped_visits ?? []).map((b:any) => canonHourLabel(String(b?.label)));
         const incLabelsRaw =
