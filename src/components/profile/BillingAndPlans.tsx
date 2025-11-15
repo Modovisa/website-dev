@@ -20,6 +20,8 @@ export default function BillingAndPlans() {
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
+    isDowngrade,
+    confirmDowngrade,
   } = useBilling();
 
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -53,7 +55,9 @@ export default function BillingAndPlans() {
         </CardHeader>
         <CardContent>
           {!info && (
-            <div className="py-6 text-muted-foreground">{loading ? "Loading…" : "—"}</div>
+            <div className="py-6 text-muted-foreground">
+              {loading ? "Loading…" : "—"}
+            </div>
           )}
 
           {info && (
@@ -81,11 +85,14 @@ export default function BillingAndPlans() {
                     {info.active_until === "Free Forever"
                       ? "Free Forever"
                       : info.active_until
-                      ? `Active until ${new Date(info.active_until).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}`
+                      ? `Active until ${new Date(info.active_until).toLocaleDateString(
+                          "en-US",
+                          {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }
+                        )}`
                       : "Active until –"}
                   </h6>
                   <p className="text-muted-foreground">
@@ -104,7 +111,8 @@ export default function BillingAndPlans() {
                         <span>Free</span>
                       ) : (
                         <>
-                          ${info.price} Per {info.interval === "year" ? "Year" : "Month"}{" "}
+                          ${info.price} Per{" "}
+                          {info.interval === "year" ? "Year" : "Month"}{" "}
                           {info.is_popular ? (
                             <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
                               Popular
@@ -137,33 +145,48 @@ export default function BillingAndPlans() {
                           <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
                           <span className="font-semibold text-red-600">
                             {info.active_until
-                              ? new Date(info.active_until).toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                  timeZone: "UTC",
-                                })
+                              ? new Date(info.active_until).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    timeZone: "UTC",
+                                  }
+                                )
                               : "—"}
                           </span>
                           .
                         </div>
                       </div>
-                    ) : info.days_left != null && info.days_left <= 7 && info.days_left > 0 ? (
+                    ) : info.days_left != null &&
+                      info.days_left <= 7 &&
+                      info.days_left > 0 ? (
                       <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
                         <div className="font-medium">Heads up!</div>
-                        <div>Your subscription ends in {info.days_left} day(s). Please update or renew.</div>
+                        <div>
+                          Your subscription ends in {info.days_left} day(s). Please
+                          update or renew.
+                        </div>
                       </div>
                     ) : null}
                   </>
                 )}
 
                 <div className="mb-2 flex items-center justify-between">
-                  <h6 className="mb-1">{isFreePlan ? "Month Progress" : "Billing Period Progress"}</h6>
-                  <h6 className="mb-1">{isFreeForever ? "—" : `${usedDays} of ${totalDays} Days`}</h6>
+                  <h6 className="mb-1">
+                    {isFreePlan ? "Month Progress" : "Billing Period Progress"}
+                  </h6>
+                  <h6 className="mb-1">
+                    {isFreeForever ? "—" : `${usedDays} of ${totalDays} Days`}
+                  </h6>
                 </div>
                 {!isFreeForever ? (
                   <div className="mb-1 h-2 w-full overflow-hidden rounded bg-muted">
-                    <div className="h-full bg-green-500" style={{ width: `${percent}%` }} />
+                    <div
+                      className="h-full bg-green-500"
+                      style={{ width: `${percent}%` }}
+                    />
                   </div>
                 ) : null}
 
@@ -195,22 +218,32 @@ export default function BillingAndPlans() {
                 )}
 
                 {hasActiveSubscription && !info.cancel_at_period_end && (
-                  <Button variant="outline" className="text-red-600" onClick={cancelSubscription}>
+                  <Button
+                    variant="outline"
+                    className="text-red-600"
+                    onClick={cancelSubscription}
+                  >
                     Cancel Subscription
                   </Button>
                 )}
 
                 {hasActiveSubscription && info.cancel_at_period_end && (
-                  <Button variant="outline" className="text-green-600" onClick={reactivateSubscription}>
+                  <Button
+                    variant="outline"
+                    className="text-green-600"
+                    onClick={reactivateSubscription}
+                  >
                     Reactivate Plan
                   </Button>
                 )}
 
-                {hasActiveSubscription && info.scheduled_downgrade && !info.cancel_at_period_end && (
-                  <Button variant="outline" onClick={cancelDowngrade}>
-                    Cancel Downgrade
-                  </Button>
-                )}
+                {hasActiveSubscription &&
+                  info.scheduled_downgrade &&
+                  !info.cancel_at_period_end && (
+                    <Button variant="outline" onClick={cancelDowngrade}>
+                      Cancel Downgrade
+                    </Button>
+                  )}
 
                 {hasActiveSubscription && (
                   <Button variant="outline" onClick={() => startUpdateCard()}>
@@ -232,28 +265,55 @@ export default function BillingAndPlans() {
         currentPlanAmount={currentPlanAmount}
         currentInfo={info}
         onUpgrade={({ tierId, interval }) => {
-          // Start checkout. We'll close the Upgrade modal only after Stripe mount succeeds.
+          // 🔽 Downgrade path — mirrors bootstrap's confirmDowngradeModal flow
+          if (isDowngrade(tierId, interval)) {
+            const ok = confirm(
+              "This change looks like a downgrade to a lower-priced tier. It will take effect from your next billing cycle. Do you want to proceed?"
+            );
+            if (!ok) return;
+
+            confirmDowngrade(tierId, interval)
+              .then(() => {
+                setShowUpgrade(false);
+              })
+              .catch((err) => {
+                console.error("[billing] confirmDowngrade error:", err);
+                alert(
+                  "We couldn’t apply the downgrade. Please try again or contact support."
+                );
+              });
+            return;
+          }
+
+          // ⬆️ Upgrade / free → paid path — Stripe embedded checkout
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
-          }).catch((err) => {
+          }).catch((err: any) => {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            
-            // Check if error is about card authentication
-            if (err.message && err.message.includes("Card declined or expired")) {
-              // Close upgrade modal and open update card modal
+
+            const message =
+              err && typeof err === "object" && "message" in err
+                ? String((err as any).message || "")
+                : "";
+
+            // Card decline / expired → match bootstrap "require_payment_update" handling
+            if (message.includes("Card declined or expired")) {
               setShowUpgrade(false);
-              
-              // Show a message to the user
-              alert("Your card needs to be updated before upgrading. Please update your payment method.");
-              
-              // Trigger update card flow
+
+              alert(
+                "Your card needs to be updated before upgrading. Please update your payment method."
+              );
+
               setTimeout(() => {
-                startUpdateCard().catch((updateErr) => {
+                startUpdateCard().catch((updateErr: any) => {
                   console.error("[billing] startUpdateCard error:", updateErr);
                 });
               }, 300);
+
+              return;
             }
-            // Leave the upgrade modal open for other errors so the user can retry
+
+            // For all other errors, leave the upgrade modal open so the user can retry
           });
         }}
       />
@@ -266,7 +326,10 @@ export default function BillingAndPlans() {
         <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
           <div id="react-billing-stripe-element" />
           {/* Optional debug line—leave for Firefox until confirmed stable */}
-          <div id="react-billing-stripe-debug" className="mt-3 text-xs text-muted-foreground"></div>
+          <div
+            id="react-billing-stripe-debug"
+            className="mt-3 text-xs text-muted-foreground"
+          />
         </div>
       </div>
 

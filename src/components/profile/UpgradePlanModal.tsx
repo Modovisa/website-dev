@@ -3,29 +3,54 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { PricingTier } from "@/hooks/useBilling";
+import type { PricingTier, BillingInfo } from "@/hooks/useBilling";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   tiers: PricingTier[];
   currentPlanAmount: number;
+  currentInfo?: BillingInfo | null;
   onUpgrade: (args: { tierId: number; interval: "month" | "year" }) => void;
 };
 
 const SNAP_STEPS = [
-  25_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000,
+  25_000,
+  100_000,
+  250_000,
+  500_000,
+  1_000_000,
+  2_000_000,
+  5_000_000,
+  10_000_000,
+  15_000_000,
+  20_000_000,
 ];
 
-export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmount, onUpgrade }: Props) {
+export default function UpgradePlanModal({
+  open,
+  onClose,
+  tiers,
+  currentPlanAmount,
+  currentInfo,
+  onUpgrade,
+}: Props) {
   const [isYearly, setIsYearly] = useState(false);
   const [events, setEvents] = useState<number>(25_000);
 
-  const idx = useMemo(() => Math.max(0, SNAP_STEPS.indexOf(events)), [events]);
-  const percent = useMemo(() => (idx / (SNAP_STEPS.length - 1)) * 100, [idx]);
+  const idx = useMemo(
+    () => Math.max(0, SNAP_STEPS.indexOf(events)),
+    [events]
+  );
+  const percent = useMemo(
+    () => (idx / (SNAP_STEPS.length - 1)) * 100,
+    [idx]
+  );
 
   const matchedTier = useMemo(
-    () => tiers.find((t) => events >= t.min_events && events <= t.max_events) || null,
+    () =>
+      tiers.find((t) => events >= t.min_events && events <= t.max_events) ||
+      null,
     [events, tiers]
   );
 
@@ -34,6 +59,42 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
     const monthly = matchedTier.monthly_price;
     return isYearly ? Math.ceil(monthly * 0.8) : monthly;
   }, [matchedTier, isYearly]);
+
+  // 🔍 Derive current plan meta from billing info (mirrors renderUpgradeModalFooter)
+  const { currentIsFree, currentDisplayAmount, currentIntervalLabel } =
+    useMemo(() => {
+      if (!currentInfo) {
+        return {
+          currentIsFree: true,
+          currentDisplayAmount: 0,
+          currentIntervalLabel: "month",
+        };
+      }
+
+      const isFreeForever =
+        String(currentInfo.is_free_forever) === "1" ||
+        currentInfo.is_free_forever === true;
+      const name = (currentInfo.plan_name || "").toLowerCase();
+      const isFree =
+        isFreeForever ||
+        currentInfo.price === 0 ||
+        currentInfo.interval == null ||
+        name.includes("free");
+
+      const amount = isFree ? 0 : currentInfo.price ?? currentPlanAmount;
+      const intervalLabel =
+        currentInfo.interval === "year"
+          ? "year"
+          : currentInfo.interval === "month"
+          ? "month"
+          : "month";
+
+      return {
+        currentIsFree: isFree,
+        currentDisplayAmount: amount,
+        currentIntervalLabel: intervalLabel,
+      };
+    }, [currentInfo, currentPlanAmount]);
 
   useEffect(() => {
     if (!open) {
@@ -48,20 +109,29 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
       <div className="w-full max-w-3xl rounded-2xl bg-background p-4 shadow-xl">
         <div className="flex justify-end">
-          <button className="text-muted-foreground" onClick={onClose} aria-label="Close">✕</button>
+          <button
+            className="text-muted-foreground"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="text-center mb-6">
+        <div className="mb-6 text-center">
           <h2 className="text-3xl font-semibold">Upgrade Plan</h2>
-          <p className="text-muted-foreground mt-2">Choose the best plan based on your usage needs.</p>
+          <p className="mt-2 text-muted-foreground">
+            Choose the best plan based on your usage needs.
+          </p>
         </div>
 
         <Card className="border shadow-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Pro</CardTitle>
 
+            {/* Interval toggle */}
             <div className="mt-4 flex items-center justify-center gap-3">
-              <span className="font-medium select-none">Monthly</span>
+              <span className="select-none font-medium">Monthly</span>
 
               <button
                 type="button"
@@ -81,15 +151,16 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                 />
               </button>
 
-              <span className="font-medium select-none">Yearly</span>
-              <span className="ml-1 rounded bg-success px-2 py-0.5 text-lg font-bold text-primary-foreground select-none">
+              <span className="select-none font-medium">Yearly</span>
+              <span className="ml-1 select-none rounded bg-success px-2 py-0.5 text-lg font-bold text-primary-foreground">
                 Save 20%
               </span>
             </div>
 
+            {/* Slider */}
             <div className="mx-auto mt-6 w-full max-w-xl">
               <div className="relative">
-                <div className="h-3 rounded-full bg-muted my-6" />
+                <div className="my-6 h-3 rounded-full bg-muted" />
                 <div
                   className="absolute left-0 top-0 h-3 rounded-full bg-primary"
                   style={{ width: `${percent}%` }}
@@ -101,25 +172,39 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
                   max={SNAP_STEPS.length - 1}
                   step={1}
                   value={idx}
-                  onChange={(e) => setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])}
+                  onChange={(e) =>
+                    setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])
+                  }
                   className="mv-range absolute inset-[5px_0_0] w-full range-primary"
                 />
               </div>
 
               <div className="mt-4 flex items-center justify-between text-base font-semibold">
                 <span className="tabular-nums">
-                  {events.toLocaleString()} <span className="text-sm text-muted-foreground">events / mo</span>
+                  {events.toLocaleString()}{" "}
+                  <span className="text-sm text-muted-foreground">
+                    events / mo
+                  </span>
                 </span>
                 <span className="tabular-nums">
                   {isYearly ? (
                     <>
-                      <span className="mr-2 line-through opacity-60">${matchedTier?.monthly_price ?? 0}</span>${price}
-                      <span className="text-sm text-muted-foreground"> / mo</span>
+                      <span className="mr-2 line-through opacity-60">
+                        ${matchedTier?.monthly_price ?? 0}
+                      </span>
+                      ${price}
+                      <span className="text-sm text-muted-foreground">
+                        {" "}
+                        / mo
+                      </span>
                     </>
                   ) : (
                     <>
                       ${price}
-                      <span className="text-sm text-muted-foreground"> / mo</span>
+                      <span className="text-sm text-muted-foreground">
+                        {" "}
+                        / mo
+                      </span>
                     </>
                   )}
                 </span>
@@ -139,18 +224,31 @@ export default function UpgradePlanModal({ open, onClose, tiers, currentPlanAmou
               disabled={!matchedTier}
               onClick={() => {
                 if (!matchedTier) return;
-                onUpgrade({ tierId: matchedTier.id, interval: isYearly ? "year" : "month" });
+                onUpgrade({
+                  tierId: matchedTier.id,
+                  interval: isYearly ? "year" : "month",
+                });
               }}
             >
               Upgrade
             </Button>
 
+            {/* Current plan summary – mirrors bootstrap renderUpgradeModalFooter */}
             <div className="mt-6 text-center text-sm">
               <p className="mb-1 text-muted-foreground">Your current plan:</p>
-              <div className="text-primary text-3xl font-bold">
-                ${currentPlanAmount}
-                <span className="ml-1 text-base text-muted-foreground">/month</span>
+              <div className="text-3xl font-bold text-primary">
+                ${currentDisplayAmount}
+                {!currentIsFree && (
+                  <span className="ml-1 text-base text-muted-foreground">
+                    /{currentIntervalLabel}
+                  </span>
+                )}
               </div>
+              {currentIsFree && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  You’re currently on the free plan.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
