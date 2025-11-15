@@ -125,8 +125,13 @@ function emitCached(siteId: number, range: RangeKey) {
     if (!raw) return false;
     const obj = JSON.parse(raw) as { ts: number; data: DashboardPayload };
     if (!obj?.data) return false;
-    const data = obj.data as DashboardPayload;
+    let data = obj.data as DashboardPayload;
     (data as any).range = range;
+
+    // Defensive: ensure cached 24h looks local-hour correct
+    data = clamp24hAllSeries(data, range) as DashboardPayload;
+    data = align24hToNow(data, range) as DashboardPayload;
+
     const sig = signature(data, range);
     set({
       data,
@@ -180,7 +185,7 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   return out;
 }
 
-/* ---------- Local-hour clamp for 24h range (fixes UTC WS overwrite) ---------- */
+/* ---------- Local-hour guards for 24h (prevents UTC overwrite) ---------- */
 function clampCounts(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series) || series.length !== 24) return series;
   const nowHour = new Date().getHours(); // viewer’s local hour 0–23
@@ -201,7 +206,67 @@ function clamp24hAllSeries(payload: Partial<DashboardPayload> | null, range: Ran
   out.conversions_timeline      = clampCounts(out.conversions_timeline);
   out.search_visitors_timeline  = clampCounts(out.search_visitors_timeline);
   out.unique_visitors_timeline  = clampCounts(out.unique_visitors_timeline);
-  // optional: previous_* can remain as-is
+  return out;
+}
+
+/* ---------- 24h alignment helpers (map UTC frames → viewer local) ---------- */
+const HOURS_12 = ["12 AM","1 AM","2 AM","3 AM","4 AM","5 AM","6 AM","7 AM","8 AM","9 AM","10 AM","11 AM","12 PM","1 PM","2 PM","3 PM","4 PM","5 PM","6 PM","7 PM","8 PM","9 PM","10 PM","11 PM"];
+
+function rotate24<T>(arr: T[], shift: number): T[] {
+  const n = 24;
+  if (!Array.isArray(arr) || arr.length !== n) return arr;
+  const s = ((shift % n) + n) % n;
+  if (s === 0) return arr.slice();
+  return arr.slice(n - s).concat(arr.slice(0, n - s));
+}
+function rightmostNonZeroIdxTGV(arr: any[]): number {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const v = Number(arr[i]?.views || 0) + Number(arr[i]?.visitors || 0);
+    if (v > 0) return i;
+  }
+  return -1;
+}
+function rightmostNonZeroIdxCount(arr: any[]): number {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const v = Number(arr[i]?.count || 0);
+    if (v > 0) return i;
+  }
+  return -1;
+}
+
+/** Align 24h series so the last non-zero bucket is the viewer’s current hour. */
+function align24hToNow(payload: Partial<DashboardPayload> | null, range: RangeKey): Partial<DashboardPayload> | null {
+  if (!payload || range !== "24h") return payload;
+  const out: any = { ...payload };
+  const nowIdx = new Date().getHours(); // 0..23 local
+
+  if (Array.isArray(out.time_grouped_visits) && out.time_grouped_visits.length === 24) {
+    const li = rightmostNonZeroIdxTGV(out.time_grouped_visits);
+    if (li >= 0) {
+      const shift = (nowIdx - li + 24) % 24;
+      out.time_grouped_visits = rotate24(out.time_grouped_visits, shift).map((b: any, i: number) => ({
+        ...b, label: HOURS_12[i]
+      }));
+    }
+  }
+
+  const fixCounts = (key: keyof DashboardPayload) => {
+    const arr = (out as any)[key];
+    if (Array.isArray(arr) && arr.length === 24) {
+      const li = rightmostNonZeroIdxCount(arr);
+      if (li >= 0) {
+        const shift = (nowIdx - li + 24) % 24;
+        (out as any)[key] = rotate24(arr, shift).map((b: any, i: number) => ({ ...b, label: HOURS_12[i] }));
+      }
+    }
+  };
+
+  fixCounts("events_timeline");
+  fixCounts("unique_visitors_timeline");
+  fixCounts("impressions_timeline");
+  fixCounts("clicks_timeline");
+  fixCounts("search_visitors_timeline");
+  fixCounts("conversions_timeline");
   return out;
 }
 
@@ -231,8 +296,9 @@ export async function fetchSnapshotSeedOnce() {
     let data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
 
-    // Clamp future buckets for 24h (defensive — REST already passes tz, but safe)
+    // Defensive local-hour handling for 24h snapshots
     data = clamp24hAllSeries(data, state.range) as DashboardPayload;
+    data = align24hToNow(data, state.range) as DashboardPayload;
 
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
@@ -396,6 +462,7 @@ export async function connectWS(forceNew = false) {
               visitors: Number(x.visitors ?? 0),
               views: Number(x.views ?? 0),
             }));
+            // treat tiny arrays as patches if much smaller than base
             if (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
               patchedTgv = applyTgvPatch(baseTgv, arr);
             } else {
@@ -418,8 +485,9 @@ export async function connectWS(forceNew = false) {
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
-          // ⛔️ Make sure 24h never shows future hours (local viewer time)
+          // Local-hour guards for 24h
           next = clamp24hAllSeries(next, frameRange || state.range) as DashboardPayload;
+          next = align24hToNow(next, frameRange || state.range) as DashboardPayload;
 
           // WS delta & staleness handling
           const prevTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;
