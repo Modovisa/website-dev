@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useBilling } from "@/hooks/useBilling";
+import { useBilling } from "@/services/billing.store";
 import UpgradePlanModal from "./UpgradePlanModal";
 import InvoicesTable from "./InvoicesTable";
 
@@ -230,11 +230,13 @@ export default function BillingAndPlans() {
                   </Button>
                 )}
 
-                {hasActiveSubscription && info.scheduled_downgrade && !info.cancel_at_period_end && (
-                  <Button variant="outline" onClick={cancelDowngrade}>
-                    Cancel Downgrade
-                  </Button>
-                )}
+                {hasActiveSubscription &&
+                  info.scheduled_downgrade &&
+                  !info.cancel_at_period_end && (
+                    <Button variant="outline" onClick={cancelDowngrade}>
+                      Cancel Downgrade
+                    </Button>
+                  )}
 
                 {hasActiveSubscription && (
                   <Button

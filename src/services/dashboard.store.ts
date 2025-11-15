@@ -3,7 +3,9 @@
 // - 24h axis is hard-locked to browser-local 12 AM → 11 PM (no UTC flip)
 // - WS frames are *patch-only* for elapsed local hours; never full-replace
 // - Non-hour labels (e.g., "OCT 17") are ignored for series updates
-// - WS 24h patches are rotated (UTC → local) **before** patching into the local seed
+// - Visual rebase: rotates UTC 24h feeds by browser TZ (nearest hour) to local
+// - Baseline backfill: after WS merges, refill missing/zeroed elapsed buckets
+//   with the last REST-seeded values so the left side never “hollows out”.
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -40,8 +42,8 @@ const BACKOFF_MAX = 60_000;
 const TICKET_THROTTLE_MS = 1500;
 const REQUEST_SERIES_THROTTLE_MS = 20_000;
 
-// If the server’s 24h buckets are in UTC, rotate them by browser TZ.
-// Set to false if/when the BE emits site-local hours already.
+// If the server’s 24h buckets are in UTC, rotate them by browser TZ
+// (Set to false if/when the BE emits site-local hours already)
 const ASSUME_UTC_SOURCE = true;
 
 const HOURS_12 = [
@@ -83,7 +85,7 @@ const safeJSON = <T = any,>(x: string): T | null => { try { return JSON.parse(x)
 const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
 const sumBy = (arr: any[], k: string) => Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
-// Browser TZ shift, rounded to nearest hour (half-hour zones are rounded pragmatically)
+// Browser TZ shift, rounded to nearest hour (handles half-hour zones pragmatically)
 const TZ_SHIFT_INT = Math.round(-new Date().getTimezoneOffset() / 60); // IST (-330) → +6
 
 function normalizeCities(payload: any): GeoCityPoint[] {
@@ -140,34 +142,23 @@ function restrictPatchToElapsed<T extends { label?: string }>(arr: T[] | undefin
   });
 }
 
-/* ---------- Rotation helpers (UTC → local) ---------- */
-function rotateLabel(lbl: string, shift: number): string | null {
-  const i = HOUR_IDX[canonHourLabel(lbl)];
-  if (i == null) return null;
-  const j = ((i + shift) % 24 + 24) % 24;
-  return HOURS_12[j];
-}
-
-function rotateTgvPatch(patch: any[] | undefined, shift: number): any[] {
-  if (!Array.isArray(patch)) return [];
-  const out: any[] = [];
-  for (const p of patch) {
-    const srcLbl = String(p?.label ?? "");
-    const dstLbl = rotateLabel(srcLbl, shift);
-    if (!dstLbl) continue;
-    out.push({ label: dstLbl, visitors: Number(p?.visitors ?? 0), views: Number(p?.views ?? 0) });
-  }
+/* ---------- Rotation helpers (UTC → local visual rebase) ---------- */
+function rotateTgv(series: any[] | undefined, shift: number): any[] | undefined {
+  if (!Array.isArray(series) || series.length !== 24) return series;
+  const out = HOURS_12.map((_, i) => {
+    const src = ((i - shift) % 24 + 24) % 24;
+    const s = series[src] || { label: HOURS_12[src], visitors: 0, views: 0 };
+    return { label: HOURS_12[i], visitors: Number(s.visitors || 0), views: Number(s.views || 0) };
+  });
   return out;
 }
-function rotateCountPatch(patch: any[] | undefined, shift: number): any[] {
-  if (!Array.isArray(patch)) return [];
-  const out: any[] = [];
-  for (const p of patch) {
-    const srcLbl = String(p?.label ?? "");
-    const dstLbl = rotateLabel(srcLbl, shift);
-    if (!dstLbl) continue;
-    out.push({ label: dstLbl, count: Number(p?.count ?? 0) });
-  }
+function rotateCounts(series: any[] | undefined, shift: number): any[] | undefined {
+  if (!Array.isArray(series) || series.length !== 24) return series;
+  const out = HOURS_12.map((_, i) => {
+    const src = ((i - shift) % 24 + 24) % 24;
+    const s = series[src] || { label: HOURS_12[src], count: 0 };
+    return { label: HOURS_12[i], count: Number(s.count || 0) };
+  });
   return out;
 }
 
@@ -211,6 +202,96 @@ function signature(d: DashboardPayload | null, r: RangeKey): string {
   });
 }
 
+/* ---------- Baseline (last full 24h) for backfill ---------- */
+type Baseline = {
+  tgv?: { label: string; visitors: number; views: number }[];
+  counts: Record<string, { label: string; count: number }[]>;
+};
+let baseline: Baseline = { counts: {} };
+
+function captureBaseline(d: Partial<DashboardPayload> | null) {
+  if (!d) return;
+
+  // Keep the generic, but tell TS exactly what T is at each callsite.
+  const saveIf24 = <T extends { label: string }>(arr?: T[]) =>
+    (Array.isArray(arr) && arr.length === 24 ? arr : undefined);
+
+  // TGV: has visitors + views
+  const tgv = saveIf24<{ label: string; visitors: number; views: number }>(
+    (d as any).time_grouped_visits
+  );
+  if (tgv) {
+    baseline.tgv = tgv.map((x) => ({
+      label: String(x.label),
+      visitors: +x.visitors || 0,
+      views: +x.views || 0,
+    }));
+  }
+
+  // Count series: has count
+  const keys: (keyof DashboardPayload)[] = [
+    "events_timeline",
+    "impressions_timeline",
+    "clicks_timeline",
+    "conversions_timeline",
+    "search_visitors_timeline",
+    "unique_visitors_timeline",
+  ];
+
+  for (const k of keys) {
+    const arr = saveIf24<{ label: string; count: number }>((d as any)[k]);
+    if (arr) {
+      baseline.counts[String(k)] = arr.map((x) => ({
+        label: String(x.label),
+        count: +x.count || 0,
+      }));
+    }
+  }
+}
+
+
+function backfillFromBaseline(next: Partial<DashboardPayload> | null): Partial<DashboardPayload> | null {
+  if (!next) return next;
+  const nowHour = new Date().getHours();
+  const out: any = { ...next };
+
+  // TGV
+  if (Array.isArray(out.time_grouped_visits) && out.time_grouped_visits.length === 24 && baseline.tgv?.length === 24) {
+    out.time_grouped_visits = out.time_grouped_visits.map((pt: any, i: number) => {
+      if (i > nowHour) return pt; // never prefill future
+      const base = baseline.tgv![i];
+      const v = Number(pt?.visitors || 0);
+      const w = Number(pt?.views || 0);
+      // Only backfill when WS left the bucket at 0/0 and baseline had data
+      if (v === 0 && w === 0 && (base.visitors > 0 || base.views > 0)) {
+        return { label: pt.label, visitors: base.visitors, views: base.views };
+      }
+      return pt;
+    });
+  }
+
+  // Count series
+  const COUNT_KEYS: (keyof DashboardPayload)[] = [
+    "events_timeline","impressions_timeline","clicks_timeline",
+    "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
+  ];
+  for (const k of COUNT_KEYS) {
+    const arr = out[String(k)];
+    const base = baseline.counts[String(k)];
+    if (Array.isArray(arr) && arr.length === 24 && Array.isArray(base) && base.length === 24) {
+      out[String(k)] = arr.map((pt: any, i: number) => {
+        if (i > nowHour) return pt;
+        const b = base[i];
+        const c = Number(pt?.count || 0);
+        if (c === 0 && (b.count > 0)) return { label: pt.label, count: b.count };
+        return pt;
+      });
+    }
+  }
+
+  return out;
+}
+
 function saveSnapshot(siteId: number, range: RangeKey, data: DashboardPayload) {
   try {
     const tzOff = new Date().getTimezoneOffset();
@@ -230,6 +311,8 @@ function emitCached(siteId: number, range: RangeKey) {
 
     data = normalize24hAllSeries(data, state.range) as DashboardPayload;
     data = clamp24hAllSeries(data, state.range) as DashboardPayload;
+
+    captureBaseline(data);
 
     const sig = signature(data, state.range);
     set({
@@ -323,7 +406,7 @@ function clampTgv(series: any[] | undefined): any[] | undefined {
   return series.map((pt, i) => (i > nowHour ? { ...pt, visitors: 0, views: 0 } : pt));
 }
 
-/* ---------- 24h normalization ---------- */
+/* ---------- 24h normalization + optional rotation ---------- */
 function normalizeTgvOrder(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series)) return series;
   const by = new Map<string, any>();
@@ -359,7 +442,7 @@ function normalize24hAllSeries(payload: Partial<DashboardPayload> | null, range:
   if (!payload || range !== "24h") return payload;
   const out: any = { ...payload };
 
-  // If any labels are not hour-like (dates/words), discard those series updates
+  // If any labels are *not* hour-like (dates, words), discard those series updates
   const guard = (s: any[] | undefined) => Array.isArray(s) && s.every(pt => isHourLabel(String(pt?.label ?? "")));
 
   if (guard(out.time_grouped_visits)) out.time_grouped_visits = normalizeTgvOrder(out.time_grouped_visits);
@@ -369,6 +452,17 @@ function normalize24hAllSeries(payload: Partial<DashboardPayload> | null, range:
   if (guard(out.conversions_timeline)) out.conversions_timeline = normalizeCountOrder(out.conversions_timeline);
   if (guard(out.search_visitors_timeline)) out.search_visitors_timeline = normalizeCountOrder(out.search_visitors_timeline);
   if (guard(out.unique_visitors_timeline)) out.unique_visitors_timeline = normalizeCountOrder(out.unique_visitors_timeline);
+
+  // Optional: rotate UTC → local (nearest hour) to keep “now” column local
+  if (ASSUME_UTC_SOURCE) {
+    out.time_grouped_visits       = rotateTgv(out.time_grouped_visits, TZ_SHIFT_INT);
+    out.events_timeline           = rotateCounts(out.events_timeline, TZ_SHIFT_INT);
+    out.impressions_timeline      = rotateCounts(out.impressions_timeline, TZ_SHIFT_INT);
+    out.clicks_timeline           = rotateCounts(out.clicks_timeline, TZ_SHIFT_INT);
+    out.conversions_timeline      = rotateCounts(out.conversions_timeline, TZ_SHIFT_INT);
+    out.search_visitors_timeline  = rotateCounts(out.search_visitors_timeline, TZ_SHIFT_INT);
+    out.unique_visitors_timeline  = rotateCounts(out.unique_visitors_timeline, TZ_SHIFT_INT);
+  }
 
   return out;
 }
@@ -417,9 +511,11 @@ export async function fetchSnapshotSeedOnce() {
     let data = (await res.json()) as DashboardPayload;
     (data as any).range = r;
 
-    // Normalize order and clamp future hours
     data = normalize24hAllSeries(data, r) as DashboardPayload;
     data = clamp24hAllSeries(data, r) as DashboardPayload;
+
+    // Save baseline BEFORE set() so first WS frame can backfill confidently
+    captureBaseline(data);
 
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
@@ -568,19 +664,19 @@ export async function connectWS(forceNew = false) {
       if (!msg) return;
       if (state.siteId && String(msg?.site_id ?? "") !== String(state.siteId)) return;
 
-      /* ---- DIAGNOSTIC (kept) ---- */
+      /* ---- DIAGNOSTIC ---- */
       try {
         const nowHour = new Date().getHours();
         const nowLabel = canonHourLabel(HOURS_12[nowHour]);
         const baseLabels = (state.data?.time_grouped_visits ?? []).map((b:any) => canonHourLabel(String(b?.label)));
-        const incLabelsRaw =
-          (msg?.payload?.time_grouped_visits_delta ??
-           msg?.payload?.tgv_delta ??
-           msg?.payload?.tgv ??
-           msg?.payload?.time_grouped_visits ?? [])
-            .map((p:any) => String(p?.label ?? ""));
-        if (incLabelsRaw.length) {
-          const uniq = Array.from(new Set(incLabelsRaw));
+        const incLabels = (
+          msg?.payload?.time_grouped_visits_delta ??
+          msg?.payload?.tgv_delta ??
+          msg?.payload?.tgv ??
+          msg?.payload?.time_grouped_visits ?? []
+        ).map((p:any) => String(p?.label ?? ""));
+        if (incLabels.length) {
+          const uniq = Array.from(new Set(incLabels));
           const baseLast = baseLabels.length ? baseLabels[baseLabels.length - 1] : undefined;
           console.warn("[DIAG] 24h seed axis (local) anchored to:", baseLabels[0], "…", baseLast);
           console.warn("[DIAG] Incoming WS labels:", uniq.join(", "));
@@ -613,27 +709,26 @@ export async function connectWS(forceNew = false) {
             return;
           }
 
-          // helpers
+          // Reject non-hour series frames (e.g., date labels) to prevent flips
           const isHourSeries = (arr?: any[]) => Array.isArray(arr) && arr.length && arr.every(x => isHourLabel(String(x?.label ?? "")));
 
-          /* ----- TGV: rotate patch first (UTC→local), then restrict → apply ----- */
-          const tgvSrc =
+          // ----- TGV: ALWAYS PATCH-ONLY for 24h -----
+          const baseTgv = base?.time_grouped_visits as any[] | undefined;
+          const patchSrc =
             (raw.time_grouped_visits_delta && isHourSeries(raw.time_grouped_visits_delta) && raw.time_grouped_visits_delta) ||
             (raw.tgv_delta && isHourSeries(raw.tgv_delta) && raw.tgv_delta) ||
             (raw.tgv && isHourSeries(raw.tgv) && raw.tgv) ||
             (raw.time_grouped_visits && isHourSeries(raw.time_grouped_visits) && raw.time_grouped_visits) ||
             null;
 
-          if (tgvSrc) {
-            let canon = tgvSrc.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }));
-            if (ASSUME_UTC_SOURCE) canon = rotateTgvPatch(canon, TZ_SHIFT_INT);
-            canon = restrictPatchToElapsed(canon);
-            (frame as any).time_grouped_visits = applyTgvPatch(base?.time_grouped_visits, canon);
+          if (patchSrc) {
+            const canon = patchSrc.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }));
+            (frame as any).time_grouped_visits = applyTgvPatch(baseTgv, restrictPatchToElapsed(canon));
           } else {
             delete (frame as any).time_grouped_visits; // ignore bad labels
           }
 
-          /* ----- Counts: rotate patch first (UTC→local), then restrict → apply ----- */
+          // ----- Counts: PATCH-ONLY, ignore non-hour labels -----
           const COUNT_KEYS: (keyof DashboardPayload)[] = [
             "events_timeline","impressions_timeline","clicks_timeline",
             "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
@@ -641,17 +736,17 @@ export async function connectWS(forceNew = false) {
           for (const k of COUNT_KEYS) {
             const incoming = (raw as any)[`${String(k)}_delta`] ?? (raw as any)[k];
             if (!incoming || !isHourSeries(incoming)) continue;
-
-            let canon = incoming.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }));
-            if (ASSUME_UTC_SOURCE) canon = rotateCountPatch(canon, TZ_SHIFT_INT);
-            canon = restrictPatchToElapsed(canon);
-
+            const canon = incoming.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }));
             (frame as any)[k] = maybePatchCounts((base as any)?.[k], canon, r);
           }
 
-          // Merge + normalize + clamp
+          // Merge + normalize + rotate + clamp
           let next = mergeSameRange(state.data, frame);
           next = normalize24hAllSeries(next, r) as DashboardPayload;
+
+          // Backfill from REST baseline for elapsed hours so the left side never hollows out
+          next = backfillFromBaseline(next) as DashboardPayload;
+
           next = clamp24hAllSeries(next, r) as DashboardPayload;
 
           // Staleness watchdog
@@ -670,6 +765,9 @@ export async function connectWS(forceNew = false) {
             console.warn("⚠️ [WS] KPIs moving but series stale >75s — requesting series frame…");
             requestSeries();
           }
+
+          // Update baseline whenever we end up with a full normalized 24h
+          captureBaseline(next);
 
           const prevSig = state.seriesSig;
           const sig = signature(next, state.range);
@@ -737,6 +835,9 @@ export function init(initialRange: RangeKey = "24h") {
   const saved = localStorage.getItem("current_website_id");
   if (saved) set({ siteId: Number(saved) });
 
+  // Reset baseline when starting fresh
+  baseline = { counts: {} };
+
   if (state.siteId) {
     emitCached(state.siteId, state.range);
     void connectWS(true);
@@ -748,6 +849,9 @@ export function setSite(siteId: number) {
   localStorage.setItem("current_website_id", String(siteId));
   set({ siteId, data: null, isLoading: true, liveCities: [], liveCount: null, error: null, seriesSig: "" });
 
+  // Clear baseline for the new site
+  baseline = { counts: {} };
+
   emitCached(siteId, state.range);
   void connectWS(true);
 }
@@ -756,6 +860,9 @@ export function setRange(range: RangeKey) {
   const r = normalizeRange(range);
   if (state.range === r) return;
   set({ range: r, data: null, isLoading: true, error: null, seriesSig: "" });
+
+  // Clear baseline for the new range
+  baseline = { counts: {} };
 
   if (state.siteId) {
     emitCached(state.siteId, r);

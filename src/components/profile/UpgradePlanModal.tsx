@@ -1,7 +1,9 @@
+// src/components/profile/UpgradePlanModal.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { PricingTier, BillingInfo } from "@/hooks/useBilling";
+import type { PricingTier, BillingInfo } from "@/services/billing.store";
 
 type Props = {
   open: boolean;
@@ -31,7 +33,7 @@ export default function UpgradePlanModal({
   onClose,
   tiers,
   currentPlanAmount,
-  currentInfo, // currently unused but keeps TS happy + parity with Bootstrap
+  currentInfo, // currently unused but kept for parity
   onUpgrade,
 }: Props) {
   const [isYearly, setIsYearly] = useState(false);
@@ -43,9 +45,18 @@ export default function UpgradePlanModal({
     [idx]
   );
 
+  // 🔒 Only paid tiers – avoid sending the free tier to BE
+  const paidTiers = useMemo(
+    () => tiers.filter((t) => (t.monthly_price ?? 0) > 0),
+    [tiers]
+  );
+
   const matchedTier = useMemo(
-    () => tiers.find((t) => events >= t.min_events && events <= t.max_events) || null,
-    [events, tiers]
+    () =>
+      paidTiers.find((t) => events >= t.min_events && events <= t.max_events) ||
+      paidTiers[0] ||
+      null,
+    [events, paidTiers]
   );
 
   const price = useMemo(() => {
@@ -85,7 +96,9 @@ export default function UpgradePlanModal({
 
         <Card className="border shadow-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Pro</CardTitle>
+            <CardTitle className="text-xl">
+              {matchedTier?.name || "Pro"}
+            </CardTitle>
 
             <div className="mt-4 flex items-center justify-center gap-3">
               <span className="select-none font-medium">Monthly</span>
@@ -181,11 +194,18 @@ export default function UpgradePlanModal({
               Upgrade
             </Button>
 
+            {/* Bottom price reflects the selected slider tier */}
             <div className="mt-6 text-center text-sm">
-              <p className="mb-1 text-muted-foreground">Your current plan:</p>
+              <p className="mb-1 text-muted-foreground">
+                {currentPlanAmount > 0
+                  ? `Your current plan: $${currentPlanAmount}/month`
+                  : "You’re currently on the Free plan"}
+              </p>
               <div className="text-3xl font-bold text-primary">
-                ${currentPlanAmount}
-                <span className="ml-1 text-base text-muted-foreground">/month</span>
+                ${price}
+                <span className="ml-1 text-base text-muted-foreground">
+                  /month {isYearly ? "(billed yearly)" : ""}
+                </span>
               </div>
             </div>
           </CardContent>

@@ -11,6 +11,7 @@
 
 import { apiBase } from "@/lib/api";
 import { secureFetch } from "@/lib/auth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 /* ============================================
    🌍 TYPES & INTERFACES
@@ -258,7 +259,7 @@ class BillingStore {
     if (!this.billingInfo) return false;
 
     const currentPlanId = this.billingInfo.plan_id || 0;
-    const currentInterval = this.billingInfo.interval || "month";
+       const currentInterval = this.billingInfo.interval || "month";
     const currentPrice = this.billingInfo.price || 0;
 
     const tier = this.pricingTiers.find((t) => t.id === tierId);
@@ -280,7 +281,6 @@ class BillingStore {
 
   /* ============================================
      💳 STRIPE EMBEDDED CHECKOUT
-     - Mirrors openStripeCustomCheckout
      ============================================ */
 
   async openStripeEmbeddedCheckout(
@@ -307,10 +307,11 @@ class BillingStore {
     try {
       if (overlay) overlay.classList.remove("hidden");
 
+      // Send both tierId (new) and tier_id (legacy) so BE can handle either safely
       const res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier_id: tierId, interval }),
+        body: JSON.stringify({ tierId, tier_id: tierId, interval }),
       });
 
       const data = await res.json();
@@ -332,7 +333,6 @@ class BillingStore {
       if (data.require_payment_update) {
         console.warn("⚠️ Card needs update");
         if (overlay) overlay.classList.add("hidden");
-        // DO NOT throw here – mirror Bootstrap "showUpdateCardModal()"
         return { mode: "require_payment_update", context };
       }
 
@@ -385,7 +385,6 @@ class BillingStore {
 
   /* ============================================
      💳 UPDATE CARD (embedded)
-     - Mirrors openStripeUpdateCardSession; no throws
      ============================================ */
 
   async openStripeUpdateCardSession(
@@ -484,7 +483,7 @@ class BillingStore {
       const res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier_id: tierId, interval }),
+        body: JSON.stringify({ tierId, tier_id: tierId, interval }),
       });
 
       const data = await res.json();
@@ -575,4 +574,118 @@ class BillingStore {
   }
 }
 
+/* ============================================
+   🔄 SINGLETON STORE + HOOK
+   ============================================ */
+
 export const billingStore = new BillingStore();
+
+/**
+ * React hook wrapper around the billing store.
+ */
+export function useBilling() {
+  const qc = useQueryClient();
+
+  const infoQ = useQuery({
+    queryKey: ["billing:info"],
+    queryFn: () => billingStore.loadUserBillingInfo(),
+    staleTime: 30_000,
+  });
+
+  const tiersQ = useQuery({
+    queryKey: ["billing:tiers"],
+    queryFn: () => billingStore.loadPricingTiers(),
+    staleTime: 60_000,
+  });
+
+  const invoicesQ = useQuery({
+    queryKey: ["billing:invoices"],
+    queryFn: () => billingStore.loadInvoices(),
+    staleTime: 30_000,
+  });
+
+  const startEmbeddedCheckout = async (
+    tierId: number,
+    interval: "month" | "year",
+    onSuccess?: () => void
+  ): Promise<EmbeddedCheckoutResult> => {
+    const currentPlanId = infoQ.data?.plan_id || 0;
+    const currentInterval = infoQ.data?.interval || "month";
+
+    return billingStore.openStripeEmbeddedCheckout(
+      tierId,
+      interval,
+      currentPlanId,
+      currentInterval,
+      async () => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["billing:info"] }),
+          qc.invalidateQueries({ queryKey: ["billing:invoices"] }),
+        ]);
+        onSuccess?.();
+      }
+    );
+  };
+
+  const startUpdateCard = async (onSuccess?: () => void) => {
+    return billingStore.openStripeUpdateCardSession(async () => {
+      await qc.invalidateQueries({ queryKey: ["billing:info"] });
+      onSuccess?.();
+    });
+  };
+
+  const cancelSubscription = async () => {
+    const result = await billingStore.cancelSubscription();
+    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    return result;
+  };
+
+  const reactivateSubscription = async () => {
+    const result = await billingStore.reactivateSubscription();
+    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    return result;
+  };
+
+  const cancelDowngrade = async () => {
+    const result = await billingStore.cancelDowngrade();
+    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    return result;
+  };
+
+  const confirmDowngrade = async (tierId: number, interval: "month" | "year") => {
+    await billingStore.confirmDowngrade(tierId, interval);
+    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+  };
+
+  const isDowngrade = (tierId: number, interval: "month" | "year") => {
+    return billingStore.isDowngrade(tierId, interval);
+  };
+
+  const updateSelectedTier = (
+    tierId: number,
+    interval: "month" | "year",
+    tier: PricingTier,
+    price: number
+  ) => {
+    billingStore.updateSelectedTier(tierId, interval, tier, price);
+  };
+
+  return {
+    loading: infoQ.isLoading || tiersQ.isLoading || invoicesQ.isLoading,
+    info: infoQ.data,
+    tiers: tiersQ.data || [],
+    invoices: invoicesQ.data || [],
+    isFreePlan: billingStore.isFreePlan(),
+    isFreeForever: billingStore.isFreeForever(),
+    paymentMethod: billingStore.getPaymentMethod(),
+
+    startEmbeddedCheckout,
+    startUpdateCard,
+    cancelSubscription,
+    reactivateSubscription,
+    cancelDowngrade,
+    confirmDowngrade,
+    isDowngrade,
+    updateSelectedTier,
+  };
+}
