@@ -1,5 +1,3 @@
-// src/components/profile/UpgradePlanModal.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +8,7 @@ type Props = {
   onClose: () => void;
   tiers: PricingTier[];
   currentPlanAmount: number;
+  /** Mirrors Bootstrap: info about current plan (kept for parity / future use) */
   currentInfo?: BillingInfo | null;
   onUpgrade: (args: { tierId: number; interval: "month" | "year" }) => void;
 };
@@ -32,25 +31,20 @@ export default function UpgradePlanModal({
   onClose,
   tiers,
   currentPlanAmount,
-  currentInfo,
+  currentInfo, // currently unused but keeps TS happy + parity with Bootstrap
   onUpgrade,
 }: Props) {
   const [isYearly, setIsYearly] = useState(false);
   const [events, setEvents] = useState<number>(25_000);
 
-  const idx = useMemo(
-    () => Math.max(0, SNAP_STEPS.indexOf(events)),
-    [events]
-  );
+  const idx = useMemo(() => Math.max(0, SNAP_STEPS.indexOf(events)), [events]);
   const percent = useMemo(
-    () => (idx / (SNAP_STEPS.length - 1)) * 100,
+    () => (idx / (SNAP_STEPS.length - 1 || 1)) * 100,
     [idx]
   );
 
   const matchedTier = useMemo(
-    () =>
-      tiers.find((t) => events >= t.min_events && events <= t.max_events) ||
-      null,
+    () => tiers.find((t) => events >= t.min_events && events <= t.max_events) || null,
     [events, tiers]
   );
 
@@ -59,42 +53,6 @@ export default function UpgradePlanModal({
     const monthly = matchedTier.monthly_price;
     return isYearly ? Math.ceil(monthly * 0.8) : monthly;
   }, [matchedTier, isYearly]);
-
-  // 🔍 Derive current plan meta from billing info (mirrors renderUpgradeModalFooter)
-  const { currentIsFree, currentDisplayAmount, currentIntervalLabel } =
-    useMemo(() => {
-      if (!currentInfo) {
-        return {
-          currentIsFree: true,
-          currentDisplayAmount: 0,
-          currentIntervalLabel: "month",
-        };
-      }
-
-      const isFreeForever =
-        String(currentInfo.is_free_forever) === "1" ||
-        currentInfo.is_free_forever === true;
-      const name = (currentInfo.plan_name || "").toLowerCase();
-      const isFree =
-        isFreeForever ||
-        currentInfo.price === 0 ||
-        currentInfo.interval == null ||
-        name.includes("free");
-
-      const amount = isFree ? 0 : currentInfo.price ?? currentPlanAmount;
-      const intervalLabel =
-        currentInfo.interval === "year"
-          ? "year"
-          : currentInfo.interval === "month"
-          ? "month"
-          : "month";
-
-      return {
-        currentIsFree: isFree,
-        currentDisplayAmount: amount,
-        currentIntervalLabel: intervalLabel,
-      };
-    }, [currentInfo, currentPlanAmount]);
 
   useEffect(() => {
     if (!open) {
@@ -129,7 +87,6 @@ export default function UpgradePlanModal({
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Pro</CardTitle>
 
-            {/* Interval toggle */}
             <div className="mt-4 flex items-center justify-center gap-3">
               <span className="select-none font-medium">Monthly</span>
 
@@ -157,7 +114,6 @@ export default function UpgradePlanModal({
               </span>
             </div>
 
-            {/* Slider */}
             <div className="mx-auto mt-6 w-full max-w-xl">
               <div className="relative">
                 <div className="my-6 h-3 rounded-full bg-muted" />
@@ -173,7 +129,7 @@ export default function UpgradePlanModal({
                   step={1}
                   value={idx}
                   onChange={(e) =>
-                    setEvents(SNAP_STEPS[parseInt(e.target.value, 10)])
+                    setEvents(SNAP_STEPS[parseInt(e.target.value, 10)] ?? SNAP_STEPS[0])
                   }
                   className="mv-range absolute inset-[5px_0_0] w-full range-primary"
                 />
@@ -182,9 +138,7 @@ export default function UpgradePlanModal({
               <div className="mt-4 flex items-center justify-between text-base font-semibold">
                 <span className="tabular-nums">
                   {events.toLocaleString()}{" "}
-                  <span className="text-sm text-muted-foreground">
-                    events / mo
-                  </span>
+                  <span className="text-sm text-muted-foreground">events / mo</span>
                 </span>
                 <span className="tabular-nums">
                   {isYearly ? (
@@ -193,18 +147,12 @@ export default function UpgradePlanModal({
                         ${matchedTier?.monthly_price ?? 0}
                       </span>
                       ${price}
-                      <span className="text-sm text-muted-foreground">
-                        {" "}
-                        / mo
-                      </span>
+                      <span className="text-sm text-muted-foreground"> / mo</span>
                     </>
                   ) : (
                     <>
                       ${price}
-                      <span className="text-sm text-muted-foreground">
-                        {" "}
-                        / mo
-                      </span>
+                      <span className="text-sm text-muted-foreground"> / mo</span>
                     </>
                   )}
                 </span>
@@ -233,22 +181,12 @@ export default function UpgradePlanModal({
               Upgrade
             </Button>
 
-            {/* Current plan summary – mirrors bootstrap renderUpgradeModalFooter */}
             <div className="mt-6 text-center text-sm">
               <p className="mb-1 text-muted-foreground">Your current plan:</p>
               <div className="text-3xl font-bold text-primary">
-                ${currentDisplayAmount}
-                {!currentIsFree && (
-                  <span className="ml-1 text-base text-muted-foreground">
-                    /{currentIntervalLabel}
-                  </span>
-                )}
+                ${currentPlanAmount}
+                <span className="ml-1 text-base text-muted-foreground">/month</span>
               </div>
-              {currentIsFree && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  You’re currently on the free plan.
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>

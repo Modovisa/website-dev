@@ -2,11 +2,11 @@
  * Complete Billing Store - 100% Bootstrap Parity
  *
  * Includes ALL billing logic from user-profile.js:
- * - Lines 8-18: Global vars
- * - Lines 21-32: Load pricing tiers
- * - Lines 35-64: Load billing info
- * - Lines 66-84: Stripe helper
- * - Lines 850-1355: All upgrade/downgrade/cancel/reactivate flows
+ * - Global vars
+ * - Load pricing tiers
+ * - Load billing info
+ * - Stripe helper
+ * - All upgrade/downgrade/cancel/reactivate flows
  *
  * Excludes UI rendering (handled by React components):
  * - renderCurrentPlan() - React components handle this
@@ -81,7 +81,7 @@ export type SelectedTierMeta = {
 
 class BillingStore {
   // ========================================
-  // GLOBAL BILLING VARS (Bootstrap lines 8-18)
+  // GLOBAL BILLING VARS
   // ========================================
   private pricingTiers: PricingTier[] = [];
   private selectedTierMeta: SelectedTierMeta = {
@@ -99,39 +99,11 @@ class BillingStore {
   // Stripe instance cache
   private stripePromise: Promise<any> | null = null;
 
-  // User status tracking (Bootstrap line 57-59)
+  // User status tracking (mirrors window.isFreePlanBeforeUpgrade)
   public isFreePlanBeforeUpgrade: boolean = false;
 
   /* ============================================
-     🔧 DOM HELPERS (for embedded Stripe containers)
-     ============================================ */
-
-  private getDoc(): Document | null {
-    if (typeof document === "undefined") return null;
-    return document;
-  }
-
-  private showOverlay(modalId: string) {
-    const doc = this.getDoc();
-    if (!doc) return;
-    const el = doc.getElementById(modalId);
-    if (!el) return;
-    el.classList.remove("hidden");
-  }
-
-  private hideOverlay(modalId: string, mountId?: string) {
-    const doc = this.getDoc();
-    if (!doc) return;
-    const el = doc.getElementById(modalId);
-    if (el) el.classList.add("hidden");
-    if (mountId) {
-      const mount = doc.getElementById(mountId);
-      if (mount) mount.innerHTML = "";
-    }
-  }
-
-  /* ============================================
-     📦 LOAD PRICING TIERS (Bootstrap lines 21-32)
+     📦 LOAD PRICING TIERS
      ============================================ */
   async loadPricingTiers(): Promise<PricingTier[]> {
     try {
@@ -149,7 +121,7 @@ class BillingStore {
   }
 
   /* ============================================
-     🔄 LOAD BILLING INFO (Bootstrap lines 35-64)
+     🔄 LOAD BILLING INFO
      ============================================ */
   async loadUserBillingInfo(): Promise<BillingInfo> {
     try {
@@ -163,7 +135,7 @@ class BillingStore {
       this.billingInfo = data;
       this.selectedPaymentMethod = data.payment_method || null;
 
-      // Track if upgrading from free plan (Bootstrap lines 57-59)
+      // Track if upgrading from free plan
       this.isFreePlanBeforeUpgrade =
         (data.plan_name || "").toLowerCase().includes("free") ||
         data.price === 0 ||
@@ -195,14 +167,15 @@ class BillingStore {
   }
 
   /* ============================================
-     🎨 STRIPE HELPER (Bootstrap lines 66-84)
+     🎨 STRIPE HELPER
      ============================================ */
+
   private async resolvePublishableKey(): Promise<string> {
     // 1) Prefer Vite env override
     const envPk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
     if (envPk && envPk.trim()) return envPk;
 
-    // 2) Admin runtime config (matches Bootstrap exactly)
+    // 2) Admin runtime config (matches Bootstrap)
     try {
       const res = await fetch(`${apiBase()}/api/stripe/runtime-config`, {
         cache: "no-store",
@@ -259,11 +232,11 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 UPGRADE LOGIC (Bootstrap lines 850-906)
+     💳 UPGRADE LOGIC
      ============================================ */
 
   /**
-   * Update selected tier metadata (Bootstrap lines 1328-1338)
+   * Update selected tier metadata
    * Called by React components before upgrade
    */
   updateSelectedTier(
@@ -283,7 +256,7 @@ class BillingStore {
   }
 
   /**
-   * Check if upgrade is a downgrade (Bootstrap lines 864-868)
+   * Check if upgrade is a downgrade
    */
   isDowngrade(tierId: number, interval: "month" | "year"): boolean {
     if (!this.billingInfo) return false;
@@ -295,7 +268,8 @@ class BillingStore {
     const tier = this.pricingTiers.find((t) => t.id === tierId);
     if (!tier) return false;
 
-    const selectedPrice = interval === "year" ? Math.ceil(tier.monthly_price * 0.8) : tier.monthly_price;
+    const selectedPrice =
+      interval === "year" ? Math.ceil(tier.monthly_price * 0.8) : tier.monthly_price;
 
     const isSameTier = currentPlanId === tier.plan_id;
     const isSameInterval = currentInterval === interval;
@@ -305,49 +279,42 @@ class BillingStore {
   }
 
   /**
-   * Check if user has saved payment method (Bootstrap line 880)
+   * Check if user has saved payment method
    */
   hasPaymentMethod(): boolean {
     return !!this.selectedPaymentMethod;
   }
 
   /* ============================================
-     💳 STRIPE EMBEDDED CHECKOUT (Bootstrap lines 917-1003)
+     💳 STRIPE EMBEDDED CHECKOUT
+     - Mirrors openStripeCustomCheckout from Bootstrap
      ============================================ */
 
   async openStripeEmbeddedCheckout(
     tierId: number,
     interval: "month" | "year",
-    opts?: {
-      previousPlanId?: number;
-      previousInterval?: "month" | "year";
-      onComplete?: () => void;
-      onError?: (error: Error) => void;
-      onRequirePaymentUpdate?: () => void;
-    }
+    previousPlanId: number = 0,
+    previousInterval: "month" | "year" = "month",
+    onComplete?: () => void,
+    onError?: (error: Error) => void
   ): Promise<any> {
     const stripe = await this.getStripe();
     if (!stripe) {
       const err = new Error("Stripe failed to load/initialize");
-      opts?.onError?.(err);
+      onError?.(err);
       throw err;
     }
 
-    const previousInterval: "month" | "year" = opts?.previousInterval ?? "month";
-    const onComplete = opts?.onComplete;
-    const onError = opts?.onError;
-    const onRequirePaymentUpdate = opts?.onRequirePaymentUpdate;
-
-    const doc = this.getDoc();
-    const modalId = "react-billing-embedded-modal";
-    const mountId = "react-billing-stripe-element";
-    const debugId = "react-billing-stripe-debug";
-
-    // Show embedded overlay container (React equivalent of Bootstrap modal)
-    this.showOverlay(modalId);
+    // React equivalent of #embeddedCheckoutModal
+    const overlay =
+      typeof document !== "undefined"
+        ? document.getElementById("react-billing-embedded-modal")
+        : null;
 
     try {
-      // Request embedded session from backend (Bootstrap lines 934-940)
+      if (overlay) overlay.classList.remove("hidden");
+
+      // Request embedded session from backend (same payload as Bootstrap)
       const res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -357,68 +324,58 @@ class BillingStore {
       const data = await res.json();
       console.log("📦 Server Response:", data);
 
-      if (doc) {
-        const dbg = doc.getElementById(debugId);
-        if (dbg) {
-          dbg.textContent = JSON.stringify(data, null, 2);
-        }
-      }
-
       const fromFree = this.isFreePlanBeforeUpgrade === true;
       const intervalChanged = previousInterval !== interval;
 
-      // 🔁 Card-on-file upgrade handled server-side (Bootstrap lines 945-962)
+      // Card-on-file upgrade handled fully server-side
       if (data.success || data.embedded_handled === true) {
-        this.hideOverlay(modalId, mountId);
+        if (overlay) overlay.classList.add("hidden");
         await this.loadUserBillingInfo();
         onComplete?.();
-        return { success: true, context: { fromFree, intervalChanged } };
+        return { mode: "server_handled", context: { fromFree, intervalChanged } };
       }
 
-      // 🧾 Require card update (Bootstrap lines 964-970)
+      // BE wants user to re-auth card → let caller switch to update-card flow
       if (data.require_payment_update) {
         console.warn("⚠️ Card needs update");
-        // Close the upgrade overlay
-        this.hideOverlay(modalId, mountId);
-
-        // Let React close the Upgrade modal, etc.
-        onRequirePaymentUpdate?.();
-
-        // Mirror Bootstrap: immediately open the "Update Card" embedded flow
-        try {
-          await this.openStripeUpdateCardSession(onComplete, onError);
-        } catch (updateErr) {
-          // Bubble update-card errors up
-          onError?.(updateErr as Error);
-          throw updateErr;
-        }
-
-        return { require_payment_update: true };
+        if (overlay) overlay.classList.add("hidden");
+        const err = new Error(
+          "Card declined or expired — user must re-authenticate payment"
+        );
+        onError?.(err);
+        throw err;
       }
 
-      // Validate client secret (Bootstrap lines 972-974)
+      // Otherwise we expect a clientSecret for embedded checkout
       if (!res.ok || !data.clientSecret) {
-        throw new Error(data.error || "Missing Stripe clientSecret");
+        if (overlay) overlay.classList.add("hidden");
+        const err = new Error(data.error || "Missing Stripe clientSecret");
+        onError?.(err);
+        throw err;
       }
 
-      // ✅ Proceed with embedded checkout (Bootstrap lines 980-996)
+      // Proceed with embedded checkout and mount into React container
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: data.clientSecret,
         onComplete: async () => {
-          this.hideOverlay(modalId, mountId);
+          if (overlay) overlay.classList.add("hidden");
           await this.loadUserBillingInfo();
           onComplete?.();
         },
       });
 
-      if (doc) {
-        checkout.mount(`#${mountId}`);
-      }
+      checkout.mount("#react-billing-stripe-element");
+
+      const debugEl =
+        typeof document !== "undefined"
+          ? document.getElementById("react-billing-stripe-debug")
+          : null;
+      if (debugEl) debugEl.textContent = "";
 
       return { checkout, context: { fromFree, intervalChanged } };
     } catch (err) {
       console.error("❌ Stripe checkout failed:", err);
-      this.hideOverlay(modalId, mountId);
+      if (overlay) overlay.classList.add("hidden");
       onError?.(err as Error);
       throw err;
     }
@@ -426,7 +383,6 @@ class BillingStore {
 
   /* ============================================
      💳 CONFIRM UPGRADE WITH SAVED CARD
-     (Bootstrap lines 1008-1020)
      ============================================ */
 
   async confirmUpgrade(
@@ -435,14 +391,17 @@ class BillingStore {
     currentPlanId: number,
     currentInterval: "month" | "year"
   ): Promise<any> {
-    return this.openStripeEmbeddedCheckout(tierId, interval, {
-      previousPlanId: currentPlanId,
-      previousInterval: currentInterval,
-    });
+    return this.openStripeEmbeddedCheckout(
+      tierId,
+      interval,
+      currentPlanId,
+      currentInterval
+    );
   }
 
   /* ============================================
-     💳 UPDATE CARD (Bootstrap lines 1041-1077)
+     💳 UPDATE CARD (embedded)
+     - Mirrors openStripeUpdateCardSession from Bootstrap
      ============================================ */
 
   async openStripeUpdateCardSession(
@@ -456,12 +415,15 @@ class BillingStore {
       throw err;
     }
 
-    const modalId = "react-billing-updatecard-modal";
-    const mountId = "react-billing-updatecard-element";
-
-    this.showOverlay(modalId);
+    // React equivalent of #updateCardModal
+    const overlay =
+      typeof document !== "undefined"
+        ? document.getElementById("react-billing-updatecard-modal")
+        : null;
 
     try {
+      if (overlay) overlay.classList.remove("hidden");
+
       const res = await secureFetch(`${apiBase()}/api/stripe/update-payment-method`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -469,34 +431,35 @@ class BillingStore {
 
       const data = await res.json();
       if (!res.ok || !data.clientSecret) {
-        throw new Error(data.error || "Missing clientSecret");
+        if (overlay) overlay.classList.add("hidden");
+        const err = new Error(data.error || "Missing clientSecret");
+        onError?.(err);
+        throw err;
       }
 
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: data.clientSecret,
         onComplete: async () => {
-          this.hideOverlay(modalId, mountId);
+          if (overlay) overlay.classList.add("hidden");
           await this.loadUserBillingInfo();
           onComplete?.();
         },
       });
 
-      const doc = this.getDoc();
-      if (doc) {
-        checkout.mount(`#${mountId}`);
-      }
+      // Same as checkout.mount("#update-card-stripe-element") in Bootstrap
+      checkout.mount("#react-billing-updatecard-element");
 
       return checkout;
     } catch (err) {
       console.error("❌ Failed to launch update card session:", err);
-      this.hideOverlay(modalId, mountId);
+      if (overlay) overlay.classList.add("hidden");
       onError?.(err as Error);
       throw err;
     }
   }
 
   /* ============================================
-     💳 CANCEL SUBSCRIPTION (Bootstrap lines 1095-1122)
+     💳 CANCEL SUBSCRIPTION
      ============================================ */
 
   async cancelSubscription(): Promise<{ success: boolean }> {
@@ -517,7 +480,7 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 REACTIVATE SUBSCRIPTION (Bootstrap lines 1141-1175)
+     💳 REACTIVATE SUBSCRIPTION
      ============================================ */
 
   async reactivateSubscription(): Promise<{ success: boolean }> {
@@ -528,7 +491,6 @@ class BillingStore {
 
       const data = await res.json();
       if (data.success) {
-        // Refresh billing info after slight delay (Bootstrap line 1163)
         setTimeout(async () => {
           await this.loadUserBillingInfo();
         }, 500);
@@ -541,7 +503,7 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 CONFIRM DOWNGRADE (Bootstrap lines 1181-1217)
+     💳 CONFIRM DOWNGRADE
      ============================================ */
 
   async confirmDowngrade(tierId: number, interval: "month" | "year"): Promise<void> {
@@ -567,7 +529,7 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 CANCEL DOWNGRADE (Bootstrap lines 1237-1268)
+     💳 CANCEL DOWNGRADE
      ============================================ */
 
   async cancelDowngrade(): Promise<{ success: boolean }> {
@@ -578,7 +540,6 @@ class BillingStore {
 
       const data = await res.json();
       if (data.success) {
-        // Dynamically update UI (Bootstrap lines 1254-1258)
         await this.loadUserBillingInfo();
       }
       return data;
@@ -613,7 +574,7 @@ class BillingStore {
   }
 
   /**
-   * Check if current plan is free (Bootstrap line 97)
+   * Check if current plan is free
    */
   isFreePlan(): boolean {
     if (!this.billingInfo) return true;
@@ -628,7 +589,7 @@ class BillingStore {
   }
 
   /**
-   * Check if free forever (Bootstrap line 96)
+   * Check if free forever
    */
   isFreeForever(): boolean {
     if (!this.billingInfo) return false;
@@ -659,25 +620,3 @@ class BillingStore {
 
 // Export singleton instance
 export const billingStore = new BillingStore();
-
-/* ============================================
-   📝 NOTES ON MISSING BOOTSTRAP CODE
-   ============================================ */
-
-// The following Bootstrap functions are NOT included because they are UI-specific:
-//
-// 1. renderCurrentPlan() (Bootstrap lines ~89-300)
-//    → Handled by: BillingAndPlans.tsx component
-//    → React renders UI based on billingInfo from the store
-//
-// 2. renderUpgradeModalFooter() (Bootstrap lines ~303-330)
-//    → Handled by: UpgradePlanModal.tsx component
-//    → React displays current plan amount directly
-//
-// 3. setupUpgradeModalSlider() (Bootstrap lines 1288-1380)
-//    → Handled by: UpgradePlanModal.tsx component
-//    → Uses native HTML5 range input instead of noUiSlider
-//    → React manages slider state locally
-//
-// The store focuses on business logic and API calls.
-// React components handle all DOM manipulation and rendering.

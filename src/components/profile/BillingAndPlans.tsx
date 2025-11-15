@@ -20,8 +20,6 @@ export default function BillingAndPlans() {
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
-    isDowngrade,
-    confirmDowngrade,
   } = useBilling();
 
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -111,8 +109,7 @@ export default function BillingAndPlans() {
                         <span>Free</span>
                       ) : (
                         <>
-                          ${info.price} Per{" "}
-                          {info.interval === "year" ? "Year" : "Month"}{" "}
+                          ${info.price} Per {info.interval === "year" ? "Year" : "Month"}{" "}
                           {info.is_popular ? (
                             <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
                               Popular
@@ -145,15 +142,12 @@ export default function BillingAndPlans() {
                           <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
                           <span className="font-semibold text-red-600">
                             {info.active_until
-                              ? new Date(info.active_until).toLocaleDateString(
-                                  "en-US",
-                                  {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                    timeZone: "UTC",
-                                  }
-                                )
+                              ? new Date(info.active_until).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                  timeZone: "UTC",
+                                })
                               : "—"}
                           </span>
                           .
@@ -165,8 +159,8 @@ export default function BillingAndPlans() {
                       <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
                         <div className="font-medium">Heads up!</div>
                         <div>
-                          Your subscription ends in {info.days_left} day(s). Please
-                          update or renew.
+                          Your subscription ends in {info.days_left} day(s). Please update
+                          or renew.
                         </div>
                       </div>
                     ) : null}
@@ -237,16 +231,23 @@ export default function BillingAndPlans() {
                   </Button>
                 )}
 
-                {hasActiveSubscription &&
-                  info.scheduled_downgrade &&
-                  !info.cancel_at_period_end && (
-                    <Button variant="outline" onClick={cancelDowngrade}>
-                      Cancel Downgrade
-                    </Button>
-                  )}
+                {hasActiveSubscription && info.scheduled_downgrade && !info.cancel_at_period_end && (
+                  <Button variant="outline" onClick={cancelDowngrade}>
+                    Cancel Downgrade
+                  </Button>
+                )}
 
                 {hasActiveSubscription && (
-                  <Button variant="outline" onClick={() => startUpdateCard()}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Standalone "Update Card" entry point
+                      startUpdateCard().catch((err) => {
+                        console.error("[billing] startUpdateCard error:", err);
+                        alert("We couldn't open the card update flow. Please try again.");
+                      });
+                    }}
+                  >
                     Update Card
                   </Button>
                 )}
@@ -265,67 +266,42 @@ export default function BillingAndPlans() {
         currentPlanAmount={currentPlanAmount}
         currentInfo={info}
         onUpgrade={({ tierId, interval }) => {
-          // 🔽 Downgrade path — mirrors bootstrap's confirmDowngradeModal flow
-          if (isDowngrade(tierId, interval)) {
-            const ok = confirm(
-              "This change looks like a downgrade to a lower-priced tier. It will take effect from your next billing cycle. Do you want to proceed?"
-            );
-            if (!ok) return;
-
-            confirmDowngrade(tierId, interval)
-              .then(() => {
-                setShowUpgrade(false);
-              })
-              .catch((err) => {
-                console.error("[billing] confirmDowngrade error:", err);
-                alert(
-                  "We couldn’t apply the downgrade. Please try again or contact support."
-                );
-              });
-            return;
-          }
-
-          // ⬆️ Upgrade / free → paid path — Stripe embedded checkout
+          // Start checkout. We'll close the Upgrade modal only after
+          // Stripe succeeds OR if we need to switch to the update-card flow.
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
-          }).catch((err: any) => {
-            console.error("[billing] startEmbeddedCheckout error:", err);
+          })
+            .catch((err: any) => {
+              console.error("[billing] startEmbeddedCheckout error:", err);
 
-            const message =
-              err && typeof err === "object" && "message" in err
-                ? String((err as any).message || "")
-                : "";
+              // Mirror Bootstrap: when BE says card declined/expired,
+              // close the Upgrade modal and open the update-card embedded checkout.
+              if (err?.message?.includes("Card declined or expired")) {
+                setShowUpgrade(false);
 
-            // Card decline / expired → match bootstrap "require_payment_update" handling
-            if (message.includes("Card declined or expired")) {
-              setShowUpgrade(false);
-
-              alert(
-                "Your card needs to be updated before upgrading. Please update your payment method."
-              );
-
-              setTimeout(() => {
                 startUpdateCard().catch((updateErr: any) => {
                   console.error("[billing] startUpdateCard error:", updateErr);
+                  alert(
+                    "Your card needs to be updated, but we couldn't start the update flow. Please try again."
+                  );
                 });
-              }, 300);
 
-              return;
-            }
+                return;
+              }
 
-            // For all other errors, leave the upgrade modal open so the user can retry
-          });
+              // Any other error – simple fallback
+              alert("We couldn't start the upgrade. Please try again.");
+            });
         }}
       />
 
-      {/* 🔒 Embedded Stripe container lives OUTSIDE the upgrade modal to avoid unmounting */}
+      {/* Embedded Stripe container – lives outside the upgrade modal */}
       <div
         id="react-billing-embedded-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
       >
         <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
           <div id="react-billing-stripe-element" />
-          {/* Optional debug line—leave for Firefox until confirmed stable */}
           <div
             id="react-billing-stripe-debug"
             className="mt-3 text-xs text-muted-foreground"
