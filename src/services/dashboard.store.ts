@@ -184,7 +184,7 @@ const HOUR_IDX: Record<string, number> = HOURS_12.reduce((acc, lbl, i) => {
   acc[lbl] = i; return acc;
 }, {} as Record<string, number>);
 
-/** Only allow patching buckets up to and including the current local hour */
+/** Only allow patching buckets up to and including the current local hour (for 24h) */
 function restrictPatchToElapsed(patch: any[] | undefined): any[] {
   if (!Array.isArray(patch) || !patch.length) return [];
   const nowHour = new Date().getHours(); // 0..23 (local)
@@ -193,6 +193,10 @@ function restrictPatchToElapsed(patch: any[] | undefined): any[] {
     const i = HOUR_IDX[lbl];
     return i != null && i <= nowHour;
   });
+}
+function restrictCountPatchToElapsed(patch: any[] | undefined): any[] {
+  // identical semantics but typed for {label,count}
+  return restrictPatchToElapsed(patch);
 }
 
 /** Replace/append by label; clamp to original length; then sort to 12AM→11PM */
@@ -235,10 +239,14 @@ function applyCountPatch(base: any[] | undefined, patch: any[]): any[] {
 
 function maybePatchCounts(base: any[] | undefined, incoming: any[] | undefined, range: RangeKey): any[] | undefined {
   if (!Array.isArray(incoming) || !incoming.length) return base;
-  if (range !== "24h") return incoming; // Only strict for 24h axis
-  if (Array.isArray(base) && base.length === 24 && incoming.length < Math.max(8, Math.floor(base.length / 2))) {
-    return applyCountPatch(base, incoming);
+  if (range !== "24h") return incoming; // Non-24h can replace freely (WS/REST agree)
+  // For 24h: NEVER replace axis; patch only elapsed local hours.
+  if (Array.isArray(base) && base.length === 24) {
+    const patch = restrictCountPatchToElapsed(incoming);
+    if (!patch.length) return base;
+    return applyCountPatch(base, patch);
   }
+  // Rare: if base is missing (first WS before seed), accept normalized but seed will follow.
   return normalizeCountOrder(incoming);
 }
 
@@ -327,6 +335,7 @@ export async function fetchSnapshotSeedOnce() {
     let data = (await res.json()) as DashboardPayload;
     (data as any).range = r;
 
+    // Normalize order first, then clamp future hours
     data = normalize24hAllSeries(data, r) as DashboardPayload;
     data = clamp24hAllSeries(data, r) as DashboardPayload;
 
@@ -518,16 +527,15 @@ export async function connectWS(forceNew = false) {
           }
           if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
 
-          /* ----- 24h count series: patch partial WS frames too ----- */
+          /* ----- 24h count series: patch partial WS frames too; never replace axis ----- */
           const keys: (keyof DashboardPayload)[] = [
             "events_timeline","impressions_timeline","clicks_timeline",
             "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
           ];
           for (const k of keys) {
             const incoming = (frameRaw as any)[k];
-            if (incoming) {
-              (frame as any)[k] = maybePatchCounts((base as any)?.[k], incoming, r);
-            }
+            if (!incoming) continue;
+            (frame as any)[k] = maybePatchCounts((base as any)?.[k], incoming, r);
           }
 
           // Merge frame
