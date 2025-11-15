@@ -35,6 +35,11 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 
 type Website = { id: number; website_name: string; domain: string };
 
+// FE supports only BE ranges: 24h | 7d | 30d | 12mo
+const ALLOWED_RANGES = ["24h","7d","30d","12mo"] as const;
+const normalizeRange = (r: RangeKey): RangeKey =>
+  (ALLOWED_RANGES as readonly string[]).includes(String(r)) ? r : ("30d" as RangeKey);
+
 export default function Dashboard() {
   const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
 
@@ -42,7 +47,7 @@ export default function Dashboard() {
     const saved = localStorage.getItem("current_website_id");
     return saved ? Number(saved) : null;
   });
-  const [range, setRange] = useState<RangeKey>("24h");
+  const [range, setRange] = useState<RangeKey>(normalizeRange("24h" as RangeKey));
 
   // Boot the store exactly once after auth
   useEffect(() => {
@@ -76,7 +81,6 @@ export default function Dashboard() {
       setSiteId(picked);
       localStorage.setItem("current_website_id", String(picked));
     }
-    // no dsSetSite here — let the siteId effect below fire exactly once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [websites, isAuthenticated]);
 
@@ -89,7 +93,7 @@ export default function Dashboard() {
   // When the user changes range → store handles cache + REST + WS set_range
   useEffect(() => {
     if (!isAuthenticated) return;
-    dsSetRange(range);
+    dsSetRange(normalizeRange(range));
   }, [range, isAuthenticated]);
 
   // Subscribe to store
@@ -169,7 +173,7 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={range} onValueChange={(v: RangeKey) => setRange(v)}>
+            <Select value={normalizeRange(range)} onValueChange={(v: RangeKey) => setRange(v)}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -177,12 +181,11 @@ export default function Dashboard() {
                 <SelectItem value="24h">Today</SelectItem>
                 <SelectItem value="7d">Last 7 Days</SelectItem>
                 <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">Last 90 Days</SelectItem>
                 <SelectItem value="12mo">Last 12 Months</SelectItem>
               </SelectContent>
             </Select>
 
-            {/* Refresh: snapshot only (no forced WS reconnect to avoid extra tickets) */}
+            {/* Refresh: snapshot only */}
             <Button
               variant="outline"
               onClick={() => dsFetchSnapshot()}
@@ -280,7 +283,7 @@ export default function Dashboard() {
                   <TimeGroupedVisits
                     key={`tgv-${frameKey}-${seriesSig}-${range}-${siteId}`}
                     data={data.time_grouped_visits ?? []}
-                    range={range}
+                    range={normalizeRange(range)}
                     loading={false}
                     hasData={!!data.time_grouped_visits?.length}
                     version={analyticsVersion}
@@ -321,8 +324,7 @@ export default function Dashboard() {
                       <p className="text-sm text-muted-foreground">
                         {range === "24h" ? "Past 24 hours" :
                          range === "7d"  ? "Past 7 days"   :
-                         range === "30d" ? "Past 30 days"  :
-                         range === "90d" ? "Past 90 days"  : "Past 12 months"}
+                         range === "30d" ? "Past 30 days"  : "Past 12 months"}
                       </p>
                     </CardHeader>
                     <CardContent className="pt-2 h-[540px]">

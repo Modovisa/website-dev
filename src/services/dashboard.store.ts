@@ -1,5 +1,6 @@
 // src/services/dashboard.store.ts
 // One-time REST seed per (siteId:range) + 100% WS stream thereafter.
+// - Ranges aligned to BE: 24h | 7d | 30d | 12mo (any 90d → 30d)
 // - Never rotates 24h series after WS: axis is always 12 AM → 11 PM
 // - Normalizes WS/REST frames to fixed hour order and clamps future hours
 // - Merges partial frames: TGV (time_grouped_visits_delta / tiny arrays) + all 24h count series
@@ -44,6 +45,13 @@ const HOURS_12 = [
   "12 PM","1 PM","2 PM","3 PM","4 PM","5 PM",
   "6 PM","7 PM","8 PM","9 PM","10 PM","11 PM"
 ] as const;
+
+// BE-supported ranges only
+const SUPPORTED_RANGES = ["24h","7d","30d","12mo"] as const;
+function normalizeRange(r: RangeKey | string | undefined): RangeKey {
+  const v = String(r || "24h");
+  return (SUPPORTED_RANGES as readonly string[]).includes(v) ? (v as RangeKey) : ("30d" as RangeKey); // map 90d → 30d
+}
 
 /* ---------------- Internal state ---------------- */
 let state: StoreState = {
@@ -111,7 +119,7 @@ function signature(d: DashboardPayload | null, r: RangeKey): string {
   const src = cap((d as any).search_visitors_timeline);
   const cnv = cap((d as any).conversions_timeline);
   return JSON.stringify({
-    r,
+    r: normalizeRange(r),
     tgvL: tgv.length, tgvV: sumBy(tgv, "visitors"), tgvW: sumBy(tgv, "views"),
     evtL: evt.length, evtC: sumBy(evt, "count"),
     uvL:  uv.length,  uvC:  sumBy(uv,  "count"),
@@ -133,13 +141,13 @@ function emitCached(siteId: number, range: RangeKey) {
     const obj = JSON.parse(raw) as { ts: number; data: DashboardPayload };
     if (!obj?.data) return false;
     let data = obj.data as DashboardPayload;
-    (data as any).range = range;
+    (data as any).range = normalizeRange(range);
 
     // Defensive: ensure cached 24h is in fixed hour order and future hours zeroed
-    data = normalize24hAllSeries(data, range) as DashboardPayload;
-    data = clamp24hAllSeries(data, range) as DashboardPayload;
+    data = normalize24hAllSeries(data, state.range) as DashboardPayload;
+    data = clamp24hAllSeries(data, state.range) as DashboardPayload;
 
-    const sig = signature(data, range);
+    const sig = signature(data, state.range);
     set({
       data,
       isLoading: false,
@@ -160,13 +168,13 @@ const KPI_KEYS = new Set<string>([
 
 function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardPayload>) {
   const merged = { ...(base || {}), ...frame } as DashboardPayload;
-  (merged as any).range = state.range;
+  (merged as any).range = normalizeRange(state.range);
   return merged;
 }
 function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPayload>) {
   const next = { ...(base || {}) } as any;
   for (const k of Object.keys(frame || {})) if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
-  next.range = state.range;
+  next.range = normalizeRange(state.range);
   return next as DashboardPayload;
 }
 
@@ -195,7 +203,6 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
 
 /* ---------- 24h count-series patching (prevents WS from zeroing future hours) ---------- */
 function applyCountPatch(base: any[] | undefined, patch: any[]): any[] {
-  // Normalize base to fixed axis; if missing, start from empty fixed axis.
   const baseNorm = normalizeCountOrder(base) || HOURS_12.map(lbl => ({ label: lbl, count: 0 }));
   const idxBy: Record<string, number> = {};
   baseNorm.forEach((b: any, i: number) => { idxBy[String(b?.label ?? "")] = i; });
@@ -214,17 +221,15 @@ function maybePatchCounts(base: any[] | undefined, incoming: any[] | undefined, 
   if (!Array.isArray(incoming) || !incoming.length) return base;
   if (range !== "24h") return incoming; // Only strict for 24h axis
   if (Array.isArray(base) && base.length === 24 && incoming.length < Math.max(8, Math.floor(base.length / 2))) {
-    // Tiny/partial frame → patch into existing 24h axis
     return applyCountPatch(base, incoming);
   }
-  // Full-enough frame → normalize to fixed axis
   return normalizeCountOrder(incoming);
 }
 
 /* ---------- Local-hour guards for 24h (prevents UTC overwrite) ---------- */
 function clampCounts(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series) || series.length !== 24) return series;
-  const nowHour = new Date().getHours(); // 0–23 local
+  const nowHour = new Date().getHours();
   return series.map((pt, i) => (i > nowHour ? { ...pt, count: 0 } : pt));
 }
 function clampTgv(series: any[] | undefined): any[] | undefined {
@@ -282,7 +287,7 @@ function normalize24hAllSeries(payload: Partial<DashboardPayload> | null, range:
 /* ---------------- REST seed (once per siteId:range) ---------------- */
 const seeded = new Set<string>();
 let seedInFlight = false;
-let lastTgvAt = 0; // updated whenever we actually change the series
+let lastTgvAt = 0;
 const seedKey = () => (state.siteId ? `${state.siteId}:${state.range}` : "");
 
 /** One-time seed fetch for the current (siteId:range). */
@@ -293,7 +298,8 @@ export async function fetchSnapshotSeedOnce() {
 
   seedInFlight = true;
   const tz = String(new Date().getTimezoneOffset());
-  const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(state.range)}&tz_offset=${encodeURIComponent(tz)}&site_id=${encodeURIComponent(state.siteId)}`;
+  const r = normalizeRange(state.range);
+  const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(r)}&tz_offset=${encodeURIComponent(tz)}&site_id=${encodeURIComponent(state.siteId)}`;
 
   try {
     const res = await secureFetch(url, { method: "GET" });
@@ -303,16 +309,15 @@ export async function fetchSnapshotSeedOnce() {
       return;
     }
     let data = (await res.json()) as DashboardPayload;
-    (data as any).range = state.range;
+    (data as any).range = r;
 
-    // Normalize order first, then clamp future hours
-    data = normalize24hAllSeries(data, state.range) as DashboardPayload;
-    data = clamp24hAllSeries(data, state.range) as DashboardPayload;
+    data = normalize24hAllSeries(data, r) as DashboardPayload;
+    data = clamp24hAllSeries(data, r) as DashboardPayload;
 
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
-    saveSnapshot(state.siteId, state.range, data);
-    const sig = signature(data, state.range);
+    saveSnapshot(state.siteId, r, data);
+    const sig = signature(data, r);
 
     set({
       data,
@@ -396,7 +401,7 @@ async function getWSTicket(): Promise<string> {
 }
 
 function requestSeries() {
-  try { ws?.send(JSON.stringify({ type: "request_series", range: state.range })); } catch {}
+  try { ws?.send(JSON.stringify({ type: "request_series", range: normalizeRange(state.range) })); } catch {}
 }
 
 export async function connectWS(forceNew = false) {
@@ -428,7 +433,7 @@ export async function connectWS(forceNew = false) {
 
     socket.onopen = () => {
       if (reconnectTimer) { window.clearTimeout(reconnectTimer); reconnectTimer = null; }
-      if (W.__mvDashDbg) console.debug("✅ [WS] Connected", { site: state.siteId, range: state.range });
+      if (W.__mvDashDbg) console.debug("✅ [WS] Connected", { site: state.siteId, range: normalizeRange(state.range) });
 
       // keepalive
       pingTimer = window.setInterval(() => {
@@ -455,10 +460,14 @@ export async function connectWS(forceNew = false) {
             time_grouped_visits_delta?: any[];
             tgv_delta?: any[];
             tgv?: any[];
+            range?: RangeKey;
           };
 
           const base = state.data as any;
           const frame: Partial<DashboardPayload> = { ...frameRaw };
+
+          // Force range to a supported value
+          (frame as any).range = normalizeRange((frame as any)?.range || state.range);
 
           /* ----- TGV: normalize/patch partial arrays ----- */
           const baseTgv = base?.time_grouped_visits as any[] | undefined;
@@ -482,7 +491,7 @@ export async function connectWS(forceNew = false) {
           if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
 
           /* ----- 24h count series: patch partial WS frames too ----- */
-          const r = ((frame as any)?.range as RangeKey) || state.range;
+          const r = (frame as any).range as RangeKey;
           const keys: (keyof DashboardPayload)[] = [
             "events_timeline","impressions_timeline","clicks_timeline",
             "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
@@ -581,7 +590,7 @@ export function init(initialRange: RangeKey = "24h") {
     bootstrapped = true;
   }
 
-  set({ range: initialRange });
+  set({ range: normalizeRange(initialRange) });
 
   const saved = localStorage.getItem("current_website_id");
   if (saved) set({ siteId: Number(saved) });
@@ -589,7 +598,6 @@ export function init(initialRange: RangeKey = "24h") {
   if (state.siteId) {
     emitCached(state.siteId, state.range);
     void connectWS(true);
-    // WS onopen triggers one-time seed
   }
 }
 
@@ -603,12 +611,12 @@ export function setSite(siteId: number) {
 }
 
 export function setRange(range: RangeKey) {
-  if (state.range === range) return;
-  set({ range, data: null, isLoading: true, error: null, seriesSig: "" });
+  const r = normalizeRange(range);
+  if (state.range === r) return;
+  set({ range: r, data: null, isLoading: true, error: null, seriesSig: "" });
 
   if (state.siteId) {
-    emitCached(state.siteId, range);
-    // keep socket; rely on stream frames; WS onopen (if reconnect) seeds once
+    emitCached(state.siteId, r);
     void connectWS(false);
   }
 }
