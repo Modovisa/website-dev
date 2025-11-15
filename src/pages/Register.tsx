@@ -49,18 +49,18 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
 
-  const isModal = mode === "modal";
-
   // Password validation
   const validatePassword = (pwd: string): boolean => {
     const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
     return regex.test(pwd);
   };
 
-  // Shared success path:
-  //  - mark mv_new_signup = 1
-  //  - if onSuccess is provided (homepage modal) → delegate to that
-  //  - else → legacy behavior: go to /app/tracking-setup
+  /**
+   * Shared success path:
+   *  - mark mv_new_signup = 1
+   *  - if mode === "modal" → delegate to onSuccess (Stripe flow) and NEVER self-navigate
+   *  - else (page) → legacy behaviour: go to /app/tracking-setup
+   */
   const handlePostSuccess = useCallback(async () => {
     try {
       window.localStorage.setItem("mv_new_signup", "1");
@@ -68,16 +68,21 @@ const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
       // ignore
     }
 
-    if (onSuccess) {
-      await onSuccess();
+    if (mode === "modal") {
+      // Modal variant (homepage pricing flow):
+      // let the caller (RegisterModal) own what happens next (Stripe embed + redirect).
+      if (onSuccess) {
+        await onSuccess();
+      }
       return;
     }
 
+    // Plain /register page behaviour
     setLoadingMessage("Setting up your dashboard...");
     setTimeout(() => {
       navigate("/app/tracking-setup");
     }, 150);
-  }, [navigate, onSuccess]);
+  }, [mode, navigate, onSuccess]);
 
   // Check username availability
   const checkUsername = async () => {
