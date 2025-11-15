@@ -45,6 +45,36 @@ export default function BillingAndPlans() {
     [info, isFreeForever, isFreePlan]
   );
 
+  // Small helpers for wording
+  const formattedDate =
+    info?.active_until && info.active_until !== "Free Forever"
+      ? new Date(info.active_until).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+
+  const dateLine = (() => {
+    if (isFreeForever) return "Free Forever";
+    if (!formattedDate) return "Active until –";
+    if (info?.cancel_at_period_end) return `Active until ${formattedDate}`;
+    return `Renews on ${formattedDate}`;
+  })();
+
+  const helperLine = (() => {
+    if (isFreeForever) {
+      return "Enjoy unlimited events and full access — forever free.";
+    }
+    if (isFreePlan) {
+      return "We'll notify you when you approach your monthly event limit.";
+    }
+    if (info?.cancel_at_period_end) {
+      return "Your plan will automatically revert to the Free plan at the end of this period.";
+    }
+    return "We'll email you before your subscription renews.";
+  })();
+
   return (
     <div className="space-y-6">
       <Card id="billing-current-plan">
@@ -62,73 +92,55 @@ export default function BillingAndPlans() {
             <div className="grid gap-6 lg:grid-cols-2">
               {/* LEFT BLOCK */}
               <div>
-                <div className="mb-4">
-                  <h6 className="mb-1">
-                    {isFreeForever ? (
-                      <>
-                        Your Current Plan is{" "}
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700">
-                          Free Forever
-                        </span>
-                      </>
-                    ) : (
-                      <>Your Current Plan is {info.plan_name}</>
+                {/* Plan + interval + popularity */}
+                <div className="mb-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-primary px-3 py-1 text-sm font-medium text-primary-foreground">
+                      {isFreeForever
+                        ? "Free Forever"
+                        : info.plan_name || "Current Plan"}
+                    </span>
+
+                    {!isFreeForever && info.interval && (
+                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs text-cyan-700">
+                        {info.interval === "year" ? "Yearly" : "Monthly"}
+                      </span>
                     )}
-                  </h6>
-                </div>
 
-                <div className="mb-4">
-                  <h6 className="mb-1">
-                    {info.active_until === "Free Forever"
-                      ? "Free Forever"
-                      : info.active_until
-                      ? `Active until ${new Date(info.active_until).toLocaleDateString(
-                          "en-US",
-                          {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          }
-                        )}`
-                      : "Active until –"}
-                  </h6>
-                  <p className="text-muted-foreground">
-                    {isFreeForever
-                      ? "Enjoy unlimited events and full access — forever free."
-                      : isFreePlan
-                      ? "We'll notify you when you approach your monthly event limit"
-                      : "We will send you a notification upon Subscription expiration"}
-                  </p>
-                </div>
+                    {!isFreeForever && info.is_popular && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                        Popular
+                      </span>
+                    )}
+                  </div>
 
-                {!isFreeForever && (
-                  <div className="mb-6">
-                    <h6 className="mb-1">
+                  {/* Price row – always show /month, with yearly hint when needed */}
+                  {!isFreeForever && (
+                    <div className="text-lg font-semibold">
                       {isFreePlan ? (
                         <span>Free</span>
                       ) : (
                         <>
-                          {/* Always display monthly-equivalent price */}
                           ${info.price}{" "}
-                          <span className="text-sm text-muted-foreground">/ month</span>
-                          {info.is_popular ? (
-                            <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                              Popular
+                          <span className="text-sm text-muted-foreground">
+                            / month
+                          </span>
+                          {info.interval === "year" && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              (billed yearly)
                             </span>
-                          ) : null}
+                          )}
                         </>
                       )}
-                    </h6>
-                    <p className="mb-0 text-muted-foreground">
-                      {info.plan_name ? info.plan_name : "–"}{" "}
-                      {!isFreePlan && info.interval ? (
-                        <span className="ml-2 rounded bg-cyan-100 px-2 py-0.5 text-md text-cyan-700">
-                          {info.interval === "year" ? "Yearly" : "Monthly"}
-                        </span>
-                      ) : null}
-                    </p>
+                    </div>
+                  )}
+
+                  {/* Date + helper */}
+                  <div>
+                    <h6 className="mb-1">{dateLine}</h6>
+                    <p className="text-sm text-muted-foreground">{helperLine}</p>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* RIGHT BLOCK */}
@@ -140,15 +152,18 @@ export default function BillingAndPlans() {
                         <div className="font-medium">Needs attention!</div>
                         <div>
                           Your plan will revert to{" "}
-                            <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
+                          <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
                           <span className="font-semibold text-red-600">
                             {info.active_until
-                              ? new Date(info.active_until).toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                  timeZone: "UTC",
-                                })
+                              ? new Date(info.active_until).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    timeZone: "UTC",
+                                  }
+                                )
                               : "—"}
                           </span>
                           .
@@ -160,8 +175,8 @@ export default function BillingAndPlans() {
                       <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
                         <div className="font-medium">Heads up!</div>
                         <div>
-                          Your subscription ends in {info.days_left} day(s). Please update
-                          or renew.
+                          Your subscription ends in {info.days_left} day(s). Please
+                          update or renew.
                         </div>
                       </div>
                     ) : null}
@@ -240,9 +255,9 @@ export default function BillingAndPlans() {
                     </Button>
                   )}
 
-                {/* Standalone "Update Card" button removed – card updates will
-                   only be triggered by the rare `require_payment_update`
-                   path from the upgrade flow. */}
+                {/* No standalone "Update Card" button.
+                   Card updates only happen via the rare
+                   `require_payment_update` path from the upgrade flow. */}
               </div>
             </div>
           )}
@@ -266,8 +281,6 @@ export default function BillingAndPlans() {
 
               if (result.mode === "require_payment_update") {
                 // Same semantics as Bootstrap: card needs to be refreshed.
-                // This still uses the embedded update-card flow if/when
-                // the backend starts returning `require_payment_update`.
                 setShowUpgrade(false);
 
                 startUpdateCard().then((updateRes) => {
@@ -303,7 +316,7 @@ export default function BillingAndPlans() {
         </div>
       </div>
 
-      {/* Update-card container (only used from upgrade fallback, not from a standalone button) */}
+      {/* Update-card container (only used via require_payment_update) */}
       <div
         id="react-billing-updatecard-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
