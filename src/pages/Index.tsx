@@ -1,6 +1,6 @@
 // src/pages/Index.tsx
 
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +28,13 @@ import SiteFooter from "@/components/SiteFooter";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { secureFetch } from "@/lib/auth";
 
-// TypeScript declaration for Gradient
+// TypeScript declaration for Gradient + Bootstrap
 declare global {
   interface Window {
     Gradient: any;
+    bootstrap?: any;
+    showGlobalLoadingModal?: (msg?: string) => void;
+    hideGlobalLoadingModal?: () => void;
   }
 }
 
@@ -71,15 +74,18 @@ const FALLBACK_PAID_TIERS: PublicPricingTier[] = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
+
   const [isYearly, setIsYearly] = useState(false);
   const [eventIndex, setEventIndex] = useState(0); // index into SNAP_STEPS
   const [tiers, setTiers] = useState<PublicPricingTier[]>([]);
   const [tiersLoading, setTiersLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gradientInitialized = useRef(false);
 
-  // Initialize gradient - exactly like Bootstrap version
+  // Initialize gradient - same behavior as Bootstrap version
   useEffect(() => {
     if (gradientInitialized.current) return;
 
@@ -102,7 +108,26 @@ const Index = () => {
     initGradient();
   }, []);
 
-  // Load pricing tiers from the public-safe endpoint (mirrors Bootstrap logic)
+  // Probe auth state (token / cookie via /api/me)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function probeLogin() {
+      try {
+        const res = await secureFetch("/api/me");
+        if (!cancelled) setIsLoggedIn(res.ok);
+      } catch {
+        if (!cancelled) setIsLoggedIn(false);
+      }
+    }
+
+    probeLogin();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load pricing tiers from the public-safe endpoint
   useEffect(() => {
     let cancelled = false;
 
@@ -172,6 +197,55 @@ const Index = () => {
       console.warn("[landing] unable to persist pricing intent", err);
     }
   }, [matchedTier, isYearly]);
+
+  // Core CTA behavior: mirror Bootstrap:
+  // - If NOT logged in → open #loginModal (register modal)
+  // - If logged in → send into the app (no checkout on homepage)
+  const handlePrimaryCtaClick = async () => {
+    try {
+      let loggedIn = isLoggedIn;
+
+      // If the probe hasn't finished yet, do a fresh check
+      if (loggedIn === null) {
+        const res = await secureFetch("/api/me");
+        loggedIn = res.ok;
+        setIsLoggedIn(loggedIn);
+      }
+
+      if (!loggedIn) {
+        const modalEl = document.getElementById("loginModal") as HTMLElement | null;
+        if (modalEl && window.bootstrap?.Modal) {
+          const existing = window.bootstrap.Modal.getInstance
+            ? window.bootstrap.Modal.getInstance(modalEl)
+            : null;
+          const modal = existing || new window.bootstrap.Modal(modalEl);
+          modal.show();
+        } else {
+          // Fallback if Bootstrap modal isn’t available
+          navigate("/register");
+        }
+        return;
+      }
+
+      // Logged in: send them to the app
+      if (typeof window.showGlobalLoadingModal === "function") {
+        window.showGlobalLoadingModal("Redirecting to your dashboard...");
+      }
+      navigate("/app/dashboard");
+    } catch (err) {
+      console.error("[landing] CTA click error, falling back to register:", err);
+      const modalEl = document.getElementById("loginModal") as HTMLElement | null;
+      if (modalEl && window.bootstrap?.Modal) {
+        const existing = window.bootstrap.Modal.getInstance
+          ? window.bootstrap.Modal.getInstance(modalEl)
+          : null;
+        const modal = existing || new window.bootstrap.Modal(modalEl);
+        modal.show();
+      } else {
+        navigate("/register");
+      }
+    }
+  };
 
   const features = [
     {
@@ -245,16 +319,16 @@ const Index = () => {
               actionable insights.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
-              <Link to="/register">
-                <Button
-                  size="lg"
-                  className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg"
-                >
-                  Start Free Trial
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
-              <Link to="/dashboard">
+              <Button
+                size="lg"
+                className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg"
+                onClick={handlePrimaryCtaClick}
+              >
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+
+              <Link to="/app/dashboard">
                 <Button size="lg" variant="hero" className="h-14 px-8 text-lg">
                   View Demo
                 </Button>
@@ -341,11 +415,14 @@ const Index = () => {
                 </div>
               </div>
 
-              <Link to="/register" className="block">
-                <Button variant="outline" className="w-full h-12 text-base" size="lg">
-                  Get Started
-                </Button>
-              </Link>
+              <Button
+                variant="outline"
+                className="w-full h-12 text-base"
+                size="lg"
+                onClick={handlePrimaryCtaClick}
+              >
+                Get Started
+              </Button>
             </div>
 
             {/* Pro Plan */}
@@ -461,13 +538,12 @@ const Index = () => {
                 </div>
               </div>
 
-              <Link to="/register" className="block">
-                <Button
-                  className="w-full h-12 text-base"
-                  size="lg"
-                  onClick={() => {
-                    // Make sure the latest choice is persisted before navigation
-                    if (!matchedTier || typeof window === "undefined") return;
+              <Button
+                className="w-full h-12 text-base"
+                size="lg"
+                onClick={() => {
+                  // Persist latest slider selection as intent, then open modal / route
+                  if (matchedTier && typeof window !== "undefined") {
                     try {
                       window.localStorage.setItem(
                         INTENT_KEY,
@@ -479,11 +555,12 @@ const Index = () => {
                     } catch {
                       // non-fatal
                     }
-                  }}
-                >
-                  Get Started
-                </Button>
-              </Link>
+                  }
+                  handlePrimaryCtaClick();
+                }}
+              >
+                Get Started
+              </Button>
             </div>
           </div>
         </div>
@@ -503,15 +580,14 @@ const Index = () => {
             Join thousands of teams already using Modovisa to understand their users
             better.
           </p>
-          <Link to="/register">
-            <Button
-              size="lg"
-              className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg"
-            >
-              Start Free Trial
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg"
+            onClick={handlePrimaryCtaClick}
+          >
+            Start Free Trial
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
         </div>
       </section>
 
