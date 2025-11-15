@@ -1,7 +1,6 @@
 // src/services/billing.store.ts
 /**
  * Centralized Billing Store
- * Mirrors the Bootstrap implementation from user-profile.js (lines 8-1355)
  * All billing logic in one place for easier maintenance and parity with Bootstrap
  */
 
@@ -15,7 +14,7 @@ import { secureFetch } from "@/lib/auth";
 export type PricingTier = {
   id: number;
   plan_id: number;
-  name: string;
+  name?: string;
   min_events: number;
   max_events: number;
   monthly_price: number;
@@ -40,6 +39,7 @@ export type BillingInfo = {
   is_free_forever?: boolean | 0 | 1;
   is_free_plan?: boolean;
   payment_method?: { brand?: string; last4?: string } | null;
+  plan_features?: string;
 };
 
 export type Invoice = {
@@ -66,11 +66,13 @@ export type SelectedTierMeta = {
 };
 
 /* ============================================
-   🌍 GLOBAL STATE (mirroring Bootstrap)
+   🌍 BILLING STORE CLASS
    ============================================ */
 
 class BillingStore {
-  // Global billing vars (lines 8-18 in Bootstrap)
+  // ========================================
+  // GLOBAL BILLING VARS (Bootstrap lines 8-18)
+  // ========================================
   private pricingTiers: PricingTier[] = [];
   private selectedTierMeta: SelectedTierMeta = {
     tier_id: null,
@@ -83,15 +85,15 @@ class BillingStore {
   private selectedPaymentMethod: { brand?: string; last4?: string } | null = null;
   private billingInfo: BillingInfo | null = null;
   private invoices: Invoice[] = [];
-  
+
   // Stripe instance cache
   private stripePromise: Promise<any> | null = null;
-  
-  // User status tracking (mirroring Bootstrap global)
+
+  // User status tracking (Bootstrap line 57-59)
   public isFreePlanBeforeUpgrade: boolean = false;
 
   /* ============================================
-     📦 LOAD PRICING TIERS (lines 21-32)
+     📦 LOAD PRICING TIERS (Bootstrap lines 21-32)
      ============================================ */
   async loadPricingTiers(): Promise<PricingTier[]> {
     try {
@@ -109,7 +111,7 @@ class BillingStore {
   }
 
   /* ============================================
-     🔄 FETCH BILLING INFO (lines 35-64)
+     🔄 LOAD BILLING INFO (Bootstrap lines 35-64)
      ============================================ */
   async loadUserBillingInfo(): Promise<BillingInfo> {
     try {
@@ -123,7 +125,7 @@ class BillingStore {
       this.billingInfo = data;
       this.selectedPaymentMethod = data.payment_method || null;
 
-      // Track if upgrading from free plan (line 57-59)
+      // Track if upgrading from free plan (Bootstrap lines 57-59)
       this.isFreePlanBeforeUpgrade =
         (data.plan_name || "").toLowerCase().includes("free") ||
         data.price === 0 ||
@@ -155,14 +157,14 @@ class BillingStore {
   }
 
   /* ============================================
-     🎨 STRIPE HELPER (lines 66-84)
+     🎨 STRIPE HELPER (Bootstrap lines 66-84)
      ============================================ */
   private async resolvePublishableKey(): Promise<string> {
     // 1) Prefer Vite env override
     const envPk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
     if (envPk && envPk.trim()) return envPk;
 
-    // 2) Admin runtime config
+    // 2) Admin runtime config (matches Bootstrap exactly)
     try {
       const res = await fetch(`${apiBase()}/api/stripe/runtime-config`, {
         cache: "no-store",
@@ -219,31 +221,26 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 UPGRADE PLAN LOGIC (lines 850-906)
+     💳 UPGRADE LOGIC (Bootstrap lines 850-906)
      ============================================ */
-  
+
   /**
-   * Update selected tier metadata (mirroring lines 1328-1338)
+   * Update selected tier metadata (Bootstrap lines 1328-1338)
+   * Called by React components before upgrade
    */
-  updateSelectedTier(
-    tierId: number,
-    interval: "month" | "year",
-    tier: PricingTier,
-    price: number
-  ) {
+  updateSelectedTier(tierId: number, interval: "month" | "year", tier: PricingTier, price: number) {
     this.selectedTierMeta = {
       tier_id: tierId,
       plan_id: tier.plan_id,
       price,
       interval,
-      stripe_price_id:
-        interval === "year" ? tier.stripe_price_id_year : tier.stripe_price_id_month,
+      stripe_price_id: interval === "year" ? tier.stripe_price_id_year : tier.stripe_price_id_month,
       label: `${tier.max_events.toLocaleString()} events/${interval}`,
     };
   }
 
   /**
-   * Detect if upgrade is a downgrade (lines 860-873)
+   * Check if upgrade is a downgrade (Bootstrap lines 864-868)
    */
   isDowngrade(tierId: number, interval: "month" | "year"): boolean {
     if (!this.billingInfo) return false;
@@ -255,9 +252,7 @@ class BillingStore {
     const tier = this.pricingTiers.find((t) => t.id === tierId);
     if (!tier) return false;
 
-    const selectedPrice = interval === "year" 
-      ? Math.ceil(tier.monthly_price * 0.8) 
-      : tier.monthly_price;
+    const selectedPrice = interval === "year" ? Math.ceil(tier.monthly_price * 0.8) : tier.monthly_price;
 
     const isSameTier = currentPlanId === tier.plan_id;
     const isSameInterval = currentInterval === interval;
@@ -267,22 +262,24 @@ class BillingStore {
   }
 
   /**
-   * Check if user has saved payment method (line 880)
+   * Check if user has saved payment method (Bootstrap line 880)
    */
   hasPaymentMethod(): boolean {
     return !!this.selectedPaymentMethod;
   }
 
   /* ============================================
-     💳 STRIPE EMBEDDED CHECKOUT (lines 917-1003)
+     💳 STRIPE EMBEDDED CHECKOUT (Bootstrap lines 917-1003)
      ============================================ */
-  
+
   async openStripeEmbeddedCheckout(
     tierId: number,
     interval: "month" | "year",
+    previousPlanId: number = 0,
+    previousInterval: "month" | "year" = "month",
     onComplete?: () => void,
     onError?: (error: Error) => void
-  ): Promise<void> {
+  ): Promise<any> {
     const stripe = await this.getStripe();
     if (!stripe) {
       const err = new Error("Stripe failed to load/initialize");
@@ -291,13 +288,7 @@ class BillingStore {
     }
 
     try {
-      // Get current plan details for context
-      const previousPlanId = this.billingInfo?.plan_id || 0;
-      const previousInterval = this.billingInfo?.interval || "month";
-      const fromFree = this.isFreePlanBeforeUpgrade;
-      const intervalChanged = previousInterval !== interval;
-
-      // Request embedded session from backend (lines 934-940)
+      // Request embedded session from backend (Bootstrap lines 934-940)
       const res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -307,50 +298,40 @@ class BillingStore {
       const data = await res.json();
       console.log("📦 Server Response:", data);
 
-      // 🔁 Modal fallback - card-on-file upgrade handled server-side (lines 945-962)
+      // Determine upgrade context (Bootstrap lines 950-951)
+      const fromFree = this.isFreePlanBeforeUpgrade === true;
+      const intervalChanged = previousInterval !== interval;
+
+      // 🔁 Card-on-file upgrade handled server-side (Bootstrap lines 945-962)
       if (data.success || data.embedded_handled === true) {
         await this.loadUserBillingInfo();
-        
+
         // Show appropriate success based on context
-        if (fromFree) {
-          onComplete?.(); // Free → Paid upgrade
-        } else if (intervalChanged) {
-          onComplete?.(); // Interval change (Monthly ↔ Yearly)
-        } else {
-          onComplete?.(); // Regular upgrade
-        }
-        return;
+        onComplete?.();
+        return { success: true, context: { fromFree, intervalChanged } };
       }
 
-      // 🧾 Require card update (lines 964-970)
+      // 🧾 Require card update (Bootstrap lines 964-970)
       if (data.require_payment_update) {
         console.warn("⚠️ Card needs update");
         throw new Error("Card declined or expired — user must re-authenticate payment");
       }
 
-      // Validate client secret (lines 972-974)
+      // Validate client secret (Bootstrap lines 972-974)
       if (!res.ok || !data.clientSecret) {
         throw new Error(data.error || "Missing Stripe clientSecret");
       }
 
-      // ✅ Proceed with embedded checkout (lines 980-996)
+      // ✅ Proceed with embedded checkout (Bootstrap lines 980-996)
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: data.clientSecret,
         onComplete: async () => {
           await this.loadUserBillingInfo();
-          
-          // Context-aware success handling
-          if (fromFree) {
-            onComplete?.(); // 🎉 Free → Monthly/Yearly
-          } else if (intervalChanged) {
-            onComplete?.(); // Monthly → Yearly
-          } else {
-            onComplete?.(); // Regular upgrade
-          }
+          onComplete?.();
         },
       });
 
-      return checkout;
+      return { checkout, context: { fromFree, intervalChanged } };
     } catch (err) {
       console.error("❌ Stripe checkout failed:", err);
       onError?.(err as Error);
@@ -359,9 +340,28 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 UPDATE CARD (lines 1041-1077)
+     💳 CONFIRM UPGRADE WITH SAVED CARD
+     (Bootstrap lines 1008-1020)
      ============================================ */
-  
+
+  async confirmUpgrade(
+    tierId: number,
+    interval: "month" | "year",
+    currentPlanId: number,
+    currentInterval: "month" | "year"
+  ): Promise<any> {
+    return this.openStripeEmbeddedCheckout(
+      tierId,
+      interval,
+      currentPlanId,
+      currentInterval
+    );
+  }
+
+  /* ============================================
+     💳 UPDATE CARD (Bootstrap lines 1041-1077)
+     ============================================ */
+
   async openStripeUpdateCardSession(
     onComplete?: () => void,
     onError?: (error: Error) => void
@@ -401,9 +401,9 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 CANCEL SUBSCRIPTION (lines 1095-1122)
+     💳 CANCEL SUBSCRIPTION (Bootstrap lines 1095-1122)
      ============================================ */
-  
+
   async cancelSubscription(): Promise<{ success: boolean }> {
     try {
       const res = await secureFetch(`${apiBase()}/api/cancel-subscription`, {
@@ -422,9 +422,9 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 REACTIVATE SUBSCRIPTION (lines 1141-1175)
+     💳 REACTIVATE SUBSCRIPTION (Bootstrap lines 1141-1175)
      ============================================ */
-  
+
   async reactivateSubscription(): Promise<{ success: boolean }> {
     try {
       const res = await secureFetch(`${apiBase()}/api/reactivate-subscription`, {
@@ -433,7 +433,10 @@ class BillingStore {
 
       const data = await res.json();
       if (data.success) {
-        await this.loadUserBillingInfo();
+        // Refresh billing info after slight delay (Bootstrap line 1163)
+        setTimeout(async () => {
+          await this.loadUserBillingInfo();
+        }, 500);
       }
       return data;
     } catch (err) {
@@ -443,9 +446,9 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 CONFIRM DOWNGRADE (lines 1181-1217)
+     💳 CONFIRM DOWNGRADE (Bootstrap lines 1181-1217)
      ============================================ */
-  
+
   async confirmDowngrade(tierId: number, interval: "month" | "year"): Promise<void> {
     try {
       const res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
@@ -469,9 +472,9 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 CANCEL DOWNGRADE (lines 1237-1268)
+     💳 CANCEL DOWNGRADE (Bootstrap lines 1237-1268)
      ============================================ */
-  
+
   async cancelDowngrade(): Promise<{ success: boolean }> {
     try {
       const res = await secureFetch(`${apiBase()}/api/cancel-downgrade`, {
@@ -480,6 +483,7 @@ class BillingStore {
 
       const data = await res.json();
       if (data.success) {
+        // Dynamically update UI (Bootstrap lines 1254-1258)
         await this.loadUserBillingInfo();
       }
       return data;
@@ -490,9 +494,9 @@ class BillingStore {
   }
 
   /* ============================================
-     📊 GETTERS
+     📊 GETTERS & HELPERS
      ============================================ */
-  
+
   getPricingTiers(): PricingTier[] {
     return this.pricingTiers;
   }
@@ -513,23 +517,68 @@ class BillingStore {
     return this.selectedPaymentMethod;
   }
 
+  /**
+   * Check if current plan is free (Bootstrap line 97)
+   */
   isFreePlan(): boolean {
     if (!this.billingInfo) return true;
+    const isFreeForever =
+      String(this.billingInfo.is_free_forever) === "1" || this.billingInfo.is_free_forever === true;
     return (
-      this.billingInfo.is_free_plan ||
-      (!this.billingInfo.price && !this.billingInfo.interval) ||
-      (this.billingInfo.plan_id || 0) === 0
+      isFreeForever ||
+      this.billingInfo.price === 0 ||
+      this.billingInfo.interval === null ||
+      (this.billingInfo.plan_name || "").toLowerCase().includes("free")
     );
   }
 
+  /**
+   * Check if free forever (Bootstrap line 96)
+   */
   isFreeForever(): boolean {
     if (!this.billingInfo) return false;
     return (
-      String(this.billingInfo.is_free_forever) === "1" ||
-      this.billingInfo.is_free_forever === true
+      String(this.billingInfo.is_free_forever) === "1" || this.billingInfo.is_free_forever === true
     );
+  }
+
+  /**
+   * Find tier by event count (used by React slider)
+   */
+  findTierByEvents(events: number): PricingTier | null {
+    return this.pricingTiers.find((tier) => events >= tier.min_events && events <= tier.max_events) || null;
+  }
+
+  /**
+   * Calculate price for tier + interval
+   */
+  calculatePrice(tier: PricingTier, interval: "month" | "year"): number {
+    const monthly = tier.monthly_price;
+    return interval === "year" ? Math.ceil(monthly * 0.8) : monthly; // 20% discount for yearly
   }
 }
 
 // Export singleton instance
 export const billingStore = new BillingStore();
+
+/* ============================================
+   📝 NOTES ON MISSING BOOTSTRAP CODE
+   ============================================ */
+
+// The following Bootstrap functions are NOT included because they are UI-specific:
+//
+// 1. renderCurrentPlan() (Bootstrap lines ~89-300)
+//    → Handled by: BillingAndPlans.tsx component
+//    → React renders UI based on billingInfo from the store
+//
+// 2. renderUpgradeModalFooter() (Bootstrap lines ~303-330)
+//    → Handled by: UpgradePlanModal.tsx component
+//    → React displays current plan amount directly
+//
+// 3. setupUpgradeModalSlider() (Bootstrap lines 1288-1380)
+//    → Handled by: UpgradePlanModal.tsx component
+//    → Uses native HTML5 range input instead of noUiSlider
+//    → React manages slider state locally
+//
+// The store focuses on business logic and API calls.
+// React components handle all DOM manipulation and rendering.
