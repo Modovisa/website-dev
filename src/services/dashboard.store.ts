@@ -3,7 +3,7 @@
 //
 // 1. Each chart only listens to WS frames for its OWN range.
 //    - If UI is on "24h", only frames with range === "24h" can touch the series.
-//    - 7d/30d/12mo WS frames are ignored for 24h (and vice-versa).
+//    - 7d/30d/90d/12mo WS frames are ignored for 24h (and vice-versa).
 //
 // 2. 24h axis is fixed to local "12 AM → 11 PM".
 //    - We normalize labels into that order, no rotation.
@@ -15,16 +15,15 @@
 //
 // 4. API surface is unchanged: init, setSite, setRange, fetchSnapshot, fetchSnapshotHard,
 //    connectWS, useDashboard, getTrackingWebsites.
-//
-// 5. NEW: WS patches for 24h are monotonic per hour bucket:
-//    - Once an hour has X views/visitors, later patches can only increase that bucket,
-//      never decrease it within the session. Same for *_timeline counts.
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 /* ---------------- Types ---------------- */
+// Local union that includes your global RangeKey plus "24h"
+type AnyRange = RangeKey | "24h";
+
 export type GeoCityPoint = {
   city: string;
   country: string;
@@ -44,7 +43,7 @@ export type StoreState = {
   frameKey: number;
   seriesSig: string;
   siteId: number | null;
-  range: RangeKey;
+  range: AnyRange;
 };
 
 export type TrackingWebsite = {
@@ -60,18 +59,41 @@ const TICKET_THROTTLE_MS = 1500;
 const REQUEST_SERIES_THROTTLE_MS = 20_000;
 
 const HOURS_12 = [
-  "12 AM","1 AM","2 AM","3 AM","4 AM","5 AM",
-  "6 AM","7 AM","8 AM","9 AM","10 AM","11 AM",
-  "12 PM","1 PM","2 PM","3 PM","4 PM","5 PM",
-  "6 PM","7 PM","8 PM","9 PM","10 PM","11 PM",
+  "12 AM",
+  "1 AM",
+  "2 AM",
+  "3 AM",
+  "4 AM",
+  "5 AM",
+  "6 AM",
+  "7 AM",
+  "8 AM",
+  "9 AM",
+  "10 AM",
+  "11 AM",
+  "12 PM",
+  "1 PM",
+  "2 PM",
+  "3 PM",
+  "4 PM",
+  "5 PM",
+  "6 PM",
+  "7 PM",
+  "8 PM",
+  "9 PM",
+  "10 PM",
+  "11 PM",
 ] as const;
 
-const SUPPORTED_RANGES = ["24h","7d","30d","12mo"] as const;
-function normalizeRange(r: RangeKey | string | undefined): RangeKey {
+const SUPPORTED_RANGES = ["24h", "7d", "30d", "90d", "12mo"] as const;
+
+function normalizeRange(
+  r: AnyRange | string | undefined
+): AnyRange {
   const v = String(r || "24h");
   return (SUPPORTED_RANGES as readonly string[]).includes(v)
-    ? (v as RangeKey)
-    : ("30d" as RangeKey);
+    ? (v as AnyRange)
+    : ("30d" as AnyRange);
 }
 
 /* ---------------- Internal state ---------------- */
@@ -97,7 +119,7 @@ const set = (partial: Partial<StoreState>) => {
 
 /* ---------------- Helpers ---------------- */
 const W: any = typeof window !== "undefined" ? window : {};
-const cacheKey = (sid: number, r: RangeKey, tzOff: number) =>
+const cacheKey = (sid: number, r: AnyRange, tzOff: number) =>
   `mv:snapshot:${sid}:${r}:${tzOff}`;
 
 const safeJSON = <T = any,>(x: string): T | null => {
@@ -175,14 +197,14 @@ function restrictPatchToElapsed<T extends { label?: string }>(
   arr: T[] | undefined
 ): T[] {
   if (!Array.isArray(arr)) return [];
-  const nowHour = new Date().getHours();
+  const nowHour = new Date().getHours(); // LOCAL hour
   return arr.filter((p) => {
     const i = HOUR_IDX[canonHourLabel(String(p?.label ?? ""))];
     return i != null && i <= nowHour;
   });
 }
 
-/* ---------- Logging (kept, but behaviour is now predictable) ---------- */
+/* ---------- Logging ---------- */
 function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   const P = Array.isArray(prev) ? prev : [];
   const N = Array.isArray(next) ? next : [];
@@ -202,7 +224,7 @@ function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   }
 }
 
-function signature(d: DashboardPayload | null, r: RangeKey): string {
+function signature(d: DashboardPayload | null, r: AnyRange): string {
   if (!d) return "";
   const tgv = cap((d as any).time_grouped_visits);
   const evt = cap((d as any).events_timeline);
@@ -231,7 +253,7 @@ function signature(d: DashboardPayload | null, r: RangeKey): string {
   });
 }
 
-/* ---------- 24h normalization (no rotation, no baseline) ---------- */
+/* ---------- 24h normalization ---------- */
 function normalizeTgvOrder(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series)) return series;
   const by = new Map<string, any>();
@@ -265,14 +287,14 @@ function normalizeCountOrder(series: any[] | undefined): any[] | undefined {
   const out = HOURS_12.map((lbl) => {
     const key = canonHourLabel(lbl);
     const v = by.get(key);
-    return v
-      ? { label: key, count: v.count }
-      : { label: key, count: 0 };
+    return v ? { label: key, count: v.count } : { label: key, count: 0 };
   });
   return out;
 }
 
-function normalize24hFrame(frame: Partial<DashboardPayload>): Partial<DashboardPayload> {
+function normalize24hFrame(
+  frame: Partial<DashboardPayload>
+): Partial<DashboardPayload> {
   const out: any = { ...frame };
 
   const guard = (s: any[] | undefined) =>
@@ -301,12 +323,8 @@ function normalize24hFrame(frame: Partial<DashboardPayload>): Partial<DashboardP
   return out;
 }
 
-/* ---------- Patchers used ONLY for 24h delta fields ---------- */
-// MONOTONIC: within a session, buckets can only stay the same or increase.
-function applyTgvPatch(
-  base: any[] | undefined,
-  patch: any[]
-): any[] {
+/* ---------- Patchers for 24h delta fields ---------- */
+function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   const baseNorm =
     normalizeTgvOrder(base) ||
     HOURS_12.map((lbl) => ({
@@ -325,24 +343,18 @@ function applyTgvPatch(
     if (!lbl || !isHourLabel(lbl)) continue;
     const j = idxBy[lbl];
     if (j == null) continue;
-
-    const prev = baseNorm[j] || { label: lbl, visitors: 0, views: 0 };
     const v = Number((p as any)?.visitors ?? 0);
     const w = Number((p as any)?.views ?? 0);
-
     baseNorm[j] = {
-      label: prev.label,
-      visitors: Math.max(Number(prev.visitors || 0), v),
-      views: Math.max(Number(prev.views || 0), w),
+      label: baseNorm[j].label,
+      visitors: v,
+      views: w,
     };
   }
   return baseNorm;
 }
 
-function applyCountPatch(
-  base: any[] | undefined,
-  patch: any[]
-): any[] {
+function applyCountPatch(base: any[] | undefined, patch: any[]): any[] {
   const baseNorm =
     normalizeCountOrder(base) ||
     HOURS_12.map((lbl) => ({ label: lbl, count: 0 }));
@@ -356,10 +368,9 @@ function applyCountPatch(
     const lbl = canonHourLabel(String((p as any)?.label ?? ""));
     if (!lbl || !isHourLabel(lbl)) continue;
     const j = idxBy[lbl];
-    if (j == null) continue;
-
-    const c = Number((p as any)?.count ?? 0);
-    out[j].count = Math.max(Number(out[j].count || 0), c);
+    if (j != null) {
+      out[j].count = Number((p as any)?.count ?? 0);
+    }
   }
   return out;
 }
@@ -374,17 +385,23 @@ const seedKey = () => {
   return `${state.siteId}:${state.range}:${tzOff}`;
 };
 
-function saveSnapshot(siteId: number, range: RangeKey, data: DashboardPayload) {
+function saveSnapshot(
+  siteId: number,
+  range: AnyRange,
+  data: DashboardPayload
+) {
   try {
     const tzOff = new Date().getTimezoneOffset();
     localStorage.setItem(
       cacheKey(siteId, range, tzOff),
       JSON.stringify({ ts: Date.now(), data })
     );
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
-function emitCached(siteId: number, range: RangeKey) {
+function emitCached(siteId: number, range: AnyRange) {
   try {
     const tzOff = new Date().getTimezoneOffset();
     const raw = localStorage.getItem(cacheKey(siteId, range, tzOff));
@@ -415,6 +432,11 @@ function emitCached(siteId: number, range: RangeKey) {
 
 export async function fetchSnapshotSeedOnce() {
   if (!state.siteId) return;
+
+  const r = normalizeRange(state.range);
+  // 24h range is WS-only now; no REST snapshot to avoid jumps.
+  if (r === "24h") return;
+
   const key = seedKey();
   if (!key || seeded.has(key) || seedInFlight) return;
   await doFetchSnapshot(true);
@@ -422,9 +444,14 @@ export async function fetchSnapshotSeedOnce() {
 
 async function doFetchSnapshot(addToSeeded: boolean) {
   if (!state.siteId) return;
+
+  const r = normalizeRange(state.range);
+
+  // Safety: don't issue REST calls for 24h at all, we rely on WS frames.
+  if (r === "24h") return;
+
   seedInFlight = true;
   const tz = String(new Date().getTimezoneOffset());
-  const r = normalizeRange(state.range);
   const url = `${API}/api/user-dashboard-analytics?range=${encodeURIComponent(
     r
   )}&tz_offset=${encodeURIComponent(tz)}&site_id=${encodeURIComponent(
@@ -442,12 +469,9 @@ async function doFetchSnapshot(addToSeeded: boolean) {
       set({ error: `snapshot_${res.status}`, isLoading: false });
       return;
     }
+
     let data = (await res.json()) as DashboardPayload;
     (data as any).range = r;
-
-    if (r === "24h") {
-      data = normalize24hFrame(data) as DashboardPayload;
-    }
 
     logTgvDelta(
       "REST",
@@ -508,9 +532,7 @@ export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   };
   return (j.projects || []).map((p) => ({
     id: Number(p.id),
-    website_name: String(
-      p.website_name || p.name || `Site ${p.id}`
-    ),
+    website_name: String(p.website_name || p.name || `Site ${p.id}`),
     domain: String(p.domain || ""),
   }));
 }
@@ -573,7 +595,9 @@ function requestSeries() {
         range: normalizeRange(state.range),
       })
     );
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 export async function connectWS(forceNew = false) {
@@ -590,7 +614,9 @@ export async function connectWS(forceNew = false) {
   try {
     try {
       ws?.close();
-    } catch {}
+    } catch {
+      // ignore
+    }
     ws = null;
 
     let ticket: string;
@@ -633,18 +659,22 @@ export async function connectWS(forceNew = false) {
             tz_iana: tzIana,
           })
         );
-      } catch {}
+      } catch {
+        // ignore
+      }
 
       // keepalive
       pingTimer = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
           try {
             socket.send(JSON.stringify({ type: "ping" }));
-          } catch {}
+          } catch {
+            // ignore
+          }
         }
       }, 25_000) as unknown as number;
 
-      // One-time REST seed after socket opens (per siteId:range)
+      // For non-24h ranges we still seed once via REST
       void fetchSnapshotSeedOnce();
 
       // Ask BE for a fresh series for current range
@@ -684,8 +714,7 @@ export async function connectWS(forceNew = false) {
       }
     };
 
-    socket.onerror = (e) =>
-      console.error("❌ [WS] error:", e);
+    socket.onerror = (e) => console.error("❌ [WS] error:", e);
     socket.onclose = (e) => {
       if (W.__mvDashDbg)
         console.warn("🔌 [WS] closed:", e.code, e.reason);
@@ -736,12 +765,11 @@ function handleAnalyticsFrame(raw: any) {
         [])?.map((p: any) => String(p?.label ?? ""));
     if (incLabels.length) {
       const uniq = Array.from(new Set(incLabels));
-      console.warn(
-        "[DIAG] Incoming WS labels:",
-        uniq.join(", ")
-      );
+      console.warn("[DIAG] Incoming WS labels:", uniq.join(", "));
     }
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   // --- 24h specialised logic: use *_delta when present, else use full series ---
   if (is24h) {
@@ -750,9 +778,7 @@ function handleAnalyticsFrame(raw: any) {
     const isHourSeries = (arr?: any[]) =>
       Array.isArray(arr) &&
       arr.length &&
-      arr.every((x) =>
-        isHourLabel(String(x?.label ?? ""))
-      );
+      arr.every((x) => isHourLabel(String(x?.label ?? "")));
 
     const tgvDelta =
       (frame.time_grouped_visits_delta &&
@@ -770,10 +796,7 @@ function handleAnalyticsFrame(raw: any) {
           label: canonHourLabel(String(x?.label ?? "")),
         }))
       );
-      frame.time_grouped_visits = applyTgvPatch(
-        baseTgv,
-        canon
-      );
+      frame.time_grouped_visits = applyTgvPatch(baseTgv, canon);
     } else if (
       frame.time_grouped_visits &&
       isHourSeries(frame.time_grouped_visits)
@@ -805,10 +828,7 @@ function handleAnalyticsFrame(raw: any) {
             label: canonHourLabel(String(x?.label ?? "")),
           }))
         );
-        (frame as any)[k] = applyCountPatch(
-          (base as any)?.[k],
-          canon
-        );
+        (frame as any)[k] = applyCountPatch((base as any)?.[k], canon);
       } else if (full && isHourSeries(full)) {
         (frame as any)[k] = normalizeCountOrder(full);
       } else {
@@ -817,7 +837,6 @@ function handleAnalyticsFrame(raw: any) {
     }
   } else {
     // Non-24h ranges: just trust BE and replace.
-    // No hour coercion, no patching.
   }
 
   // Merge into current data and normalize (24h only)
@@ -852,6 +871,11 @@ function handleAnalyticsFrame(raw: any) {
       Number((next as any).live_visitors) || liveCount || 0;
   }
 
+  // Persist the latest frame into localStorage for this site+range
+  if (state.siteId) {
+    saveSnapshot(state.siteId, range, next);
+  }
+
   set({
     data: next,
     isLoading: false,
@@ -866,7 +890,7 @@ function handleAnalyticsFrame(raw: any) {
 /* ---------------- Public actions ---------------- */
 let bootstrapped = false;
 
-export function init(initialRange: RangeKey = "24h") {
+export function init(initialRange: AnyRange = "24h") {
   if (!bootstrapped && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
@@ -907,6 +931,7 @@ export function setSite(siteId: number) {
   void connectWS(true);
 }
 
+// External API stays typed to your original RangeKey
 export function setRange(range: RangeKey) {
   const r = normalizeRange(range);
   if (state.range === r) return;
@@ -927,7 +952,9 @@ export function setRange(range: RangeKey) {
 export function cleanup() {
   try {
     ws?.close();
-  } catch {}
+  } catch {
+    // ignore
+  }
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   if (pingTimer) window.clearInterval(pingTimer);
 }

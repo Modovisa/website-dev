@@ -1,6 +1,6 @@
 // src/pages/Register.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Zap, Code, Users } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -19,9 +19,11 @@ type Feedback = { message: string; type: "success" | "error" | "" };
 type RegisterProps = {
   /** "page" = full /register route, "modal" = homepage modal */
   mode?: "page" | "modal";
+  /** Optional hook so the homepage modal can run the Stripe pricing flow */
+  onSuccess?: () => void | Promise<void>;
 };
 
-const RegisterInner = ({ mode = "page" }: RegisterProps) => {
+const RegisterInner = ({ mode = "page", onSuccess }: RegisterProps) => {
   const navigate = useNavigate();
 
   // Form state
@@ -47,20 +49,35 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
 
+  const isModal = mode === "modal";
+
   // Password validation
   const validatePassword = (pwd: string): boolean => {
     const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
     return regex.test(pwd);
   };
 
-  // Shared “success” path
-  const completeSignup = () => {
+  // Shared success path:
+  //  - mark mv_new_signup = 1
+  //  - if onSuccess is provided (homepage modal) → delegate to that
+  //  - else → legacy behavior: go to /app/tracking-setup
+  const handlePostSuccess = useCallback(async () => {
+    try {
+      window.localStorage.setItem("mv_new_signup", "1");
+    } catch {
+      // ignore
+    }
+
+    if (onSuccess) {
+      await onSuccess();
+      return;
+    }
+
     setLoadingMessage("Setting up your dashboard...");
     setTimeout(() => {
-      // Full navigation – closes any modal because the page changes
       navigate("/app/tracking-setup");
     }, 150);
-  };
+  }, [navigate, onSuccess]);
 
   // Check username availability
   const checkUsername = async () => {
@@ -121,7 +138,7 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
 
     if (!validatePassword(password)) {
       setPasswordFeedback(
-        "Password must be 8+ chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char."
+        "Password must be 8+ chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char.",
       );
       return;
     }
@@ -152,7 +169,8 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
         return;
       }
 
-      completeSignup();
+      // ✅ unified success path
+      await handlePostSuccess();
     } catch (err) {
       console.error("❌ Register error:", err);
       setIsLoading(false);
@@ -164,7 +182,7 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
   const handleGoogleResponse = async (response: any) => {
     if (!termsAccepted) {
       setGoogleError(
-        "Please agree to the Privacy Policy and Terms before using Google sign-in."
+        "Please agree to the Privacy Policy and Terms before using Google sign-in.",
       );
       return;
     }
@@ -191,7 +209,7 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
         setIsLoading(false);
         setGoogleError(
           result.error ||
-            "This email is already registered with a password. Please sign in with email/password."
+            "This email is already registered with a password. Please sign in with email/password.",
         );
         return;
       }
@@ -204,7 +222,9 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
       }
 
       if (res.ok) {
-        completeSignup();
+        // ✅ unified success path (manual + Google)
+        setLoadingMessage("Setting up your dashboard...");
+        await handlePostSuccess();
       } else {
         setIsLoading(false);
         setGoogleError(result.error || "Google sign-in failed. Try again.");
@@ -485,14 +505,14 @@ const Register = (props: RegisterProps) => {
     // For modal we don't wrap with full-page gradient; the modal backdrop handles it
     return (
       <div className="w-full max-w-6xl mx-auto">
-        <RegisterInner mode="modal" />
+        <RegisterInner mode="modal" onSuccess={props.onSuccess} />
       </div>
     );
   }
 
   return (
     <AnimatedGradientBackground layout="full">
-      <RegisterInner mode="page" />
+      <RegisterInner mode="page" onSuccess={props.onSuccess} />
     </AnimatedGradientBackground>
   );
 };
