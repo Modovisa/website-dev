@@ -484,7 +484,8 @@ export async function connectWS(forceNew = false) {
         if (incomingTgvLabels.length) {
           const hasNow = incomingTgvLabels.includes(nowLabel);
           const uniq = Array.from(new Set(incomingTgvLabels));
-          console.warn("[DIAG] 24h seed axis (local) anchored to:", baseLabels[0], "…", baseLabels.at(-1));
+          const baseLast = baseLabels.length ? baseLabels[baseLabels.length - 1] : undefined;
+          console.warn("[DIAG] 24h seed axis (local) anchored to:", baseLabels[0], "…", baseLast);
           console.warn("[DIAG] Incoming WS labels:", uniq.join(", "));
           if (!hasNow) console.warn(`[DIAG] Suspected tz drift: WS did NOT include current local hour '${nowLabel}'`);
         }
