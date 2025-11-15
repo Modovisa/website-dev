@@ -144,8 +144,6 @@ function emitCached(siteId: number, range: RangeKey) {
 const KPI_KEYS = new Set<string>([
   "live_visitors","unique_visitors","bounce_rate","bounce_rate_delta",
   "avg_duration","avg_duration_delta","multi_page_visits","multi_page_visits_delta",
-  // allow country list to refresh even when off-range
-  "countries",
 ]);
 
 function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardPayload>) {
@@ -153,7 +151,6 @@ function mergeSameRange(base: DashboardPayload | null, frame: Partial<DashboardP
   (merged as any).range = state.range;
   return merged;
 }
-
 function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPayload>) {
   const next = { ...(base || {}) } as any;
   for (const k of Object.keys(frame || {})) if (KPI_KEYS.has(k)) next[k] = (frame as any)[k];
@@ -183,6 +180,31 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   return out;
 }
 
+/* ---------- Local-hour clamp for 24h range (fixes UTC WS overwrite) ---------- */
+function clampCounts(series: any[] | undefined): any[] | undefined {
+  if (!Array.isArray(series) || series.length !== 24) return series;
+  const nowHour = new Date().getHours(); // viewer’s local hour 0–23
+  return series.map((pt, i) => (i > nowHour ? { ...pt, count: 0 } : pt));
+}
+function clampTgv(series: any[] | undefined): any[] | undefined {
+  if (!Array.isArray(series) || series.length !== 24) return series;
+  const nowHour = new Date().getHours();
+  return series.map((pt, i) => (i > nowHour ? { ...pt, visitors: 0, views: 0 } : pt));
+}
+function clamp24hAllSeries(payload: Partial<DashboardPayload> | null, range: RangeKey): Partial<DashboardPayload> | null {
+  if (!payload || range !== "24h") return payload;
+  const out: any = { ...payload };
+  out.time_grouped_visits       = clampTgv(out.time_grouped_visits);
+  out.events_timeline           = clampCounts(out.events_timeline);
+  out.impressions_timeline      = clampCounts(out.impressions_timeline);
+  out.clicks_timeline           = clampCounts(out.clicks_timeline);
+  out.conversions_timeline      = clampCounts(out.conversions_timeline);
+  out.search_visitors_timeline  = clampCounts(out.search_visitors_timeline);
+  out.unique_visitors_timeline  = clampCounts(out.unique_visitors_timeline);
+  // optional: previous_* can remain as-is
+  return out;
+}
+
 /* ---------------- REST seed (once per siteId:range) ---------------- */
 const seeded = new Set<string>();
 let seedInFlight = false;
@@ -206,8 +228,11 @@ export async function fetchSnapshotSeedOnce() {
       set({ error: `snapshot_${res.status}`, isLoading: false });
       return;
     }
-    const data = (await res.json()) as DashboardPayload;
+    let data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
+
+    // Clamp future buckets for 24h (defensive — REST already passes tz, but safe)
+    data = clamp24hAllSeries(data, state.range) as DashboardPayload;
 
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
@@ -355,7 +380,6 @@ export async function connectWS(forceNew = false) {
             time_grouped_visits_delta?: any[];
             tgv_delta?: any[];
             tgv?: any[];
-            range?: RangeKey;
           };
 
           // Normalize/patch any partial TGV payload first
@@ -372,7 +396,6 @@ export async function connectWS(forceNew = false) {
               visitors: Number(x.visitors ?? 0),
               views: Number(x.views ?? 0),
             }));
-            // treat tiny arrays as patches
             if (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
               patchedTgv = applyTgvPatch(baseTgv, arr);
             } else {
@@ -390,15 +413,13 @@ export async function connectWS(forceNew = false) {
           const frame: Partial<DashboardPayload> = { ...frameRaw };
           if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
 
-          // ---------- Range mismatch guard ----------
-          // If server sent range != current selection (or omitted range), only merge KPIs (and countries).
           const frameRange = (frame as any)?.range as RangeKey | undefined;
-          const selected = (W.selectedRange as RangeKey) ?? state.range;
-          const useKpiOnly = !frameRange || frameRange !== selected;
-
-          const next = useKpiOnly
+          let next = frameRange && frameRange !== state.range
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
+
+          // ⛔️ Make sure 24h never shows future hours (local viewer time)
+          next = clamp24hAllSeries(next, frameRange || state.range) as DashboardPayload;
 
           // WS delta & staleness handling
           const prevTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;
@@ -406,14 +427,13 @@ export async function connectWS(forceNew = false) {
 
           logTgvDelta("WS", prevTgv, nextTgv);
 
-          // If KPIs changed but TGV didn't for >75s, nudge server
           const kpiChanged =
             (frame as any)?.unique_visitors !== undefined && (frame as any)?.unique_visitors !== (state.data as any)?.unique_visitors ||
             (frame as any)?.multi_page_visits !== undefined && (frame as any)?.multi_page_visits !== (state.data as any)?.multi_page_visits;
 
           const tgvChanged = JSON.stringify(prevTgv || []) !== JSON.stringify(nextTgv || []);
           if (tgvChanged) lastTgvAt = Date.now();
-          else if (!useKpiOnly && kpiChanged && Date.now() - lastTgvAt > 75_000) {
+          else if (kpiChanged && Date.now() - lastTgvAt > 75_000) {
             console.warn("⚠️ [WS] KPIs moving but series stale >75s — requesting series frame…");
             requestSeries();
           }
@@ -479,8 +499,6 @@ export function init(initialRange: RangeKey = "24h") {
   }
 
   set({ range: initialRange });
-  // keep a window mirror so non-React handlers can read current selection
-  W.selectedRange = initialRange;
 
   const saved = localStorage.getItem("current_website_id");
   if (saved) set({ siteId: Number(saved) });
@@ -504,8 +522,6 @@ export function setSite(siteId: number) {
 export function setRange(range: RangeKey) {
   if (state.range === range) return;
   set({ range, data: null, isLoading: true, error: null, seriesSig: "" });
-  // mirror to window for any imperative DOM listeners
-  W.selectedRange = range;
 
   if (state.siteId) {
     emitCached(state.siteId, range);
