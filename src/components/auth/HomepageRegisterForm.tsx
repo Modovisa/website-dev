@@ -1,70 +1,75 @@
 // src/components/auth/HomepageRegisterForm.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { secureFetch } from "@/lib/auth";
 
+const GOOGLE_CLIENT_ID =
+  "1057403058678-pak64aj4vthcedsnr81r30qbo6pia6d3.apps.googleusercontent.com";
+
+type Feedback = { message: string; type: "success" | "error" | "" };
+
 type HomepageRegisterFormProps = {
+  // Called after a successful signup / Google login
+  // (RegisterModal uses this to trigger the Stripe checkout router)
   onSuccess: () => void | Promise<void>;
 };
 
-type AvailabilityState = {
-  message: string;
-  type: "success" | "error";
-};
-
 function validatePassword(pwd: string): boolean {
-  return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/.test(pwd);
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+  return regex.test(pwd);
 }
 
 export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
+  // Form state
   const [username, setUsername] = useState("");
-  const [usernameFeedback, setUsernameFeedback] =
-    useState<AvailabilityState | null>(null);
-
   const [email, setEmail] = useState("");
-  const [emailFeedback, setEmailFeedback] =
-    useState<AvailabilityState | null>(null);
-
   const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-
+  const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleUsernameBlur = async () => {
-    const value = username.trim();
-    if (!value) {
-      setUsernameFeedback(null);
-      return;
-    }
+  // Validation feedback
+  const [usernameFeedback, setUsernameFeedback] = useState<Feedback>({
+    message: "",
+    type: "",
+  });
+  const [emailFeedback, setEmailFeedback] = useState<Feedback>({
+    message: "",
+    type: "",
+  });
+  const [passwordFeedback, setPasswordFeedback] = useState("");
+  const [googleError, setGoogleError] = useState("");
+
+  // Loading state
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+
+  /* ---------------- Username / email availability ---------------- */
+
+  const checkUsername = async () => {
+    if (!username.trim()) return;
 
     try {
-      const res = await secureFetch("/api/check-username", {
+      const response = await secureFetch("/api/check-username", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: value }),
+        body: JSON.stringify({ username: username.trim() }),
       });
-      const data = await res.json().catch(() => ({} as any));
 
-      if (!res.ok) {
-        setUsernameFeedback({
-          message: data?.error || "Unable to check username.",
-          type: "error",
-        });
-        return;
-      }
-
+      const result = await response.json().catch(() => ({} as any));
       setUsernameFeedback({
-        message: data?.available ? "Username available" : "Username taken",
-        type: data?.available ? "success" : "error",
+        message: result?.available ? "Username available" : "Username taken",
+        type: result?.available ? "success" : "error",
       });
     } catch (err) {
-      console.error("[homepage-register] username check failed:", err);
+      console.error("[homepage-register] Username check failed:", err);
       setUsernameFeedback({
         message: "Unable to check username.",
         type: "error",
@@ -72,35 +77,23 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     }
   };
 
-  const handleEmailBlur = async () => {
-    const value = email.trim();
-    if (!value) {
-      setEmailFeedback(null);
-      return;
-    }
+  const checkEmail = async () => {
+    if (!email.trim()) return;
 
     try {
-      const res = await secureFetch("/api/check-email", {
+      const response = await secureFetch("/api/check-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: value }),
+        body: JSON.stringify({ email: email.trim() }),
       });
-      const data = await res.json().catch(() => ({} as any));
 
-      if (!res.ok) {
-        setEmailFeedback({
-          message: data?.error || "Unable to check email.",
-          type: "error",
-        });
-        return;
-      }
-
+      const result = await response.json().catch(() => ({} as any));
       setEmailFeedback({
-        message: data?.available ? "Email available" : "Email taken",
-        type: data?.available ? "success" : "error",
+        message: result?.available ? "Email available" : "Email taken",
+        type: result?.available ? "success" : "error",
       });
     } catch (err) {
-      console.error("[homepage-register] email check failed:", err);
+      console.error("[homepage-register] Email check failed:", err);
       setEmailFeedback({
         message: "Unable to check email.",
         type: "error",
@@ -108,31 +101,30 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     }
   };
 
+  /* ---------------- Manual registration (subscription flow) ---------------- */
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
-    setPasswordError(null);
 
     if (!termsAccepted) {
-      setFormError("You must agree to the Privacy Policy & Terms.");
+      alert("You must agree to the Privacy Policy & Terms.");
       return;
     }
 
+    setPasswordFeedback("");
+
     if (!validatePassword(password)) {
-      setPasswordError(
-        "Password must be at least 8 characters with uppercase, lowercase, number, and special character.",
+      setPasswordFeedback(
+        "Password must be 8+ chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char.",
       );
       return;
     }
 
-    setIsSubmitting(true);
+    setIsLoading(true);
+    setLoadingMessage("Creating your account...");
 
     try {
-      if (window.showGlobalLoadingModal) {
-        window.showGlobalLoadingModal("Creating your account...");
-      }
-
-      const res = await secureFetch("/api/register", {
+      const response = await secureFetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -144,160 +136,329 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
         }),
       });
 
-      const data = await res.json().catch(() => ({} as any));
+      const result = await response.json().catch(() => ({} as any));
 
-      if (!res.ok) {
-        setFormError(data?.error || "Registration failed. Please try again.");
+      if (!response.ok) {
+        setIsLoading(false);
+        alert(result.error || "Registration failed.");
         return;
       }
 
+      // Mark as new signup so routeAfterLoginFromHomepageReact treats them
+      // as "new" (Scenario 1).
       try {
         window.localStorage.setItem("mv_new_signup", "1");
       } catch {
         // ignore
       }
 
+      // Hand over to the caller: this will run the Bootstrap-mirrored flow
+      // (routeAfterLoginFromHomepageReact → Stripe embed → /app/tracking-setup).
       await onSuccess();
     } catch (err) {
-      console.error("[homepage-register] register error:", err);
-      setFormError("Registration failed. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-      window.hideGlobalLoadingModal?.();
+      console.error("[homepage-register] Register error:", err);
+      setIsLoading(false);
+      alert("Registration failed. Please try again.");
     }
   };
 
+  /* ---------------- Google sign-in (no mv_new_signup here) ---------------- */
+
+  const handleGoogleResponse = async (response: any) => {
+    if (!termsAccepted) {
+      setGoogleError(
+        "Please agree to the Privacy Policy and Terms before using Google sign-in.",
+      );
+      return;
+    }
+
+    setGoogleError("");
+    setIsLoading(true);
+    setLoadingMessage("Signing you in with Google...");
+
+    try {
+      const res = await secureFetch("/api/google-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credential: response?.credential,
+          consent: true,
+          consent_at: new Date().toISOString(),
+        }),
+      });
+
+      const result = await res.json().catch(() => ({} as any));
+
+      // Scenario 7: provider mismatch → show error, no checkout
+      if (res.status === 409 && result?.code === "PROVIDER_MISMATCH") {
+        setIsLoading(false);
+        setGoogleError(
+          result.error ||
+            "This email is already registered with a password. Please sign in with email/password.",
+        );
+        return;
+      }
+
+      // Scenario 8: 2FA required → hand off to /two-step-verification
+      if (result?.temp_token && result?.redirect?.includes("two-step-verification")) {
+        sessionStorage.setItem("twofa_temp_token", result.temp_token);
+        sessionStorage.setItem("pending_2fa_user_id", result.user_id);
+        window.location.href = result.redirect;
+        return;
+      }
+
+      if (res.ok) {
+        // Don’t set mv_new_signup here — whether they are “new” is determined
+        // by /api/me (is_new_user) inside routeAfterLoginFromHomepageReact.
+        await onSuccess();
+      } else {
+        setIsLoading(false);
+        setGoogleError(result.error || "Google sign-in failed. Try again.");
+      }
+    } catch (err) {
+      console.error("[homepage-register] Google login error:", err);
+      setIsLoading(false);
+      setGoogleError("Google login failed. Try again.");
+    }
+  };
+
+  /* ---------------- Google script + button render ---------------- */
+
+  useEffect(() => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://accounts.google.com/gsi/client"]',
+    );
+    if (existing) {
+      if (window.google?.accounts?.id) {
+        const buttonDiv = document.getElementById("google-signin-button-homepage");
+        if (buttonDiv) {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleResponse,
+            auto_select: false,
+          });
+          window.google.accounts.id.renderButton(buttonDiv, {
+            theme: "outline",
+            size: "large",
+            width: buttonDiv.offsetWidth,
+          });
+        }
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleResponse,
+          auto_select: false,
+        });
+
+        const buttonDiv = document.getElementById("google-signin-button-homepage");
+        if (buttonDiv) {
+          window.google.accounts.id.renderButton(buttonDiv, {
+            theme: "outline",
+            size: "large",
+            width: buttonDiv.offsetWidth,
+          });
+        }
+      }
+    };
+
+    return () => {
+      // Don’t remove the script (may be reused by /register page)
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Optional: “one-tap” style prompt once terms are accepted
+  useEffect(() => {
+    if (termsAccepted && window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
+    }
+  }, [termsAccepted]);
+
+  /* ---------------- UI: clone of Register.tsx right pane ---------------- */
+
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-3xl bg-card/95 backdrop-blur border shadow-2xl p-8">
-      <div className="mb-6 text-center">
-        <h2 className="text-2xl font-semibold tracking-tight mb-1">
-          Create your Modovisa account
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Start your free trial and pick a plan after checkout.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Username */}
-        <div className="space-y-2">
-          <Label htmlFor="hp-username">Username</Label>
-          <Input
-            id="hp-username"
-            type="text"
-            autoComplete="username"
-            placeholder="Your username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onBlur={handleUsernameBlur}
-            disabled={isSubmitting}
-          />
-          {usernameFeedback && (
-            <p
-              className={`text-xs ${
-                usernameFeedback.type === "success"
-                  ? "text-emerald-500"
-                  : "text-red-500"
-              }`}
-            >
-              {usernameFeedback.message}
-            </p>
-          )}
+    <div className="w-full max-w-6xl glass-card rounded-3xl shadow-2xl overflow-hidden">
+      <div className="p-12">
+        <div className="flex flex-col items-center space-y-2 py-4">
+          <Link to="/">
+            <Logo showBeta={false} />
+          </Link>
+          <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
+          <h1 className="text-2xl font-semibold mb-6 pb-6">
+            Create your Modovisa account
+          </h1>
         </div>
 
-        {/* Email */}
-        <div className="space-y-2">
-          <Label htmlFor="hp-email">Email</Label>
-          <Input
-            id="hp-email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={handleEmailBlur}
-            disabled={isSubmitting}
-          />
-          {emailFeedback && (
-            <p
-              className={`text-xs ${
-                emailFeedback.type === "success" ? "text-emerald-500" : "text-red-500"
-              }`}
-            >
-              {emailFeedback.message}
-            </p>
-          )}
-        </div>
-
-        {/* Password */}
-        <div className="space-y-2">
-          <Label htmlFor="hp-password">Password</Label>
-          <Input
-            id="hp-password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isSubmitting}
-          />
-          <p className="text-xs text-muted-foreground">
-            At least 8 characters, with uppercase, lowercase, number, and special
-            character.
-          </p>
-          {passwordError && (
-            <p className="text-xs text-red-500">{passwordError}</p>
-          )}
-        </div>
-
-        {/* Terms */}
-        <div className="flex items-start gap-2">
-          <Checkbox
-            id="hp-terms"
-            className="mt-1"
-            checked={termsAccepted}
-            onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-            disabled={isSubmitting}
-          />
-          <label htmlFor="hp-terms" className="text-xs text-muted-foreground">
-            I agree to the{" "}
-            <a
-              href="/legal/privacy"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2"
-            >
-              Privacy Policy
-            </a>{" "}
-            and{" "}
-            <a
-              href="/legal/terms"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2"
-            >
-              Terms of Service
-            </a>
-            .
-          </label>
-        </div>
-
-        {formError && (
-          <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {formError}
+        {isLoading && (
+          <div className="mb-6 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            <p className="mt-2 text-sm text-muted-foreground">{loadingMessage}</p>
           </div>
         )}
 
-        <Button
-          type="submit"
-          className="w-full h-11 text-sm font-medium"
-          disabled={isSubmitting || !termsAccepted}
-        >
-          {isSubmitting ? "Creating your account…" : "Continue to checkout"}
-        </Button>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          {/* Username */}
+          <div className="space-y-2">
+            <Label htmlFor="username-homepage">Username</Label>
+            <Input
+              id="username-homepage"
+              type="text"
+              placeholder="Enter your username"
+              className="h-12"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onBlur={checkUsername}
+              disabled={isLoading}
+            />
+            {usernameFeedback.message && (
+              <p
+                className={`text-sm ${
+                  usernameFeedback.type === "success"
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
+              >
+                {usernameFeedback.message}
+              </p>
+            )}
+          </div>
 
-        {/* No Google one-tap here on purpose – this is the clean "new user → subscription" flow */}
-      </form>
+          {/* Email */}
+          <div className="space-y-2">
+            <Label htmlFor="email-homepage">Email</Label>
+            <Input
+              id="email-homepage"
+              type="email"
+              placeholder="Enter your email"
+              className="h-12"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={checkEmail}
+              disabled={isLoading}
+            />
+            {emailFeedback.message && (
+              <p
+                className={`text-sm ${
+                  emailFeedback.type === "success"
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
+              >
+                {emailFeedback.message}
+              </p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div className="space-y-2">
+            <Label htmlFor="password-homepage">Password</Label>
+            <div className="relative">
+              <Input
+                id="password-homepage"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••••"
+                className="h-12 pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                disabled={isLoading}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            {passwordFeedback && (
+              <p className="text-sm text-red-600">{passwordFeedback}</p>
+            )}
+          </div>
+
+          {/* Terms */}
+          <div className="flex items-start space-x-2">
+            <Checkbox
+              id="terms-homepage"
+              className="mt-1"
+              checked={termsAccepted}
+              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+              disabled={isLoading}
+            />
+            <label htmlFor="terms-homepage" className="text-sm leading-relaxed">
+              I agree to the{" "}
+              <Link to="/privacy" className="text-primary hover:underline">
+                Privacy Policy
+              </Link>{" "}
+              and{" "}
+              <Link to="/terms" className="text-primary hover:underline">
+                Terms of Service
+              </Link>
+            </label>
+          </div>
+
+          {/* Submit */}
+          <Button
+            className="w-full h-12 text-base"
+            size="lg"
+            disabled={!termsAccepted || isLoading}
+            type="submit"
+          >
+            {isLoading ? "Creating..." : "Sign up"}
+          </Button>
+
+          {/* Already have account */}
+          <div className="text-center text-sm">
+            Already have an account?{" "}
+            <Link to="/login" className="text-primary hover:underline font-medium">
+              Sign in
+            </Link>
+          </div>
+
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+
+          {/* Google errors */}
+          {googleError && (
+            <Alert variant="destructive">
+              <AlertDescription>{googleError}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Google button */}
+          <div
+            id="google-signin-button-homepage"
+            className={`w-full ${
+              !termsAccepted ? "opacity-50 pointer-events-none" : ""
+            }`}
+            title={
+              !termsAccepted
+                ? "Please agree to the Privacy Policy and Terms first"
+                : ""
+            }
+          />
+        </form>
+      </div>
     </div>
   );
 }
+
+// window.google type is already declared in Register.tsx global augmentation.
