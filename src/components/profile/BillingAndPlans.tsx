@@ -213,7 +213,7 @@ export default function BillingAndPlans() {
                 )}
 
                 {hasActiveSubscription && (
-                  <Button variant="outline" onClick={startUpdateCard}>
+                  <Button variant="outline" onClick={() => startUpdateCard()}>
                     Update Card
                   </Button>
                 )}
@@ -230,13 +230,30 @@ export default function BillingAndPlans() {
         onClose={() => setShowUpgrade(false)}
         tiers={tiers}
         currentPlanAmount={currentPlanAmount}
+        currentInfo={info}
         onUpgrade={({ tierId, interval }) => {
-          // Start checkout. We’ll close the Upgrade modal only after Stripe mount succeeds.
+          // Start checkout. We'll close the Upgrade modal only after Stripe mount succeeds.
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
           }).catch((err) => {
             console.error("[billing] startEmbeddedCheckout error:", err);
-            // Leave the upgrade modal open so the user can retry / see errors.
+            
+            // Check if error is about card authentication
+            if (err.message && err.message.includes("Card declined or expired")) {
+              // Close upgrade modal and open update card modal
+              setShowUpgrade(false);
+              
+              // Show a message to the user
+              alert("Your card needs to be updated before upgrading. Please update your payment method.");
+              
+              // Trigger update card flow
+              setTimeout(() => {
+                startUpdateCard().catch((updateErr) => {
+                  console.error("[billing] startUpdateCard error:", updateErr);
+                });
+              }, 300);
+            }
+            // Leave the upgrade modal open for other errors so the user can retry
           });
         }}
       />

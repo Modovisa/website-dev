@@ -4,6 +4,23 @@
  * All billing logic in one place for easier maintenance and parity with Bootstrap
  */
 
+// src/services/billing.store.ts
+/**
+ * Complete Billing Store - 100% Bootstrap Parity
+ * 
+ * Includes ALL billing logic from user-profile.js:
+ * - Lines 8-18: Global vars
+ * - Lines 21-32: Load pricing tiers
+ * - Lines 35-64: Load billing info  
+ * - Lines 66-84: Stripe helper
+ * - Lines 850-1355: All upgrade/downgrade/cancel/reactivate flows
+ * 
+ * Excludes UI rendering (handled by React components):
+ * - renderCurrentPlan() - React components handle this
+ * - renderUpgradeModalFooter() - React components handle this
+ * - setupUpgradeModalSlider() - React UpgradePlanModal handles this
+ */
+
 import { apiBase } from "@/lib/api";
 import { secureFetch } from "@/lib/auth";
 

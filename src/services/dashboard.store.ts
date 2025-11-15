@@ -1,8 +1,9 @@
 // src/services/dashboard.store.ts
 // One-time REST seed per (siteId:range) + 100% WS stream thereafter.
-// - Merges partial TGV frames (time_grouped_visits_delta or tiny arrays)
+// - Never rotates 24h series after WS: axis is always 12 AM → 11 PM
+// - Normalizes WS/REST frames to fixed hour order and clamps future hours
+// - Merges partial TGV frames (time_grouped_visits_delta / tiny arrays)
 // - Watchdog pings WS for series if KPIs move but TGV stalls
-// - Clear delta logs with source tags (WS / REST)
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -37,6 +38,12 @@ export type TrackingWebsite = { id: number; website_name: string; domain: string
 const API = "https://api.modovisa.com";
 const BACKOFF_MAX = 60_000;
 const TICKET_THROTTLE_MS = 1500;
+const HOURS_12 = [
+  "12 AM","1 AM","2 AM","3 AM","4 AM","5 AM",
+  "6 AM","7 AM","8 AM","9 AM","10 AM","11 AM",
+  "12 PM","1 PM","2 PM","3 PM","4 PM","5 PM",
+  "6 PM","7 PM","8 PM","9 PM","10 PM","11 PM"
+] as const;
 
 /* ---------------- Internal state ---------------- */
 let state: StoreState = {
@@ -77,7 +84,7 @@ const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-
 const sumBy = (arr: any[], k: string) =>
   Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
-/** Source-tagged delta log with window-shift detection */
+/** Source-tagged delta log with window-shift hint */
 function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   const P = Array.isArray(prev) ? prev : [];
   const N = Array.isArray(next) ? next : [];
@@ -128,9 +135,9 @@ function emitCached(siteId: number, range: RangeKey) {
     let data = obj.data as DashboardPayload;
     (data as any).range = range;
 
-    // Defensive: ensure cached 24h looks local-hour correct
+    // Defensive: ensure cached 24h is in fixed hour order and future hours zeroed
+    data = normalize24hAllSeries(data, range) as DashboardPayload;
     data = clamp24hAllSeries(data, range) as DashboardPayload;
-    data = align24hToNow(data, range) as DashboardPayload;
 
     const sig = signature(data, range);
     set({
@@ -163,7 +170,7 @@ function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPa
   return next as DashboardPayload;
 }
 
-/** Replace or append patch labels; clamp size to original length (if known) */
+/** Replace/append by label; clamp to original length; then sort to 12AM→11PM */
 function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   const out = Array.isArray(base) ? base.map(b => ({ ...b })) : [];
   const labels = out.map(b => String(b.label));
@@ -182,13 +189,14 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   }
   const max = Array.isArray(base) && base.length ? base.length : out.length;
   while (out.length > max) out.shift();
-  return out;
+
+  return normalizeTgvOrder(out);
 }
 
 /* ---------- Local-hour guards for 24h (prevents UTC overwrite) ---------- */
 function clampCounts(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series) || series.length !== 24) return series;
-  const nowHour = new Date().getHours(); // viewer’s local hour 0–23
+  const nowHour = new Date().getHours(); // 0–23 local
   return series.map((pt, i) => (i > nowHour ? { ...pt, count: 0 } : pt));
 }
 function clampTgv(series: any[] | undefined): any[] | undefined {
@@ -209,64 +217,37 @@ function clamp24hAllSeries(payload: Partial<DashboardPayload> | null, range: Ran
   return out;
 }
 
-/* ---------- 24h alignment helpers (map UTC frames → viewer local) ---------- */
-const HOURS_12 = ["12 AM","1 AM","2 AM","3 AM","4 AM","5 AM","6 AM","7 AM","8 AM","9 AM","10 AM","11 AM","12 PM","1 PM","2 PM","3 PM","4 PM","5 PM","6 PM","7 PM","8 PM","9 PM","10 PM","11 PM"];
-
-function rotate24<T>(arr: T[], shift: number): T[] {
-  const n = 24;
-  if (!Array.isArray(arr) || arr.length !== n) return arr;
-  const s = ((shift % n) + n) % n;
-  if (s === 0) return arr.slice();
-  return arr.slice(n - s).concat(arr.slice(0, n - s));
+/* ---------- Fixed 12AM→11PM ordering for all 24h series ---------- */
+function normalizeTgvOrder(series: any[] | undefined): any[] | undefined {
+  if (!Array.isArray(series)) return series;
+  const by = new Map<string, any>();
+  for (const x of series) by.set(String(x?.label ?? ""), { label: String(x?.label ?? ""), visitors: Number(x?.visitors||0), views: Number(x?.views||0) });
+  const out = HOURS_12.map((lbl) => {
+    const v = by.get(lbl);
+    return v ? { label: lbl, visitors: v.visitors, views: v.views } : { label: lbl, visitors: 0, views: 0 };
+  });
+  return out;
 }
-function rightmostNonZeroIdxTGV(arr: any[]): number {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const v = Number(arr[i]?.views || 0) + Number(arr[i]?.visitors || 0);
-    if (v > 0) return i;
-  }
-  return -1;
+function normalizeCountOrder(series: any[] | undefined): any[] | undefined {
+  if (!Array.isArray(series)) return series;
+  const by = new Map<string, any>();
+  for (const x of series) by.set(String(x?.label ?? ""), { label: String(x?.label ?? ""), count: Number(x?.count||0) });
+  const out = HOURS_12.map((lbl) => {
+    const v = by.get(lbl);
+    return v ? { label: lbl, count: v.count } : { label: lbl, count: 0 };
+  });
+  return out;
 }
-function rightmostNonZeroIdxCount(arr: any[]): number {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const v = Number(arr[i]?.count || 0);
-    if (v > 0) return i;
-  }
-  return -1;
-}
-
-/** Align 24h series so the last non-zero bucket is the viewer’s current hour. */
-function align24hToNow(payload: Partial<DashboardPayload> | null, range: RangeKey): Partial<DashboardPayload> | null {
+function normalize24hAllSeries(payload: Partial<DashboardPayload> | null, range: RangeKey): Partial<DashboardPayload> | null {
   if (!payload || range !== "24h") return payload;
   const out: any = { ...payload };
-  const nowIdx = new Date().getHours(); // 0..23 local
-
-  if (Array.isArray(out.time_grouped_visits) && out.time_grouped_visits.length === 24) {
-    const li = rightmostNonZeroIdxTGV(out.time_grouped_visits);
-    if (li >= 0) {
-      const shift = (nowIdx - li + 24) % 24;
-      out.time_grouped_visits = rotate24(out.time_grouped_visits, shift).map((b: any, i: number) => ({
-        ...b, label: HOURS_12[i]
-      }));
-    }
-  }
-
-  const fixCounts = (key: keyof DashboardPayload) => {
-    const arr = (out as any)[key];
-    if (Array.isArray(arr) && arr.length === 24) {
-      const li = rightmostNonZeroIdxCount(arr);
-      if (li >= 0) {
-        const shift = (nowIdx - li + 24) % 24;
-        (out as any)[key] = rotate24(arr, shift).map((b: any, i: number) => ({ ...b, label: HOURS_12[i] }));
-      }
-    }
-  };
-
-  fixCounts("events_timeline");
-  fixCounts("unique_visitors_timeline");
-  fixCounts("impressions_timeline");
-  fixCounts("clicks_timeline");
-  fixCounts("search_visitors_timeline");
-  fixCounts("conversions_timeline");
+  out.time_grouped_visits       = normalizeTgvOrder(out.time_grouped_visits);
+  out.events_timeline           = normalizeCountOrder(out.events_timeline);
+  out.impressions_timeline      = normalizeCountOrder(out.impressions_timeline);
+  out.clicks_timeline           = normalizeCountOrder(out.clicks_timeline);
+  out.conversions_timeline      = normalizeCountOrder(out.conversions_timeline);
+  out.search_visitors_timeline  = normalizeCountOrder(out.search_visitors_timeline);
+  out.unique_visitors_timeline  = normalizeCountOrder(out.unique_visitors_timeline);
   return out;
 }
 
@@ -296,9 +277,9 @@ export async function fetchSnapshotSeedOnce() {
     let data = (await res.json()) as DashboardPayload;
     (data as any).range = state.range;
 
-    // Defensive local-hour handling for 24h snapshots
+    // Normalize order first, then clamp future hours
+    data = normalize24hAllSeries(data, state.range) as DashboardPayload;
     data = clamp24hAllSeries(data, state.range) as DashboardPayload;
-    data = align24hToNow(data, state.range) as DashboardPayload;
 
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
@@ -466,14 +447,14 @@ export async function connectWS(forceNew = false) {
             if (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
               patchedTgv = applyTgvPatch(baseTgv, arr);
             } else {
-              patchedTgv = arr;
+              patchedTgv = normalizeTgvOrder(arr);
             }
           } else if (Array.isArray(frameRaw.time_grouped_visits) && frameRaw.time_grouped_visits.length) {
             const incoming = frameRaw.time_grouped_visits;
             if (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
               patchedTgv = applyTgvPatch(baseTgv, incoming);
             } else {
-              patchedTgv = incoming;
+              patchedTgv = normalizeTgvOrder(incoming);
             }
           }
 
@@ -485,9 +466,9 @@ export async function connectWS(forceNew = false) {
             ? mergeKPIsOnly(state.data, frame)
             : mergeSameRange(state.data, frame);
 
-          // Local-hour guards for 24h
+          // 1) Normalize hour order, 2) clamp future hours
+          next = normalize24hAllSeries(next, frameRange || state.range) as DashboardPayload;
           next = clamp24hAllSeries(next, frameRange || state.range) as DashboardPayload;
-          next = align24hToNow(next, frameRange || state.range) as DashboardPayload;
 
           // WS delta & staleness handling
           const prevTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;

@@ -1,7 +1,8 @@
 // src/components/profile/InvoicesTable.tsx
+
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { InvoiceRow } from "@/services/billingService";
+import type { Invoice } from "@/services/billing.store";
 
 function toEpoch(d?: string) {
   if (!d) return 0;
@@ -18,13 +19,31 @@ function toEpoch(d?: string) {
   return Date.UTC(parseInt(m[3], 10), mm, parseInt(m[2], 10));
 }
 
-export default function InvoicesTable({ rows }: { rows: InvoiceRow[] }) {
+function toSeq(id?: string) {
+  const m = String(id || "").match(/(\d+)(?!.*\d)/);
+  return m ? parseInt(m[1], 10) : -1;
+}
+
+export default function InvoicesTable({ rows }: { rows: Invoice[] }) {
   const sorted = useMemo(() => {
-    const withKeys = rows.map((r) => ({
-      ...r,
-      issued_ts: toEpoch(r.issued_date),
-      seq: parseInt((r.invoice_id.match(/(\d+)(?!.*\d)/) || [])[1] || "-1", 10),
-    }));
+    const withKeys = rows.map((r) => {
+      const invoiceId = r.invoice_id || r.number || r.id || "";
+      const date = r.issued_date || r.created_at || "";
+      const amount = r.total ?? r.amount_due ?? 0;
+      const status = r.invoice_status || r.status || "";
+      const pdfLink = r.pdf_link || r.invoice_pdf || null;
+
+      return {
+        ...r,
+        invoiceId,
+        date,
+        amount,
+        status,
+        pdfLink,
+        issued_ts: toEpoch(date),
+        seq: toSeq(invoiceId),
+      };
+    });
     return withKeys.sort((a, b) => b.issued_ts - a.issued_ts || b.seq - a.seq);
   }, [rows]);
 
@@ -37,45 +56,55 @@ export default function InvoicesTable({ rows }: { rows: InvoiceRow[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-muted-foreground">
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Amount</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4">Invoice #</th>
-                <th className="py-2 pr-4">Actions</th>
+              <tr className="text-left text-muted-foreground border-b">
+                <th className="py-3 pr-4 font-semibold">Date</th>
+                <th className="py-3 pr-4 font-semibold">Amount</th>
+                <th className="py-3 pr-4 font-semibold">Status</th>
+                <th className="py-3 pr-4 font-semibold">Invoice #</th>
+                <th className="py-3 pr-4 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 && (
                 <tr>
-                  <td className="py-6 text-muted-foreground" colSpan={5}>
+                  <td className="py-6 text-center text-muted-foreground" colSpan={5}>
                     No invoices yet.
                   </td>
                 </tr>
               )}
-              {sorted.map((r) => (
-                <tr key={r.invoice_id} className="border-t">
-                  <td className="py-3 pr-4">{r.issued_date || "—"}</td>
-                  <td className="py-3 pr-4">{r.total != null ? `$${Number(r.total).toFixed(2)}` : "—"}</td>
+              {sorted.map((r, idx) => (
+                <tr key={r.invoiceId || idx} className="border-t hover:bg-muted/50">
+                  <td className="py-3 pr-4">{r.date || "—"}</td>
+                  <td className="py-3 pr-4 font-medium">
+                    {r.amount != null ? `$${Number(r.amount).toFixed(2)}` : "—"}
+                  </td>
                   <td className="py-3 pr-4">
                     <span
-                      className={`rounded px-2 py-1 text-xs ${
-                        (r.invoice_status || "").toLowerCase() === "refunded"
+                      className={`inline-block rounded px-2 py-1 text-xs font-medium ${
+                        (r.status || "").toLowerCase() === "refunded"
                           ? "bg-red-100 text-red-700"
                           : "bg-blue-100 text-blue-700"
                       }`}
                     >
-                      {r.invoice_status || "—"}
+                      {r.status || "—"}
                     </span>
                   </td>
-                  <td className="py-3 pr-4 font-medium">{r.invoice_id || "—"}</td>
                   <td className="py-3 pr-4">
-                    {r.pdf_link ? (
-                      <a className="underline" href={r.pdf_link} target="_blank" rel="noreferrer">
+                    <span className="font-medium">{r.invoiceId || "—"}</span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    {r.pdfLink ? (
+                      <a
+                        className="inline-flex items-center rounded border border-primary px-3 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                        href={r.pdfLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                      >
                         Download
                       </a>
                     ) : (
-                      "—"
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                 </tr>
@@ -83,6 +112,14 @@ export default function InvoicesTable({ rows }: { rows: InvoiceRow[] }) {
             </tbody>
           </table>
         </div>
+
+        {sorted.length > 0 && (
+          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Showing {sorted.length} {sorted.length === 1 ? "invoice" : "invoices"}
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
