@@ -27,6 +27,7 @@ import {
 import SiteFooter from "@/components/SiteFooter";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { secureFetch } from "@/lib/auth";
+import { RegisterModal } from "@/components/auth/RegisterModal";
 
 // TypeScript declaration for Gradient + Bootstrap
 declare global {
@@ -81,6 +82,7 @@ const Index = () => {
   const [tiers, setTiers] = useState<PublicPricingTier[]>([]);
   const [tiersLoading, setTiersLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gradientInitialized = useRef(false);
@@ -198,8 +200,8 @@ const Index = () => {
     }
   }, [matchedTier, isYearly]);
 
-  // 🔑 Pro plan CTA behavior (mirrors Bootstrap pricing JS)
-  // - If NOT logged in → open #loginModal (register modal)
+  // 🔑 Pro plan CTA behavior:
+  // - If NOT logged in → open React RegisterModal
   // - If logged in → redirect to /app/user-profile with loading modal
   const handleProPlanClick = async () => {
     try {
@@ -228,17 +230,8 @@ const Index = () => {
       }
 
       if (!loggedIn) {
-        const modalEl = document.getElementById("loginModal") as HTMLElement | null;
-        if (modalEl && window.bootstrap?.Modal) {
-          const existing = window.bootstrap.Modal.getInstance
-            ? window.bootstrap.Modal.getInstance(modalEl)
-            : null;
-          const modal = existing || new window.bootstrap.Modal(modalEl);
-          modal.show();
-        } else {
-          // Fallback if Bootstrap modal isn’t available
-          navigate("/register");
-        }
+        // 👉 Open React register modal instead of navigating
+        setShowRegisterModal(true);
         return;
       }
 
@@ -248,17 +241,8 @@ const Index = () => {
       }
       navigate("/app/user-profile");
     } catch (err) {
-      console.error("[landing] Pro CTA click error, falling back to register:", err);
-      const modalEl = document.getElementById("loginModal") as HTMLElement | null;
-      if (modalEl && window.bootstrap?.Modal) {
-        const existing = window.bootstrap.Modal.getInstance
-          ? window.bootstrap.Modal.getInstance(modalEl)
-          : null;
-        const modal = existing || new window.bootstrap.Modal(modalEl);
-        modal.show();
-      } else {
-        navigate("/register");
-      }
+      console.error("[landing] Pro CTA click error, opening register modal:", err);
+      setShowRegisterModal(true);
     }
   };
 
@@ -557,7 +541,7 @@ const Index = () => {
                 </div>
               </div>
 
-              {/* 🔥 Only this button opens the register modal logic */}
+              {/* 🔥 Only this button opens the React register modal */}
               <Button
                 className="w-full h-12 text-base"
                 size="lg"
@@ -584,7 +568,7 @@ const Index = () => {
             Join thousands of teams already using Modovisa to understand their users
             better.
           </p>
-          {/* CTA here also just goes to /register, like hero */}
+          {/* Bottom CTA: still goes straight to /register */}
           <Link to="/register">
             <Button
               size="lg"
@@ -701,6 +685,12 @@ const Index = () => {
 
       {/* Footer */}
       <SiteFooter />
+
+      {/* 🔐 React Register Modal, reusing the Register page UI */}
+      <RegisterModal
+        open={showRegisterModal}
+        onOpenChange={setShowRegisterModal}
+      />
     </div>
   );
 };
