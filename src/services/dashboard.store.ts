@@ -15,6 +15,10 @@
 //
 // 4. API surface is unchanged: init, setSite, setRange, fetchSnapshot, fetchSnapshotHard,
 //    connectWS, useDashboard, getTrackingWebsites.
+//
+// 5. NEW: WS patches for 24h are monotonic per hour bucket:
+//    - Once an hour has X views/visitors, later patches can only increase that bucket,
+//      never decrease it within the session. Same for *_timeline counts.
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -298,6 +302,7 @@ function normalize24hFrame(frame: Partial<DashboardPayload>): Partial<DashboardP
 }
 
 /* ---------- Patchers used ONLY for 24h delta fields ---------- */
+// MONOTONIC: within a session, buckets can only stay the same or increase.
 function applyTgvPatch(
   base: any[] | undefined,
   patch: any[]
@@ -320,12 +325,15 @@ function applyTgvPatch(
     if (!lbl || !isHourLabel(lbl)) continue;
     const j = idxBy[lbl];
     if (j == null) continue;
+
+    const prev = baseNorm[j] || { label: lbl, visitors: 0, views: 0 };
     const v = Number((p as any)?.visitors ?? 0);
     const w = Number((p as any)?.views ?? 0);
+
     baseNorm[j] = {
-      label: baseNorm[j].label,
-      visitors: v,
-      views: w,
+      label: prev.label,
+      visitors: Math.max(Number(prev.visitors || 0), v),
+      views: Math.max(Number(prev.views || 0), w),
     };
   }
   return baseNorm;
@@ -348,9 +356,10 @@ function applyCountPatch(
     const lbl = canonHourLabel(String((p as any)?.label ?? ""));
     if (!lbl || !isHourLabel(lbl)) continue;
     const j = idxBy[lbl];
-    if (j != null) {
-      out[j].count = Number((p as any)?.count ?? 0);
-    }
+    if (j == null) continue;
+
+    const c = Number((p as any)?.count ?? 0);
+    out[j].count = Math.max(Number(out[j].count || 0), c);
   }
   return out;
 }
