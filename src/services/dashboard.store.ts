@@ -1,10 +1,9 @@
 // src/services/dashboard.store.ts
 // One-time REST seed per (siteId:range) + 100% WS stream thereafter.
-// - 24h axis is hard-locked to browser-local 12 AM → 11 PM (BE already emits local hours)
+// - 24h axis is hard-locked to browser-local 12 AM → 11 PM (BE emits local hours)
 // - WS frames are patch-only for elapsed local hours; never full-replace, never re-order
 // - Non-hour labels (e.g., "OCT 17") are ignored for series updates
-// - Baseline backfill: after WS merges, refill missing/zeroed elapsed buckets
-//   with the last REST-seeded values so the left side never “hollows out”.
+// - Baseline backfill retained so the left side never “hollows out”.
 
 import { useSyncExternalStore } from "react";
 import { secureFetch } from "@/lib/auth";
@@ -41,7 +40,7 @@ const BACKOFF_MAX = 60_000;
 const TICKET_THROTTLE_MS = 1500;
 const REQUEST_SERIES_THROTTLE_MS = 20_000;
 
-// Front-end rotation disabled (BE emits local hours consistently)
+// Front-end rotation disabled (assume BE sends local hours)
 const ASSUME_UTC_SOURCE = false;
 
 const HOURS_12 = [
@@ -83,7 +82,7 @@ const safeJSON = <T = any,>(x: string): T | null => { try { return JSON.parse(x)
 const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-n) : [];
 const sumBy = (arr: any[], k: string) => Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
-// Kept for completeness; unused when ASSUME_UTC_SOURCE=false
+// Kept for completeness if we ever flip rotation back on
 const TZ_SHIFT_INT = Math.round(-new Date().getTimezoneOffset() / 60);
 
 /** Normalize incoming live city clusters */
@@ -213,11 +212,9 @@ let baseline: Baseline = { counts: {} };
 function captureBaseline(d: Partial<DashboardPayload> | null) {
   if (!d) return;
 
-  // Keep the generic, but tell TS exactly what T is at each callsite.
   const saveIf24 = <T extends { label: string }>(arr?: T[]) =>
     (Array.isArray(arr) && arr.length === 24 ? arr : undefined);
 
-  // TGV: has visitors + views
   const tgv = saveIf24<{ label: string; visitors: number; views: number }>(
     (d as any).time_grouped_visits
   );
@@ -229,7 +226,6 @@ function captureBaseline(d: Partial<DashboardPayload> | null) {
     }));
   }
 
-  // Count series: has count
   const keys: (keyof DashboardPayload)[] = [
     "events_timeline",
     "impressions_timeline",
@@ -255,14 +251,12 @@ function backfillFromBaseline(next: Partial<DashboardPayload> | null): Partial<D
   const nowHour = new Date().getHours();
   const out: any = { ...next };
 
-  // TGV
   if (Array.isArray(out.time_grouped_visits) && out.time_grouped_visits.length === 24 && baseline.tgv?.length === 24) {
     out.time_grouped_visits = out.time_grouped_visits.map((pt: any, i: number) => {
       if (i > nowHour) return pt; // never prefill future
       const base = baseline.tgv![i];
       const v = Number(pt?.visitors || 0);
       const w = Number(pt?.views || 0);
-      // Only backfill when WS left the bucket at 0/0 and baseline had data
       if (v === 0 && w === 0 && (base.visitors > 0 || base.views > 0)) {
         return { label: pt.label, visitors: base.visitors, views: base.views };
       }
@@ -270,7 +264,6 @@ function backfillFromBaseline(next: Partial<DashboardPayload> | null): Partial<D
     });
   }
 
-  // Count series
   const COUNT_KEYS: (keyof DashboardPayload)[] = [
     "events_timeline","impressions_timeline","clicks_timeline",
     "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
@@ -346,20 +339,16 @@ function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPa
 }
 
 /* ---------- Patchers ---------- */
-/** In-place 24h TGV patcher: never grows/shrinks the array, never reorders */
 function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
-  // Start from a fully ordered 24-bucket baseline
   const baseNorm =
     normalizeTgvOrder(base) ||
     HOURS_12.map((lbl) => ({ label: lbl, visitors: 0, views: 0 }));
 
-  // Precompute indexes for O(1) writes
   const idxBy: Record<string, number> = {};
   baseNorm.forEach((b: any, i: number) => {
     idxBy[canonHourLabel(String(b?.label ?? ""))] = i;
   });
 
-  // Overwrite only existing hour buckets (elapsed only already filtered upstream)
   for (const p of patch) {
     const lbl = canonHourLabel(String((p as any)?.label ?? ""));
     if (!lbl || !isHourLabel(lbl)) continue;
@@ -412,7 +401,7 @@ function clampTgv(series: any[] | undefined): any[] | undefined {
   return series.map((pt, i) => (i > nowHour ? { ...pt, visitors: 0, views: 0 } : pt));
 }
 
-/* ---------- 24h normalization + (rotation disabled) ---------- */
+/* ---------- 24h normalization (+ optional rotation) ---------- */
 function normalizeTgvOrder(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series)) return series;
   const by = new Map<string, any>();
@@ -448,7 +437,6 @@ function normalize24hAllSeries(payload: Partial<DashboardPayload> | null, range:
   if (!payload || range !== "24h") return payload;
   const out: any = { ...payload };
 
-  // If any labels are *not* hour-like (dates, words), discard those series updates
   const guard = (s: any[] | undefined) => Array.isArray(s) && s.every(pt => isHourLabel(String(pt?.label ?? "")));
 
   if (guard(out.time_grouped_visits)) out.time_grouped_visits = normalizeTgvOrder(out.time_grouped_visits);
@@ -459,7 +447,6 @@ function normalize24hAllSeries(payload: Partial<DashboardPayload> | null, range:
   if (guard(out.search_visitors_timeline)) out.search_visitors_timeline = normalizeCountOrder(out.search_visitors_timeline);
   if (guard(out.unique_visitors_timeline)) out.unique_visitors_timeline = normalizeCountOrder(out.unique_visitors_timeline);
 
-  // Rotation is disabled; BE is already local. Keep block for future toggling.
   if (ASSUME_UTC_SOURCE) {
     out.time_grouped_visits       = rotateTgv(out.time_grouped_visits, TZ_SHIFT_INT);
     out.events_timeline           = rotateCounts(out.events_timeline, TZ_SHIFT_INT);
@@ -486,11 +473,14 @@ function clamp24hAllSeries(payload: Partial<DashboardPayload> | null, range: Ran
   return out;
 }
 
-/* ---------------- REST seed (once per siteId:range) ---------------- */
+/* ---------------- REST seed + hard refresh ---------------- */
 const seeded = new Set<string>();
 let seedInFlight = false;
 let lastTgvAt = 0;
 let lastSeriesRequestAt = 0;
+let staleWarns = 0;
+let lastForcedRefreshAt = 0;
+
 const seedKey = () => {
   if (!state.siteId) return "";
   const tzOff = new Date().getTimezoneOffset();
@@ -501,7 +491,11 @@ export async function fetchSnapshotSeedOnce() {
   if (!state.siteId) return;
   const key = seedKey();
   if (!key || seeded.has(key) || seedInFlight) return;
+  await doFetchSnapshot(); // will add to 'seeded'
+}
 
+async function doFetchSnapshot(addToSeeded = true) {
+  if (!state.siteId) return;
   seedInFlight = true;
   const tz = String(new Date().getTimezoneOffset());
   const r = normalizeRange(state.range);
@@ -510,7 +504,7 @@ export async function fetchSnapshotSeedOnce() {
   try {
     const res = await secureFetch(url, { method: "GET" });
     if (!res.ok) {
-      console.error("❌ [REST] Seed snapshot failed:", res.status, await res.text().catch(()=> ""));
+      console.error("❌ [REST] Snapshot failed:", res.status, await res.text().catch(()=> ""));
       set({ error: `snapshot_${res.status}`, isLoading: false });
       return;
     }
@@ -520,12 +514,10 @@ export async function fetchSnapshotSeedOnce() {
     data = normalize24hAllSeries(data, r) as DashboardPayload;
     data = clamp24hAllSeries(data, r) as DashboardPayload;
 
-    // Save baseline BEFORE set() so first WS frame can backfill confidently
     captureBaseline(data);
-
     logTgvDelta("REST", state.data?.time_grouped_visits as any[], (data as any)?.time_grouped_visits as any[]);
 
-    saveSnapshot(state.siteId, r, data);
+    saveSnapshot(state.siteId!, r, data);
     const sig = signature(data, r);
 
     set({
@@ -538,14 +530,20 @@ export async function fetchSnapshotSeedOnce() {
     });
 
     lastTgvAt = Date.now();
-    seeded.add(key);
-    if (W.__mvDashDbg) console.debug("✅ [REST] Seed snapshot completed once for", key);
+    staleWarns = 0;
+    if (addToSeeded) seeded.add(seedKey());
+    if (W.__mvDashDbg) console.debug("✅ [REST] Snapshot loaded");
   } catch (e: any) {
-    console.error("❌ [REST] Seed snapshot error:", e?.message || e);
+    console.error("❌ [REST] Snapshot error:", e?.message || e);
     set({ error: "snapshot_error", isLoading: false });
   } finally {
     seedInFlight = false;
   }
+}
+
+/** Hard refresh that ignores the one-time 'seeded' guard */
+export async function fetchSnapshotHard() {
+  await doFetchSnapshot(false);
 }
 
 /** COMPAT alias for Dashboard.tsx */
@@ -662,6 +660,9 @@ export async function connectWS(forceNew = false) {
 
       // One-time REST seed after socket opens (per siteId:range)
       void fetchSnapshotSeedOnce();
+
+      // Immediately ask for a 24h series frame (guards BE that push KPIs-only)
+      requestSeries();
     };
 
     socket.onmessage = (ev) => {
@@ -684,7 +685,6 @@ export async function connectWS(forceNew = false) {
           const baseLast = baseLabels.length ? baseLabels[baseLabels.length - 1] : undefined;
           console.warn("[DIAG] 24h seed axis (local) anchored to:", baseLabels[0], "…", baseLast);
           console.warn("[DIAG] Incoming WS labels:", uniq.join(", "));
-          // No auto-request here; refresh only via staleness watchdog below.
         }
       } catch {}
 
@@ -701,16 +701,21 @@ export async function connectWS(forceNew = false) {
           const base = state.data as any;
           const frame: Partial<DashboardPayload> = { ...raw };
           (frame as any).range = normalizeRange((frame as any)?.range || state.range);
-          const r = (frame as any).range as RangeKey;
+          const incomingRange = (frame as any).range as RangeKey;
 
-          // If BE’s frame range mismatches UI, accept KPIs only; ask for series
-          if (r !== state.range) {
-            set({ data: mergeKPIsOnly(state.data, frame), isLoading: false, analyticsVersion: state.analyticsVersion + 1, error: null });
+          // If BE’s frame range mismatches UI, still keep KPIs and *try* to patch
+          if (incomingRange !== state.range) {
+            set({
+              data: mergeKPIsOnly(state.data, frame),
+              isLoading: false,
+              analyticsVersion: state.analyticsVersion + 1,
+              error: null,
+            });
             requestSeries();
-            return;
+            // **Do not return** — if this mismatched frame happens to carry hour-labeled
+            // 24h arrays, we’ll still patch them below.
           }
 
-          // Reject non-hour series frames (e.g., date labels) to prevent flips
           const isHourSeries = (arr?: any[]) => Array.isArray(arr) && arr.length && arr.every(x => isHourLabel(String(x?.label ?? "")));
 
           // ----- TGV: PATCH-ONLY + IN-PLACE for 24h -----
@@ -742,17 +747,14 @@ export async function connectWS(forceNew = false) {
             const canon = restrictPatchToElapsed(
               incoming.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }))
             );
-            (frame as any)[k] = maybePatchCounts((base as any)?.[k], canon, r);
+            (frame as any)[k] = maybePatchCounts((base as any)?.[k], canon, state.range);
           }
 
-          // Merge + normalize + clamp (+ optional backfill)
+          // Merge + normalize + backfill + clamp
           let next = mergeSameRange(state.data, frame);
-          next = normalize24hAllSeries(next, r) as DashboardPayload;
-
-          // Backfill from REST baseline for elapsed hours so the left side never hollows out
+          next = normalize24hAllSeries(next, state.range) as DashboardPayload;
           next = backfillFromBaseline(next) as DashboardPayload;
-
-          next = clamp24hAllSeries(next, r) as DashboardPayload;
+          next = clamp24hAllSeries(next, state.range) as DashboardPayload;
 
           // Staleness watchdog
           const prevTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;
@@ -769,10 +771,17 @@ export async function connectWS(forceNew = false) {
           ];
           const countsChanged = COUNT_KEYS_WATCH.some((k) => JSON.stringify((state.data as any)?.[k] || []) !== JSON.stringify((next as any)?.[k] || []));
           const tgvChanged = JSON.stringify(prevTgv || []) !== JSON.stringify(nextTgv || []);
-          if (tgvChanged) lastTgvAt = Date.now();
+          if (tgvChanged) { lastTgvAt = Date.now(); staleWarns = 0; }
           else if (kpiChanged && Date.now() - lastTgvAt > 75_000) {
             console.warn("⚠️ [WS] KPIs moving but series stale >75s — requesting series frame…");
             requestSeries();
+            staleWarns += 1;
+            if (staleWarns >= 2 && Date.now() - lastForcedRefreshAt > 120_000) {
+              console.warn("↻ Forcing REST snapshot refresh (series stale twice) …");
+              lastForcedRefreshAt = Date.now();
+              void fetchSnapshotHard();
+              staleWarns = 0;
+            }
           }
 
           // Update baseline whenever we end up with a full normalized 24h
@@ -858,8 +867,7 @@ export function setSite(siteId: number) {
   localStorage.setItem("current_website_id", String(siteId));
   set({ siteId, data: null, isLoading: true, liveCities: [], liveCount: null, error: null, seriesSig: "" });
 
-  // Clear baseline for the new site
-  baseline = { counts: {} };
+  baseline = { counts: {} }; // new site ⇒ new baseline
 
   emitCached(siteId, state.range);
   void connectWS(true);
@@ -870,8 +878,7 @@ export function setRange(range: RangeKey) {
   if (state.range === r) return;
   set({ range: r, data: null, isLoading: true, error: null, seriesSig: "" });
 
-  // Clear baseline for the new range
-  baseline = { counts: {} };
+  baseline = { counts: {} }; // new range ⇒ new baseline
 
   if (state.siteId) {
     emitCached(state.siteId, r);
