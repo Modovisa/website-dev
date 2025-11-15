@@ -1,10 +1,10 @@
 // src/services/dashboard.store.ts
 // One-time REST seed per (siteId:range) + 100% WS stream thereafter.
-// - Ranges aligned to BE: 24h | 7d | 30d | 12mo (any 90d → 30d)
+// - Ranges aligned to BE: 24h | 7d | 30d | 12mo (any unknown/90d → 30d)
 // - For 24h: never rotate axis (local 12 AM → 11 PM), never rebase to UTC
 // - WS frames only PATCH the anchored seed; only elapsed local hours may change
 // - Normalizes all 24h series to fixed hour order and clamps future hours to 0
-// - Merges partial frames: TGV + all 24h count series
+// - Merges partial frames (TGV + 24h count series) and ignores range-mismatch frames for series
 // - Watchdog pings WS for series if KPIs move but TGV stalls; also auto-requests if range mismatches
 
 import { useSyncExternalStore } from "react";
@@ -53,7 +53,7 @@ const HOURS_12 = [
 const SUPPORTED_RANGES = ["24h","7d","30d","12mo"] as const;
 function normalizeRange(r: RangeKey | string | undefined): RangeKey {
   const v = String(r || "24h");
-  return (SUPPORTED_RANGES as readonly string[]).includes(v) ? (v as RangeKey) : ("30d" as RangeKey); // map unknown/90d → 30d
+  return (SUPPORTED_RANGES as readonly string[]).includes(v) ? (v as RangeKey) : ("30d" as RangeKey);
 }
 
 /* ---------------- Internal state ---------------- */
@@ -95,6 +95,50 @@ const cap = (arr: any[] | undefined, n = 24) => Array.isArray(arr) ? arr.slice(-
 const sumBy = (arr: any[], k: string) =>
   Array.isArray(arr) ? arr.reduce((s, x) => s + (Number(x?.[k]) || 0), 0) : 0;
 
+/* ---------- Hour-label canonicalization (prevents UTC flip via label drift) ---------- */
+function canonHourLabel(s: string): string {
+  let t = String(s || "")
+    .replace(/\u00A0|\u202F/g, " ") // nbsp & narrow nbsp → space
+    .replace(/\./g, "")            // remove dots (e.g., p.m.)
+    .trim()
+    .toUpperCase();
+
+  // e.g., "7PM" → "7 PM"
+  const mCompact = t.match(/^(\d{1,2})\s*(AM|PM)$/);
+  if (mCompact) return `${parseInt(mCompact[1], 10)} ${mCompact[2]}`;
+
+  // e.g., "07:00", "7:00", "23", "0"
+  const m24 = t.match(/^(\d{1,2})(?::\d{2})?$/);
+  if (m24) {
+    let h = Math.max(0, Math.min(23, parseInt(m24[1], 10)));
+    const pm = h >= 12;
+    let h12 = h % 12; if (h12 === 0) h12 = 12;
+    return `${h12} ${pm ? "PM" : "AM"}`;
+  }
+
+  // e.g., "7 : 00 PM" → "7 PM"
+  const m12 = t.match(/^(\d{1,2})(?::\d{2})?\s*(AM|PM)$/);
+  if (m12) return `${parseInt(m12[1], 10)} ${m12[2]}`;
+
+  // Keep already canonical labels like "7 AM"
+  return t;
+}
+
+/** Index map for hour labels (canonical) */
+const HOUR_IDX: Record<string, number> = HOURS_12.reduce((acc, lbl, i) => {
+  acc[canonHourLabel(lbl)] = i; return acc;
+}, {} as Record<string, number>);
+
+/** Accept patches for all elapsed local hours (0..nowHour). */
+function restrictPatchToElapsed<T extends { label?: string }>(arr: T[] | undefined): T[] {
+  if (!Array.isArray(arr)) return [];
+  const nowHour = new Date().getHours();
+  return arr.filter((p) => {
+    const i = HOUR_IDX[canonHourLabel(String(p?.label ?? ""))];
+    return i != null && i <= nowHour;
+  });
+}
+
 /** Source-tagged delta log with window-shift hint */
 function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   const P = Array.isArray(prev) ? prev : [];
@@ -104,7 +148,9 @@ function logTgvDelta(source: "WS" | "REST", prev?: any[], next?: any[]) {
   const nv = N.reduce((s,x)=>s+(+x?.views||0),0);
   const pu = P.reduce((s,x)=>s+(+x?.visitors||0),0);
   const nu = N.reduce((s,x)=>s+(+x?.visitors||0),0);
-  const shifted = !!(P.length && N.length && (P[P.length-1]?.label === N[N.length-1]?.label) && (P[0]?.label !== N[0]?.label));
+  const lastLblP = P.length ? P[P.length-1]?.label : undefined;
+  const lastLblN = N.length ? N[N.length-1]?.label : undefined;
+  const shifted = !!(P.length && N.length && canonHourLabel(String(lastLblP)) === canonHourLabel(String(lastLblN)) && canonHourLabel(String(P[0]?.label)) !== canonHourLabel(String(N[0]?.label)));
   if (pv !== nv || pu !== nu) {
     console.log(`📈 [${source} TGV Δ] views: ${pv} → ${nv}, visitors: ${pu} → ${nu}, buckets: ${N.length}${shifted ? " (window shift)" : ""}`);
   } else {
@@ -163,7 +209,7 @@ function emitCached(siteId: number, range: RangeKey) {
   } catch { return false; }
 }
 
-/* ---------- Merge policy & TGV patching ---------- */
+/* ---------- Merge policy ---------- */
 const KPI_KEYS = new Set<string>([
   "live_visitors","unique_visitors","bounce_rate","bounce_rate_delta",
   "avg_duration","avg_duration_delta","multi_page_visits","multi_page_visits_delta",
@@ -181,28 +227,12 @@ function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPa
   return next as DashboardPayload;
 }
 
-/** Index map for hour labels */
-const HOUR_IDX: Record<string, number> = HOURS_12.reduce((acc, lbl, i) => {
-  acc[lbl] = i; return acc;
-}, {} as Record<string, number>);
-
-/** Accept patches for all elapsed local hours (0..nowHour). */
-function restrictPatchToElapsed<T extends { label?: string }>(arr: T[] | undefined): T[] {
-  if (!Array.isArray(arr)) return [];
-  const nowHour = new Date().getHours();
-  return arr.filter((p) => {
-    const lbl = String(p?.label ?? "");
-    const i = HOUR_IDX[lbl];
-    return i != null && i <= nowHour;
-  });
-}
-
 /** Replace/append by label; clamp to original length; then sort to 12AM→11PM */
 function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   const out = Array.isArray(base) ? base.map(b => ({ ...b })) : [];
-  const labels = out.map(b => String(b.label));
+  const labels = out.map(b => canonHourLabel(String(b?.label)));
   for (const p of patch) {
-    const lbl = String((p as any)?.label ?? "");
+    const lbl = canonHourLabel(String((p as any)?.label ?? ""));
     if (!lbl) continue;
     const v = Number((p as any)?.visitors ?? 0);
     const w = Number((p as any)?.views ?? 0);
@@ -223,11 +253,11 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
 function applyCountPatch(base: any[] | undefined, patch: any[]): any[] {
   const baseNorm = normalizeCountOrder(base) || HOURS_12.map(lbl => ({ label: lbl, count: 0 }));
   const idxBy: Record<string, number> = {};
-  baseNorm.forEach((b: any, i: number) => { idxBy[String(b?.label ?? "")] = i; });
+  baseNorm.forEach((b: any, i: number) => { idxBy[canonHourLabel(String(b?.label ?? ""))] = i; });
 
   const out = baseNorm.map((b: any) => ({ ...b }));
   for (const p of patch) {
-    const lbl = String((p as any)?.label ?? "");
+    const lbl = canonHourLabel(String((p as any)?.label ?? ""));
     if (!lbl) continue;
     const j = idxBy[lbl];
     if (j != null) out[j].count = Number((p as any)?.count ?? 0);
@@ -277,20 +307,28 @@ function clamp24hAllSeries(payload: Partial<DashboardPayload> | null, range: Ran
 function normalizeTgvOrder(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series)) return series;
   const by = new Map<string, any>();
-  for (const x of series) by.set(String(x?.label ?? ""), { label: String(x?.label ?? ""), visitors: Number(x?.visitors||0), views: Number(x?.views||0) });
+  for (const x of series) {
+    const lbl = canonHourLabel(String(x?.label ?? ""));
+    by.set(lbl, { label: lbl, visitors: Number(x?.visitors||0), views: Number(x?.views||0) });
+  }
   const out = HOURS_12.map((lbl) => {
-    const v = by.get(lbl);
-    return v ? { label: lbl, visitors: v.visitors, views: v.views } : { label: lbl, visitors: 0, views: 0 };
+    const key = canonHourLabel(lbl);
+    const v = by.get(key);
+    return v ? { label: key, visitors: v.visitors, views: v.views } : { label: key, visitors: 0, views: 0 };
   });
   return out;
 }
 function normalizeCountOrder(series: any[] | undefined): any[] | undefined {
   if (!Array.isArray(series)) return series;
   const by = new Map<string, any>();
-  for (const x of series) by.set(String(x?.label ?? ""), { label: String(x?.label ?? ""), count: Number(x?.count||0) });
+  for (const x of series) {
+    const lbl = canonHourLabel(String(x?.label ?? ""));
+    by.set(lbl, { label: lbl, count: Number(x?.count||0) });
+  }
   const out = HOURS_12.map((lbl) => {
-    const v = by.get(lbl);
-    return v ? { label: lbl, count: v.count } : { label: lbl, count: 0 };
+    const key = canonHourLabel(lbl);
+    const v = by.get(key);
+    return v ? { label: key, count: v.count } : { label: key, count: 0 };
   });
   return out;
 }
@@ -483,21 +521,20 @@ export async function connectWS(forceNew = false) {
       /* ---- DIAGNOSTIC (always first) ---- */
       try {
         const nowHour = new Date().getHours();
-        const nowLabel = HOURS_12[nowHour];
-        const baseLabels = (state.data?.time_grouped_visits ?? []).map((b:any) => b?.label);
-        const incLabels =
+        const nowLabel = canonHourLabel(HOURS_12[nowHour]);
+        const baseLabels = (state.data?.time_grouped_visits ?? []).map((b:any) => canonHourLabel(String(b?.label)));
+        const incLabelsRaw =
           (msg?.payload?.time_grouped_visits_delta ??
            msg?.payload?.tgv_delta ??
            msg?.payload?.tgv ??
            msg?.payload?.time_grouped_visits ?? [])
-            .map((p:any) => String(p?.label ?? ""));
-        if (incLabels.length) {
-          const hasNow = incLabels.includes(nowLabel);
-          const uniq = Array.from(new Set(incLabels));
+            .map((p:any) => canonHourLabel(String(p?.label ?? "")));
+        if (incLabelsRaw.length) {
+          const uniq = Array.from(new Set(incLabelsRaw));
           const baseLast = baseLabels.length ? baseLabels[baseLabels.length - 1] : undefined;
           console.warn("[DIAG] 24h seed axis (local) anchored to:", baseLabels[0], "…", baseLast);
           console.warn("[DIAG] Incoming WS labels:", uniq.join(", "));
-          if (!hasNow) {
+          if (!uniq.includes(nowLabel)) {
             console.warn(`[DIAG] WS frame missing current local hour '${nowLabel}'. Requesting 24h series…`);
             requestSeries();
           }
@@ -544,12 +581,12 @@ export async function connectWS(forceNew = false) {
           } else if (Array.isArray(frameRaw.tgv_delta) && frameRaw.tgv_delta.length) {
             patchedTgv = asPatch(frameRaw.tgv_delta);
           } else if (Array.isArray(frameRaw.tgv) && frameRaw.tgv.length) {
-            const arr = frameRaw.tgv.map((x:any)=>({ label: String(x.label ?? ""), visitors: Number(x.visitors ?? 0), views: Number(x.views ?? 0) }));
+            const arr = frameRaw.tgv.map((x:any)=>({ label: canonHourLabel(String(x.label ?? "")), visitors: Number(x.visitors ?? 0), views: Number(x.views ?? 0) }));
             patchedTgv = (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor((baseTgv?.length || 0) / 3)))
               ? asPatch(arr)
               : normalizeTgvOrder(arr);
           } else if (Array.isArray(frameRaw.time_grouped_visits) && frameRaw.time_grouped_visits.length) {
-            const incoming = frameRaw.time_grouped_visits;
+            const incoming = frameRaw.time_grouped_visits.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }));
             patchedTgv = (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor((baseTgv?.length || 0) / 3)))
               ? asPatch(incoming)
               : normalizeTgvOrder(incoming);
@@ -557,14 +594,20 @@ export async function connectWS(forceNew = false) {
           if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
 
           /* ----- 24h count series: elapsed-hours patch; never replace axis ----- */
-          const keys: (keyof DashboardPayload)[] = [
+          const COUNT_KEYS: (keyof DashboardPayload)[] = [
             "events_timeline","impressions_timeline","clicks_timeline",
             "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
           ];
-          for (const k of keys) {
-            const incoming = (frameRaw as any)[k];
+          for (const k of COUNT_KEYS) {
+            const incoming =
+              (frameRaw as any)[`${String(k)}_delta`] ?? // accept *_delta frames
+              (frameRaw as any)[k];
             if (!incoming) continue;
-            (frame as any)[k] = maybePatchCounts((base as any)?.[k], incoming, r);
+            // canon labels before patching
+            const canonIncoming = Array.isArray(incoming)
+              ? incoming.map((x:any)=>({ ...x, label: canonHourLabel(String(x?.label ?? "")) }))
+              : incoming;
+            (frame as any)[k] = maybePatchCounts((base as any)?.[k], canonIncoming, r);
           }
 
           // Merge frame (same-range)
@@ -584,6 +627,11 @@ export async function connectWS(forceNew = false) {
             (frame as any)?.unique_visitors !== undefined && (frame as any)?.unique_visitors !== (state.data as any)?.unique_visitors ||
             (frame as any)?.multi_page_visits !== undefined && (frame as any)?.multi_page_visits !== (state.data as any)?.multi_page_visits;
 
+          const countsChanged = [
+            "events_timeline","impressions_timeline","clicks_timeline",
+            "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
+          ].some((k) => JSON.stringify((state.data as any)?.[k] || []) !== JSON.stringify((next as any)?.[k] || []));
+
           const tgvChanged = JSON.stringify(prevTgv || []) !== JSON.stringify(nextTgv || []);
           if (tgvChanged) lastTgvAt = Date.now();
           else if (kpiChanged && Date.now() - lastTgvAt > 75_000) {
@@ -601,13 +649,6 @@ export async function connectWS(forceNew = false) {
 
           const prevSig = state.seriesSig;
           const sig = signature(next, state.range);
-
-          // Stronger bump condition: if any normalized series changed OR the aggregate sig changed.
-          const countsChanged = [
-            "events_timeline","impressions_timeline","clicks_timeline",
-            "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
-          ].some((k) => JSON.stringify((state.data as any)?.[k] || []) !== JSON.stringify((next as any)?.[k] || []));
-
           const bump = tgvChanged || countsChanged || sig !== prevSig;
 
           set({
