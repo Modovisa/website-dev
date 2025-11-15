@@ -1,9 +1,10 @@
 // src/services/dashboard.store.ts
 // One-time REST seed per (siteId:range) + 100% WS stream thereafter.
 // - Ranges aligned to BE: 24h | 7d | 30d | 12mo (any 90d → 30d)
-// - Never rotates 24h series after WS: axis is always 12 AM → 11 PM
-// - Normalizes WS/REST frames to fixed hour order and clamps future hours
-// - Merges partial frames: TGV (time_grouped_visits_delta / tiny arrays) + all 24h count series
+// - For 24h: never rotate axis (local 12 AM → 11 PM), never rebase to UTC
+// - WS frames only PATCH the anchored seed; only elapsed hours (≤ current local hour) may change
+// - Normalizes all 24h series to fixed hour order and clamps future hours to 0
+// - Merges partial frames: TGV + all 24h count series
 // - Watchdog pings WS for series if KPIs move but TGV stalls
 
 import { useSyncExternalStore } from "react";
@@ -178,6 +179,22 @@ function mergeKPIsOnly(base: DashboardPayload | null, frame: Partial<DashboardPa
   return next as DashboardPayload;
 }
 
+/** Index map for hour labels */
+const HOUR_IDX: Record<string, number> = HOURS_12.reduce((acc, lbl, i) => {
+  acc[lbl] = i; return acc;
+}, {} as Record<string, number>);
+
+/** Only allow patching buckets up to and including the current local hour */
+function restrictPatchToElapsed(patch: any[] | undefined): any[] {
+  if (!Array.isArray(patch) || !patch.length) return [];
+  const nowHour = new Date().getHours(); // 0..23 (local)
+  return patch.filter((p) => {
+    const lbl = String((p as any)?.label ?? "");
+    const i = HOUR_IDX[lbl];
+    return i != null && i <= nowHour;
+  });
+}
+
 /** Replace/append by label; clamp to original length; then sort to 12AM→11PM */
 function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   const out = Array.isArray(base) ? base.map(b => ({ ...b })) : [];
@@ -197,7 +214,6 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   }
   const max = Array.isArray(base) && base.length ? base.length : out.length;
   while (out.length > max) out.shift();
-
   return normalizeTgvOrder(out);
 }
 
@@ -469,29 +485,40 @@ export async function connectWS(forceNew = false) {
           // Force range to a supported value
           (frame as any).range = normalizeRange((frame as any)?.range || state.range);
 
-          /* ----- TGV: normalize/patch partial arrays ----- */
+          /* ----- TGV: normalize/patch partial arrays (24h is patch-only, never replace) ----- */
           const baseTgv = base?.time_grouped_visits as any[] | undefined;
           let patchedTgv: any[] | undefined;
+          const r = (frame as any).range as RangeKey;
+
+          const asPatch = (arr: any[]) => applyTgvPatch(baseTgv, restrictPatchToElapsed(arr));
 
           if (Array.isArray(frameRaw.time_grouped_visits_delta) && frameRaw.time_grouped_visits_delta.length) {
-            patchedTgv = applyTgvPatch(baseTgv, frameRaw.time_grouped_visits_delta);
+            patchedTgv = r === "24h" && baseTgv ? asPatch(frameRaw.time_grouped_visits_delta) : applyTgvPatch(baseTgv, frameRaw.time_grouped_visits_delta);
           } else if (Array.isArray(frameRaw.tgv_delta) && frameRaw.tgv_delta.length) {
-            patchedTgv = applyTgvPatch(baseTgv, frameRaw.tgv_delta);
+            patchedTgv = r === "24h" && baseTgv ? asPatch(frameRaw.tgv_delta) : applyTgvPatch(baseTgv, frameRaw.tgv_delta);
           } else if (Array.isArray(frameRaw.tgv) && frameRaw.tgv.length) {
             const arr = frameRaw.tgv.map((x:any)=>({ label: String(x.label ?? ""), visitors: Number(x.visitors ?? 0), views: Number(x.views ?? 0) }));
-            patchedTgv = (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3)))
-              ? applyTgvPatch(baseTgv, arr)
-              : normalizeTgvOrder(arr);
+            if (r === "24h" && baseTgv) {
+              patchedTgv = asPatch(arr);
+            } else {
+              // treat tiny arrays as patches; otherwise normalize
+              patchedTgv = (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor((baseTgv?.length || 0) / 3)))
+                ? applyTgvPatch(baseTgv, arr)
+                : normalizeTgvOrder(arr);
+            }
           } else if (Array.isArray(frameRaw.time_grouped_visits) && frameRaw.time_grouped_visits.length) {
             const incoming = frameRaw.time_grouped_visits;
-            patchedTgv = (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor(baseTgv.length / 3)))
-              ? applyTgvPatch(baseTgv, incoming)
-              : normalizeTgvOrder(incoming);
+            if (r === "24h" && baseTgv) {
+              patchedTgv = asPatch(incoming);
+            } else {
+              patchedTgv = (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor((baseTgv?.length || 0) / 3)))
+                ? applyTgvPatch(baseTgv, incoming)
+                : normalizeTgvOrder(incoming);
+            }
           }
           if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
 
           /* ----- 24h count series: patch partial WS frames too ----- */
-          const r = (frame as any).range as RangeKey;
           const keys: (keyof DashboardPayload)[] = [
             "events_timeline","impressions_timeline","clicks_timeline",
             "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
