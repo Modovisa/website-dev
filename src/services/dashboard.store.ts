@@ -2,7 +2,7 @@
 // One-time REST seed per (siteId:range) + 100% WS stream thereafter.
 // - Never rotates 24h series after WS: axis is always 12 AM → 11 PM
 // - Normalizes WS/REST frames to fixed hour order and clamps future hours
-// - Merges partial TGV frames (time_grouped_visits_delta / tiny arrays)
+// - Merges partial frames: TGV (time_grouped_visits_delta / tiny arrays) + all 24h count series
 // - Watchdog pings WS for series if KPIs move but TGV stalls
 
 import { useSyncExternalStore } from "react";
@@ -191,6 +191,34 @@ function applyTgvPatch(base: any[] | undefined, patch: any[]): any[] {
   while (out.length > max) out.shift();
 
   return normalizeTgvOrder(out);
+}
+
+/* ---------- 24h count-series patching (prevents WS from zeroing future hours) ---------- */
+function applyCountPatch(base: any[] | undefined, patch: any[]): any[] {
+  // Normalize base to fixed axis; if missing, start from empty fixed axis.
+  const baseNorm = normalizeCountOrder(base) || HOURS_12.map(lbl => ({ label: lbl, count: 0 }));
+  const idxBy: Record<string, number> = {};
+  baseNorm.forEach((b: any, i: number) => { idxBy[String(b?.label ?? "")] = i; });
+
+  const out = baseNorm.map((b: any) => ({ ...b }));
+  for (const p of patch) {
+    const lbl = String((p as any)?.label ?? "");
+    if (!lbl) continue;
+    const j = idxBy[lbl];
+    if (j != null) out[j].count = Number((p as any)?.count ?? 0);
+  }
+  return out;
+}
+
+function maybePatchCounts(base: any[] | undefined, incoming: any[] | undefined, range: RangeKey): any[] | undefined {
+  if (!Array.isArray(incoming) || !incoming.length) return base;
+  if (range !== "24h") return incoming; // Only strict for 24h axis
+  if (Array.isArray(base) && base.length === 24 && incoming.length < Math.max(8, Math.floor(base.length / 2))) {
+    // Tiny/partial frame → patch into existing 24h axis
+    return applyCountPatch(base, incoming);
+  }
+  // Full-enough frame → normalize to fixed axis
+  return normalizeCountOrder(incoming);
 }
 
 /* ---------- Local-hour guards for 24h (prevents UTC overwrite) ---------- */
@@ -429,8 +457,11 @@ export async function connectWS(forceNew = false) {
             tgv?: any[];
           };
 
-          // Normalize/patch any partial TGV payload first
-          const baseTgv = (state.data as any)?.time_grouped_visits as any[] | undefined;
+          const base = state.data as any;
+          const frame: Partial<DashboardPayload> = { ...frameRaw };
+
+          /* ----- TGV: normalize/patch partial arrays ----- */
+          const baseTgv = base?.time_grouped_visits as any[] | undefined;
           let patchedTgv: any[] | undefined;
 
           if (Array.isArray(frameRaw.time_grouped_visits_delta) && frameRaw.time_grouped_visits_delta.length) {
@@ -438,29 +469,32 @@ export async function connectWS(forceNew = false) {
           } else if (Array.isArray(frameRaw.tgv_delta) && frameRaw.tgv_delta.length) {
             patchedTgv = applyTgvPatch(baseTgv, frameRaw.tgv_delta);
           } else if (Array.isArray(frameRaw.tgv) && frameRaw.tgv.length) {
-            const arr = frameRaw.tgv.map((x:any)=>({
-              label: String(x.label ?? ""),
-              visitors: Number(x.visitors ?? 0),
-              views: Number(x.views ?? 0),
-            }));
-            // treat tiny arrays as patches if much smaller than base
-            if (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
-              patchedTgv = applyTgvPatch(baseTgv, arr);
-            } else {
-              patchedTgv = normalizeTgvOrder(arr);
-            }
+            const arr = frameRaw.tgv.map((x:any)=>({ label: String(x.label ?? ""), visitors: Number(x.visitors ?? 0), views: Number(x.views ?? 0) }));
+            patchedTgv = (Array.isArray(baseTgv) && arr.length && arr.length < Math.max(6, Math.floor(baseTgv.length / 3)))
+              ? applyTgvPatch(baseTgv, arr)
+              : normalizeTgvOrder(arr);
           } else if (Array.isArray(frameRaw.time_grouped_visits) && frameRaw.time_grouped_visits.length) {
             const incoming = frameRaw.time_grouped_visits;
-            if (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor(baseTgv.length / 3))) {
-              patchedTgv = applyTgvPatch(baseTgv, incoming);
-            } else {
-              patchedTgv = normalizeTgvOrder(incoming);
+            patchedTgv = (Array.isArray(baseTgv) && incoming.length && incoming.length < Math.max(6, Math.floor(baseTgv.length / 3)))
+              ? applyTgvPatch(baseTgv, incoming)
+              : normalizeTgvOrder(incoming);
+          }
+          if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
+
+          /* ----- 24h count series: patch partial WS frames too ----- */
+          const r = ((frame as any)?.range as RangeKey) || state.range;
+          const keys: (keyof DashboardPayload)[] = [
+            "events_timeline","impressions_timeline","clicks_timeline",
+            "conversions_timeline","search_visitors_timeline","unique_visitors_timeline",
+          ];
+          for (const k of keys) {
+            const incoming = (frameRaw as any)[k];
+            if (incoming) {
+              (frame as any)[k] = maybePatchCounts((base as any)?.[k], incoming, r);
             }
           }
 
-          const frame: Partial<DashboardPayload> = { ...frameRaw };
-          if (patchedTgv) (frame as any).time_grouped_visits = patchedTgv;
-
+          // Merge frame
           const frameRange = (frame as any)?.range as RangeKey | undefined;
           let next = frameRange && frameRange !== state.range
             ? mergeKPIsOnly(state.data, frame)
