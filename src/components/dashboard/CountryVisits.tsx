@@ -57,8 +57,8 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
                   <img
                     src={`/assets/flags/4x3/${iso}.svg`}
                     alt={name}
-                    width={20}
-                    height={15}
+                    width={25}
+                    height={20}
                     className="rounded"
                     onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
                   />
