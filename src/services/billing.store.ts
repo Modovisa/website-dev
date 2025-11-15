@@ -1,10 +1,21 @@
-// This file has the complete fix with type enforcement and debugging
-// Copy this to: src/services/billing.store.ts
+// src/services/billing.store.ts
+/**
+ * Complete Billing Store - mirrors Bootstrap user-profile.js billing logic.
+ *
+ * Handles:
+ * - Loading pricing tiers / billing info / invoices
+ * - Stripe helper & embedded checkout
+ * - Upgrade / downgrade / cancel / reactivate
+ * - Card-update embedded flow
+ */
 
 import { apiBase } from "@/lib/api";
 import { secureFetch } from "@/lib/auth";
 
-/* Type definitions */
+/* ============================================
+   🌍 TYPES & INTERFACES
+   ============================================ */
+
 export type PricingTier = {
   id: number;
   plan_id: number;
@@ -59,6 +70,31 @@ export type SelectedTierMeta = {
   label: string;
 };
 
+type CheckoutContext = {
+  fromFree: boolean;
+  intervalChanged: boolean;
+};
+
+export type EmbeddedCheckoutResult =
+  | {
+      mode: "server_handled";
+      context: CheckoutContext;
+    }
+  | {
+      mode: "embedded_checkout";
+      checkout: any;
+      context: CheckoutContext;
+    }
+  | {
+      mode: "require_payment_update";
+      context: CheckoutContext;
+    }
+  | null;
+
+/* ============================================
+   🌍 BILLING STORE CLASS
+   ============================================ */
+
 class BillingStore {
   private pricingTiers: PricingTier[] = [];
   private selectedTierMeta: SelectedTierMeta = {
@@ -72,9 +108,15 @@ class BillingStore {
   private selectedPaymentMethod: { brand?: string; last4?: string } | null = null;
   private billingInfo: BillingInfo | null = null;
   private invoices: Invoice[] = [];
+
   private stripePromise: Promise<any> | null = null;
+
+  // Mirrors window.isFreePlanBeforeUpgrade in Bootstrap
   public isFreePlanBeforeUpgrade: boolean = false;
 
+  /* ============================================
+     📦 LOAD PRICING TIERS
+     ============================================ */
   async loadPricingTiers(): Promise<PricingTier[]> {
     try {
       const res = await secureFetch(`${apiBase()}/api/billing-pricing-tiers`);
@@ -88,18 +130,24 @@ class BillingStore {
     }
   }
 
+  /* ============================================
+     🔄 LOAD BILLING INFO
+     ============================================ */
   async loadUserBillingInfo(): Promise<BillingInfo> {
     try {
       const res = await secureFetch(`${apiBase()}/api/user-billing-info`);
       if (res.status === 401) throw new Error("Unauthorized");
       if (!res.ok) throw new Error("Failed to fetch billing info");
+
       const data = await res.json();
       this.billingInfo = data;
       this.selectedPaymentMethod = data.payment_method || null;
+
       this.isFreePlanBeforeUpgrade =
         (data.plan_name || "").toLowerCase().includes("free") ||
         data.price === 0 ||
         data.interval == null;
+
       return data;
     } catch (err) {
       console.error("❌ Failed to load billing info:", err);
@@ -107,6 +155,9 @@ class BillingStore {
     }
   }
 
+  /* ============================================
+     💳 LOAD INVOICES
+     ============================================ */
   async loadInvoices(): Promise<Invoice[]> {
     try {
       const res = await secureFetch(`${apiBase()}/api/user/invoices`);
@@ -120,9 +171,14 @@ class BillingStore {
     }
   }
 
+  /* ============================================
+     🎨 STRIPE HELPER
+     ============================================ */
+
   private async resolvePublishableKey(): Promise<string> {
     const envPk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
     if (envPk && envPk.trim()) return envPk;
+
     try {
       const res = await fetch(`${apiBase()}/api/stripe/runtime-config`, {
         cache: "no-store",
@@ -178,7 +234,16 @@ class BillingStore {
     return this.stripePromise;
   }
 
-  updateSelectedTier(tierId: number, interval: "month" | "year", tier: PricingTier, price: number) {
+  /* ============================================
+     💳 UPGRADE LOGIC
+     ============================================ */
+
+  updateSelectedTier(
+    tierId: number,
+    interval: "month" | "year",
+    tier: PricingTier,
+    price: number
+  ) {
     this.selectedTierMeta = {
       tier_id: tierId,
       plan_id: tier.plan_id,
@@ -191,15 +256,21 @@ class BillingStore {
 
   isDowngrade(tierId: number, interval: "month" | "year"): boolean {
     if (!this.billingInfo) return false;
+
     const currentPlanId = this.billingInfo.plan_id || 0;
     const currentInterval = this.billingInfo.interval || "month";
     const currentPrice = this.billingInfo.price || 0;
+
     const tier = this.pricingTiers.find((t) => t.id === tierId);
     if (!tier) return false;
-    const selectedPrice = interval === "year" ? Math.ceil(tier.monthly_price * 0.8) : tier.monthly_price;
+
+    const selectedPrice =
+      interval === "year" ? Math.ceil(tier.monthly_price * 0.8) : tier.monthly_price;
+
     const isSameTier = currentPlanId === tier.plan_id;
     const isSameInterval = currentInterval === interval;
     const isLowerPrice = selectedPrice < currentPrice;
+
     return isSameTier && isSameInterval && isLowerPrice;
   }
 
@@ -207,77 +278,92 @@ class BillingStore {
     return !!this.selectedPaymentMethod;
   }
 
-  /* CRITICAL: This is where the API call happens */
+  /* ============================================
+     💳 STRIPE EMBEDDED CHECKOUT
+     - Mirrors openStripeCustomCheckout
+     ============================================ */
+
   async openStripeEmbeddedCheckout(
     tierId: number,
-    interval: "month" | "year",  // ✅ MUST be exactly "month" or "year" (Bootstrap compatible)
+    interval: "month" | "year",
     previousPlanId: number = 0,
     previousInterval: "month" | "year" = "month",
     onComplete?: () => void,
     onError?: (error: Error) => void
-  ): Promise<any> {
+  ): Promise<EmbeddedCheckoutResult> {
     const stripe = await this.getStripe();
     if (!stripe) {
       const err = new Error("Stripe failed to load/initialize");
+      console.error("[billing] getStripe failed:", err);
       onError?.(err);
       throw err;
     }
 
-    // ✅ Assert interval is correct (Bootstrap only accepts "month" or "year")
-    if (interval !== "month" && interval !== "year") {
-      const err = new Error(`Invalid interval: "${interval}". Must be "month" or "year"`);
-      console.error(err);
-      onError?.(err);
-      throw err;
-    }
+    const overlay =
+      typeof document !== "undefined"
+        ? document.getElementById("react-billing-embedded-modal")
+        : null;
 
     try {
-      // 🐛 DEBUG: Log exactly what we're sending
-      console.log("🔍 [billing.store] Calling /api/stripe/embedded-session with:", {
-        tier_id: tierId,
-        interval,  // Should be "month" or "year" only
-        request_body: JSON.stringify({ tier_id: tierId, interval })
-      });
+      if (overlay) overlay.classList.remove("hidden");
 
-      // ✅ API call - matches Bootstrap exactly
       const res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier_id: tierId, interval }),  // interval is "month" or "year"
+        body: JSON.stringify({ tier_id: tierId, interval }),
       });
 
       const data = await res.json();
-      console.log("📦 [billing.store] Server response:", data);
+      console.log("📦 Server Response:", data);
 
       const fromFree = this.isFreePlanBeforeUpgrade === true;
       const intervalChanged = previousInterval !== interval;
+      const context: CheckoutContext = { fromFree, intervalChanged };
 
+      // Card-on-file upgrade handled fully server-side
       if (data.success || data.embedded_handled === true) {
+        if (overlay) overlay.classList.add("hidden");
         await this.loadUserBillingInfo();
         onComplete?.();
-        return { success: true, context: { fromFree, intervalChanged } };
+        return { mode: "server_handled", context };
       }
 
+      // Backend says: card must be re-authenticated
       if (data.require_payment_update) {
-        console.warn("⚠️ [billing.store] Card needs update");
-        throw new Error("Card declined or expired — user must re-authenticate payment");
+        console.warn("⚠️ Card needs update");
+        if (overlay) overlay.classList.add("hidden");
+        // DO NOT throw here – mirror Bootstrap "showUpdateCardModal()"
+        return { mode: "require_payment_update", context };
       }
 
       if (!res.ok || !data.clientSecret) {
-        throw new Error(data.error || "Missing Stripe clientSecret");
+        if (overlay) overlay.classList.add("hidden");
+        const err = new Error(data.error || "Missing Stripe clientSecret");
+        onError?.(err);
+        throw err;
       }
 
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: data.clientSecret,
         onComplete: async () => {
+          if (overlay) overlay.classList.add("hidden");
           await this.loadUserBillingInfo();
           onComplete?.();
         },
       });
 
-      return { checkout, context: { fromFree, intervalChanged } };
+      checkout.mount("#react-billing-stripe-element");
+
+      const debugEl =
+        typeof document !== "undefined"
+          ? document.getElementById("react-billing-stripe-debug")
+          : null;
+      if (debugEl) debugEl.textContent = "";
+
+      return { mode: "embedded_checkout", checkout, context };
     } catch (err) {
-      console.error("❌ [billing.store] Stripe checkout failed:", err);
+      console.error("❌ Stripe checkout failed:", err);
+      if (overlay) overlay.classList.add("hidden");
       onError?.(err as Error);
       throw err;
     }
@@ -288,49 +374,86 @@ class BillingStore {
     interval: "month" | "year",
     currentPlanId: number,
     currentInterval: "month" | "year"
-  ): Promise<any> {
-    return this.openStripeEmbeddedCheckout(tierId, interval, currentPlanId, currentInterval);
+  ) {
+    return this.openStripeEmbeddedCheckout(
+      tierId,
+      interval,
+      currentPlanId,
+      currentInterval
+    );
   }
+
+  /* ============================================
+     💳 UPDATE CARD (embedded)
+     - Mirrors openStripeUpdateCardSession; no throws
+     ============================================ */
 
   async openStripeUpdateCardSession(
     onComplete?: () => void,
     onError?: (error: Error) => void
-  ): Promise<any> {
+  ): Promise<{ mode: "update_card"; checkout: any } | null> {
     const stripe = await this.getStripe();
     if (!stripe) {
       const err = new Error("Stripe failed to load");
+      console.error("[billing] getStripe failed (update-card):", err);
       onError?.(err);
-      throw err;
+      return null;
     }
+
+    const overlay =
+      typeof document !== "undefined"
+        ? document.getElementById("react-billing-updatecard-modal")
+        : null;
+
     try {
+      if (overlay) overlay.classList.remove("hidden");
+
       const res = await secureFetch(`${apiBase()}/api/stripe/update-payment-method`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      const data = await res.json();
+
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.clientSecret) {
-        throw new Error(data.error || "Missing clientSecret");
+        if (overlay) overlay.classList.add("hidden");
+        const err = new Error(data.error || "Missing clientSecret");
+        console.error("❌ Failed to launch update card session:", err);
+        onError?.(err);
+        return null;
       }
+
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: data.clientSecret,
         onComplete: async () => {
+          if (overlay) overlay.classList.add("hidden");
           await this.loadUserBillingInfo();
           onComplete?.();
         },
       });
-      return checkout;
+
+      checkout.mount("#react-billing-updatecard-element");
+      return { mode: "update_card", checkout };
     } catch (err) {
       console.error("❌ Failed to launch update card session:", err);
+      if (overlay) overlay.classList.add("hidden");
       onError?.(err as Error);
-      throw err;
+      return null;
     }
   }
 
+  /* ============================================
+     💳 CANCEL / REACTIVATE / DOWNGRADE
+     ============================================ */
+
   async cancelSubscription(): Promise<{ success: boolean }> {
     try {
-      const res = await secureFetch(`${apiBase()}/api/cancel-subscription`, { method: "POST" });
+      const res = await secureFetch(`${apiBase()}/api/cancel-subscription`, {
+        method: "POST",
+      });
       const data = await res.json();
-      if (data.success) await this.loadUserBillingInfo();
+      if (data.success) {
+        await this.loadUserBillingInfo();
+      }
       return data;
     } catch (err) {
       console.error("❌ Cancel error:", err);
@@ -340,7 +463,9 @@ class BillingStore {
 
   async reactivateSubscription(): Promise<{ success: boolean }> {
     try {
-      const res = await secureFetch(`${apiBase()}/api/reactivate-subscription`, { method: "POST" });
+      const res = await secureFetch(`${apiBase()}/api/reactivate-subscription`, {
+        method: "POST",
+      });
       const data = await res.json();
       if (data.success) {
         setTimeout(async () => {
@@ -361,7 +486,9 @@ class BillingStore {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier_id: tierId, interval }),
       });
+
       const data = await res.json();
+
       if (res.ok && (data.success || data.message?.includes("successful"))) {
         await this.loadUserBillingInfo();
         return;
@@ -376,15 +503,24 @@ class BillingStore {
 
   async cancelDowngrade(): Promise<{ success: boolean }> {
     try {
-      const res = await secureFetch(`${apiBase()}/api/cancel-downgrade`, { method: "POST" });
+      const res = await secureFetch(`${apiBase()}/api/cancel-downgrade`, {
+        method: "POST",
+      });
+
       const data = await res.json();
-      if (data.success) await this.loadUserBillingInfo();
+      if (data.success) {
+        await this.loadUserBillingInfo();
+      }
       return data;
     } catch (err) {
       console.error("❌ Cancel downgrade error:", err);
       throw err;
     }
   }
+
+  /* ============================================
+     📊 GETTERS & HELPERS
+     ============================================ */
 
   getPricingTiers(): PricingTier[] {
     return this.pricingTiers;
@@ -426,7 +562,11 @@ class BillingStore {
   }
 
   findTierByEvents(events: number): PricingTier | null {
-    return this.pricingTiers.find((tier) => events >= tier.min_events && events <= tier.max_events) || null;
+    return (
+      this.pricingTiers.find(
+        (tier) => events >= tier.min_events && events <= tier.max_events
+      ) || null
+    );
   }
 
   calculatePrice(tier: PricingTier, interval: "month" | "year"): number {

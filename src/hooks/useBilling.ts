@@ -1,33 +1,34 @@
 // src/hooks/useBilling.ts
 /**
- * Simplified React Hook for Billing
- * Uses centralized billing.store.ts for all logic
+ * React hook wrapper around billing.store.ts
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingStore } from "@/services/billing.store";
-import type { BillingInfo, PricingTier, Invoice } from "@/services/billing.store";
+import type {
+  BillingInfo,
+  PricingTier,
+  Invoice,
+  EmbeddedCheckoutResult,
+} from "@/services/billing.store";
 
 export type { BillingInfo, PricingTier, Invoice };
 
 export function useBilling() {
   const qc = useQueryClient();
 
-  // Load billing info
   const infoQ = useQuery({
     queryKey: ["billing:info"],
     queryFn: () => billingStore.loadUserBillingInfo(),
     staleTime: 30_000,
   });
 
-  // Load pricing tiers
   const tiersQ = useQuery({
     queryKey: ["billing:tiers"],
     queryFn: () => billingStore.loadPricingTiers(),
     staleTime: 60_000,
   });
 
-  // Load invoices
   const invoicesQ = useQuery({
     queryKey: ["billing:invoices"],
     queryFn: () => billingStore.loadInvoices(),
@@ -35,14 +36,14 @@ export function useBilling() {
   });
 
   /* ========================================
-     ACTIONS - All logic delegated to store
+     ACTIONS
      ======================================== */
 
   const startEmbeddedCheckout = async (
     tierId: number,
     interval: "month" | "year",
     onSuccess?: () => void
-  ) => {
+  ): Promise<EmbeddedCheckoutResult> => {
     const currentPlanId = infoQ.data?.plan_id || 0;
     const currentInterval = infoQ.data?.interval || "month";
 
@@ -52,30 +53,20 @@ export function useBilling() {
       currentPlanId,
       currentInterval,
       async () => {
-        // Refresh data after success
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["billing:info"] }),
           qc.invalidateQueries({ queryKey: ["billing:invoices"] }),
         ]);
         onSuccess?.();
-      },
-      (error) => {
-        // Error is thrown by store, caller handles it
-        throw error;
       }
     );
   };
 
   const startUpdateCard = async (onSuccess?: () => void) => {
-    return billingStore.openStripeUpdateCardSession(
-      async () => {
-        await qc.invalidateQueries({ queryKey: ["billing:info"] });
-        onSuccess?.();
-      },
-      (error) => {
-        throw error;
-      }
-    );
+    return billingStore.openStripeUpdateCardSession(async () => {
+      await qc.invalidateQueries({ queryKey: ["billing:info"] });
+      onSuccess?.();
+    });
   };
 
   const cancelSubscription = async () => {
@@ -115,11 +106,10 @@ export function useBilling() {
   };
 
   /* ========================================
-     RETURN VALUES
+     RETURN
      ======================================== */
 
   return {
-    // State
     loading: infoQ.isLoading || tiersQ.isLoading || invoicesQ.isLoading,
     info: infoQ.data,
     tiers: tiersQ.data || [],
@@ -128,7 +118,6 @@ export function useBilling() {
     isFreeForever: billingStore.isFreeForever(),
     paymentMethod: billingStore.getPaymentMethod(),
 
-    // Actions
     startEmbeddedCheckout,
     startUpdateCard,
     cancelSubscription,

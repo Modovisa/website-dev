@@ -60,7 +60,7 @@ export default function BillingAndPlans() {
 
           {info && (
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* Left block */}
+              {/* LEFT BLOCK */}
               <div>
                 <div className="mb-4">
                   <h6 className="mb-1">
@@ -75,7 +75,6 @@ export default function BillingAndPlans() {
                       <>Your Current Plan is {info.plan_name}</>
                     )}
                   </h6>
-                  <p className="text-muted-foreground" />
                 </div>
 
                 <div className="mb-4">
@@ -130,7 +129,7 @@ export default function BillingAndPlans() {
                 )}
               </div>
 
-              {/* Right block */}
+              {/* RIGHT BLOCK */}
               <div>
                 {!isFreePlan && (
                   <>
@@ -203,7 +202,7 @@ export default function BillingAndPlans() {
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* ACTIONS */}
               <div className="col-span-full mt-2 flex flex-wrap gap-3">
                 {!isFreeForever && (
                   <Button onClick={() => setShowUpgrade(true)} className="mr-2">
@@ -241,10 +240,13 @@ export default function BillingAndPlans() {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      // Standalone "Update Card" entry point
-                      startUpdateCard().catch((err) => {
-                        console.error("[billing] startUpdateCard error:", err);
-                        alert("We couldn't open the card update flow. Please try again.");
+                      startUpdateCard().then((res) => {
+                        if (!res) {
+                          alert(
+                            "We tried to start the card update flow, but the API route for updating your card is returning an error.\n\n" +
+                              "You’ll need to update your card from the classic billing page or fix the backend route `/api/stripe/update-payment-method`."
+                          );
+                        }
                       });
                     }}
                   >
@@ -266,36 +268,36 @@ export default function BillingAndPlans() {
         currentPlanAmount={currentPlanAmount}
         currentInfo={info}
         onUpgrade={({ tierId, interval }) => {
-          // Start checkout. We'll close the Upgrade modal only after
-          // Stripe succeeds OR if we need to switch to the update-card flow.
           startEmbeddedCheckout(tierId, interval, () => {
             setShowUpgrade(false);
           })
-            .catch((err: any) => {
-              console.error("[billing] startEmbeddedCheckout error:", err);
+            .then((result) => {
+              if (!result) return;
 
-              // Mirror Bootstrap: when BE says card declined/expired,
-              // close the Upgrade modal and open the update-card embedded checkout.
-              if (err?.message?.includes("Card declined or expired")) {
+              if (result.mode === "require_payment_update") {
+                // Same semantics as Bootstrap: card needs to be refreshed
                 setShowUpgrade(false);
 
-                startUpdateCard().catch((updateErr: any) => {
-                  console.error("[billing] startUpdateCard error:", updateErr);
-                  alert(
-                    "Your card needs to be updated, but we couldn't start the update flow. Please try again."
-                  );
+                startUpdateCard().then((updateRes) => {
+                  if (!updateRes) {
+                    alert(
+                      "Your card needs to be updated before upgrading, " +
+                        "but the `/api/stripe/update-payment-method` endpoint is returning 404.\n\n" +
+                        "React is doing the same thing as the Bootstrap page. " +
+                        "To actually fix this you need that backend route to exist or use the classic billing page where it does."
+                    );
+                  }
                 });
-
-                return;
               }
-
-              // Any other error – simple fallback
+            })
+            .catch((err: any) => {
+              console.error("[billing] startEmbeddedCheckout error:", err);
               alert("We couldn't start the upgrade. Please try again.");
             });
         }}
       />
 
-      {/* Embedded Stripe container – lives outside the upgrade modal */}
+      {/* Embedded Stripe container */}
       <div
         id="react-billing-embedded-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
@@ -309,7 +311,7 @@ export default function BillingAndPlans() {
         </div>
       </div>
 
-      {/* Update-card modal container */}
+      {/* Update-card container */}
       <div
         id="react-billing-updatecard-modal"
         className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
