@@ -6,10 +6,27 @@ import { Navbar } from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowRight, Eye, BarChart2, Zap, Shield, Globe, Clock, Package, Briefcase, Check } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  ArrowRight,
+  Eye,
+  BarChart2,
+  Zap,
+  Shield,
+  Globe,
+  Clock,
+  Package,
+  Briefcase,
+  Check,
+} from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { secureFetch } from "@/lib/auth";
 
 // TypeScript declaration for Gradient
 declare global {
@@ -18,51 +35,150 @@ declare global {
   }
 }
 
+type PublicPricingTier = {
+  id: number;
+  name: string;
+  min_events: number;
+  max_events: number;
+  monthly_price: number;
+  stripe_price_id_month?: string | null;
+  stripe_price_id_year?: string | null;
+};
+
+const SNAP_STEPS = [
+  25_000,
+  100_000,
+  250_000,
+  500_000,
+  1_000_000,
+  2_000_000,
+  5_000_000,
+  10_000_000,
+  15_000_000,
+  20_000_000,
+];
+
+const INTENT_KEY = "intent_upgrade";
+
+// Fallback in case the public tiers endpoint is unavailable.
+// Only used as a safety net; real environments should rely on the API.
+const FALLBACK_PAID_TIERS: PublicPricingTier[] = [
+  { id: 1, name: "Pro 25k", min_events: 25_000, max_events: 25_000, monthly_price: 14 },
+  { id: 2, name: "Pro 50k", min_events: 50_000, max_events: 50_000, monthly_price: 24 },
+  { id: 3, name: "Pro 100k", min_events: 100_000, max_events: 100_000, monthly_price: 44 },
+  { id: 4, name: "Pro 250k", min_events: 250_000, max_events: 250_000, monthly_price: 99 },
+  { id: 5, name: "Pro 500k", min_events: 500_000, max_events: 500_000, monthly_price: 179 },
+];
+
 const Index = () => {
   const [isYearly, setIsYearly] = useState(false);
-  const [eventTier, setEventTier] = useState(0);
+  const [eventIndex, setEventIndex] = useState(0); // index into SNAP_STEPS
+  const [tiers, setTiers] = useState<PublicPricingTier[]>([]);
+  const [tiersLoading, setTiersLoading] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gradientInitialized = useRef(false);
-  
+
   // Initialize gradient - exactly like Bootstrap version
   useEffect(() => {
     if (gradientInitialized.current) return;
-    
+
     const initGradient = () => {
-      if (typeof window.Gradient !== 'undefined' && canvasRef.current) {
+      if (typeof window.Gradient !== "undefined" && canvasRef.current) {
         try {
           const gradient = new window.Gradient();
-          gradient.initGradient('.gradient-canvas');
+          gradient.initGradient(".gradient-canvas");
           gradientInitialized.current = true;
-          console.log('✅ Gradient initialized');
+          console.log("✅ Gradient initialized");
         } catch (error) {
-          console.error('❌ Gradient init error:', error);
+          console.error("❌ Gradient init error:", error);
         }
       } else {
-        console.log('Waiting for Gradient...');
+        console.log("Waiting for Gradient...");
         setTimeout(initGradient, 100);
       }
     };
-    
+
     initGradient();
   }, []);
-  
-  // Pricing tiers based on events
-  const pricingTiers = [
-    { events: "25,000", monthlyPrice: 14, yearlyPrice: 11 },
-    { events: "50,000", monthlyPrice: 24, yearlyPrice: 19 },
-    { events: "100,000", monthlyPrice: 44, yearlyPrice: 35 },
-    { events: "250,000", monthlyPrice: 99, yearlyPrice: 79 },
-    { events: "500,000", monthlyPrice: 179, yearlyPrice: 143 },
-  ];
-  
-  const currentTier = pricingTiers[eventTier];
-  
+
+  // Load pricing tiers from the public-safe endpoint (mirrors Bootstrap logic)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTiers() {
+      setTiersLoading(true);
+      try {
+        const res = await secureFetch("/api/billing-pricing-tiers?public=1");
+        if (!res.ok) {
+          console.error("[landing] failed to fetch pricing tiers:", res.status);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          setTiers(data);
+        }
+      } catch (err) {
+        console.error("[landing] error fetching pricing tiers:", err);
+      } finally {
+        if (!cancelled) setTiersLoading(false);
+      }
+    }
+
+    loadTiers();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const paidTiers = useMemo<PublicPricingTier[]>(() => {
+    const source = tiers.length ? tiers : FALLBACK_PAID_TIERS;
+    return source.filter((t) => (t.monthly_price ?? 0) > 0);
+  }, [tiers]);
+
+  const selectedEvents = SNAP_STEPS[eventIndex] ?? SNAP_STEPS[0];
+
+  const matchedTier = useMemo<PublicPricingTier | null>(() => {
+    if (!paidTiers.length) return null;
+    const tier =
+      paidTiers.find(
+        (t) =>
+          typeof t.min_events === "number" &&
+          typeof t.max_events === "number" &&
+          selectedEvents >= t.min_events &&
+          selectedEvents <= t.max_events
+      ) ?? paidTiers[0];
+    return tier || null;
+  }, [paidTiers, selectedEvents]);
+
+  const effectiveMonthlyPrice = useMemo(() => {
+    if (!matchedTier) return 0;
+    const base = matchedTier.monthly_price ?? 0;
+    return isYearly ? Math.ceil(base * 0.8) : base;
+  }, [matchedTier, isYearly]);
+
+  // Keep a simple upgrade intent in localStorage, same key as Bootstrap
+  useEffect(() => {
+    if (!matchedTier || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        INTENT_KEY,
+        JSON.stringify({
+          tier_id: matchedTier.id,
+          interval: isYearly ? "year" : "month",
+        })
+      );
+    } catch (err) {
+      console.warn("[landing] unable to persist pricing intent", err);
+    }
+  }, [matchedTier, isYearly]);
+
   const features = [
     {
       icon: Eye,
       title: "Real-Time Tracking",
-      description: "Watch visitors navigate your site in real-time with detailed session recordings.",
+      description:
+        "Watch visitors navigate your site in real-time with detailed session recordings.",
     },
     {
       icon: BarChart2,
@@ -82,29 +198,35 @@ const Index = () => {
     {
       icon: Globe,
       title: "Global Coverage",
-      description: "Track visitors from anywhere in the world with accurate geolocation.",
+      description:
+        "Track visitors from anywhere in the world with accurate geolocation.",
     },
     {
       icon: Clock,
       title: "Session Replay",
-      description: "Replay user sessions to understand exactly how visitors interact.",
+      description:
+        "Replay user sessions to understand exactly how visitors interact.",
     },
   ];
+
+  const eventsLabel = `${selectedEvents.toLocaleString()} events / mo`;
+
+  const isPriceLoaded = !!matchedTier && !tiersLoading;
 
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden flex items-center">
         {/* Canvas directly in section - just like Bootstrap */}
-        <canvas 
+        <canvas
           ref={canvasRef}
-          className="gradient-canvas" 
-          style={{ height: '100%', width: '100%' }}
+          className="gradient-canvas"
+          style={{ height: "100%", width: "100%" }}
         />
-        
+
         {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
-        
+
         {/* Content container - positioned above the canvas */}
         <div className="container relative mx-auto px-4 pt-6 pb-20 z-10">
           {/* Navbar Component */}
@@ -119,11 +241,15 @@ const Index = () => {
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-white/80 max-w-2xl mx-auto">
-              Track visitors, analyze behavior, and grow your business with beautiful, actionable insights.
+              Track visitors, analyze behavior, and grow your business with beautiful,
+              actionable insights.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
               <Link to="/register">
-                <Button size="lg" className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg">
+                <Button
+                  size="lg"
+                  className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg"
+                >
                   Start Free Trial
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
@@ -144,7 +270,8 @@ const Index = () => {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Everything you need to grow</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Powerful features designed for teams who want to understand their users better.
+              Powerful features designed for teams who want to understand their users
+              better.
             </p>
           </div>
 
@@ -193,7 +320,11 @@ const Index = () => {
                     <Check className="h-3 w-3 text-primary" />
                   </div>
                   <p className="text-muted-foreground">
-                    Up to <span className="font-semibold text-foreground">3,000 events</span> per month
+                    Up to{" "}
+                    <span className="font-semibold text-foreground">
+                      3,000 events
+                    </span>{" "}
+                    per month
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
@@ -224,43 +355,30 @@ const Index = () => {
                   <Briefcase className="h-10 w-10 text-primary" />
                 </div>
                 <h3 className="text-3xl font-bold mb-6">Pro</h3>
-                
-                {/* Monthly/Yearly Toggle */}
-                <div className="flex items-center gap-3 mb-6">
-                  <span className={`text-sm ${!isYearly ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                    Monthly
-                  </span>
-                  <Switch
-                    checked={isYearly}
-                    onCheckedChange={setIsYearly}
-                  />
-                  <span className={`text-sm ${isYearly ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                    Yearly
-                  </span>
-                  {isYearly && (
-                    <Badge variant="secondary" className="text-xs">
-                      Save 20%
-                    </Badge>
-                  )}
-                </div>
 
                 {/* Monthly/Yearly Toggle */}
                 <div className="flex items-center gap-3 mb-6">
-                  <span className={`text-sm ${!isYearly ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                  <span
+                    className={`text-sm ${
+                      !isYearly ? "font-semibold text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
                     Monthly
                   </span>
-                  <Switch
-                    checked={isYearly}
-                    onCheckedChange={setIsYearly}
-                  />
-                  <span className={`text-sm ${isYearly ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                  <Switch checked={isYearly} onCheckedChange={setIsYearly} />
+                  <span
+                    className={`text-sm ${
+                      isYearly ? "font-semibold text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
                     Yearly
                   </span>
-                  {isYearly && (
-                    <Badge variant="secondary" className="text-xs">
-                      Save 20%
-                    </Badge>
-                  )}
+                  <Badge
+                    variant={isYearly ? "default" : "secondary"}
+                    className="text-xs"
+                  >
+                    Save 20%
+                  </Badge>
                 </div>
 
                 {/* Price Slider */}
@@ -268,29 +386,58 @@ const Index = () => {
                   <div className="relative mb-4">
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2">
                       <div className="bg-foreground text-background px-3 py-1 rounded text-xs font-medium whitespace-nowrap">
-                        {currentTier.events} events
+                        {eventsLabel}
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="border rounded-lg p-4 bg-background">
                     <Slider
-                      value={[eventTier]}
-                      onValueChange={(value) => setEventTier(value[0])}
-                      max={pricingTiers.length - 1}
+                      value={[eventIndex]}
+                      onValueChange={(value) => {
+                        const idx = Array.isArray(value) ? value[0] ?? 0 : 0;
+                        setEventIndex(Math.min(Math.max(idx, 0), SNAP_STEPS.length - 1));
+                      }}
+                      max={SNAP_STEPS.length - 1}
                       step={1}
                       className="w-full mb-4"
                     />
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">
-                        {currentTier.events} <span className="font-medium">events / mo</span>
+                        {eventsLabel.replace(" / mo", "")}{" "}
+                        <span className="font-medium">events / mo</span>
                       </span>
-                      <span className="text-lg font-bold">
-                        ${isYearly ? currentTier.yearlyPrice : currentTier.monthlyPrice} <span className="text-sm text-muted-foreground font-normal">/ mo</span>
+                      <span className="text-lg font-bold flex items-center gap-2">
+                        {isPriceLoaded && isYearly && matchedTier ? (
+                          <>
+                            <span className="mr-1 line-through opacity-60">
+                              ${matchedTier.monthly_price}
+                            </span>
+                            <span>
+                              ${effectiveMonthlyPrice}
+                              <span className="text-sm text-muted-foreground font-normal">
+                                {" "}
+                                / mo
+                              </span>
+                            </span>
+                          </>
+                        ) : isPriceLoaded ? (
+                          <>
+                            ${effectiveMonthlyPrice}
+                            <span className="text-sm text-muted-foreground font-normal">
+                              {" "}
+                              / mo
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Contact us
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>
-                  
+
                   {isYearly && (
                     <p className="text-xs text-muted-foreground mt-3 text-center">
                       Billed annually
@@ -315,7 +462,25 @@ const Index = () => {
               </div>
 
               <Link to="/register" className="block">
-                <Button className="w-full h-12 text-base" size="lg">
+                <Button
+                  className="w-full h-12 text-base"
+                  size="lg"
+                  onClick={() => {
+                    // Make sure the latest choice is persisted before navigation
+                    if (!matchedTier || typeof window === "undefined") return;
+                    try {
+                      window.localStorage.setItem(
+                        INTENT_KEY,
+                        JSON.stringify({
+                          tier_id: matchedTier.id,
+                          interval: isYearly ? "year" : "month",
+                        })
+                      );
+                    } catch {
+                      // non-fatal
+                    }
+                  }}
+                >
                   Get Started
                 </Button>
               </Link>
@@ -328,17 +493,21 @@ const Index = () => {
       <section className="py-24 gradient-primary relative overflow-hidden">
         {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
-        
+
         {/* Content - positioned above the canvas */}
         <div className="container relative mx-auto px-4 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to get started?
           </h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
-            Join thousands of teams already using Modovisa to understand their users better.
+            Join thousands of teams already using Modovisa to understand their users
+            better.
           </p>
           <Link to="/register">
-            <Button size="lg" className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg">
+            <Button
+              size="lg"
+              className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg"
+            >
               Start Free Trial
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -350,52 +519,100 @@ const Index = () => {
       <section className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center mb-12">
-            <Badge variant="secondary" className="mb-3">FAQ</Badge>
-            <h2 id="faq-heading" className="text-4xl md:text-5xl font-bold mb-3">Frequently asked questions</h2>
-            <p className="text-muted-foreground text-lg">Answers to commonly asked questions</p>
+            <Badge variant="secondary" className="mb-3">
+              FAQ
+            </Badge>
+            <h2
+              id="faq-heading"
+              className="text-4xl md:text-5xl font-bold mb-3"
+            >
+              Frequently asked questions
+            </h2>
+            <p className="text-muted-foreground text-lg">
+              Answers to commonly asked questions
+            </p>
           </div>
 
           <div className="max-w-3xl mx-auto">
             <Accordion type="single" collapsible className="space-y-3">
-              <AccordionItem value="item-1" className="rounded-2xl border bg-card px-6">
-                <AccordionTrigger className="py-5 text-left">What is considered an “event”?</AccordionTrigger>
+              <AccordionItem
+                value="item-1"
+                className="rounded-2xl border bg-card px-6"
+              >
+                <AccordionTrigger className="py-5 text-left">
+                  What is considered an “event”?
+                </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  An event is any tracked action taken by a visitor on your website—such as a page view, button click, form submission, or cart activity. You can define custom events to capture the interactions that matter most to your business.
+                  An event is any tracked action taken by a visitor on your
+                  website—such as a page view, button click, form submission, or
+                  cart activity. You can define custom events to capture the
+                  interactions that matter most to your business.
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-2" className="rounded-2xl border bg-card px-6">
-                <AccordionTrigger className="py-5 text-left">How is this different from Google Analytics?</AccordionTrigger>
+              <AccordionItem
+                value="item-2"
+                className="rounded-2xl border bg-card px-6"
+              >
+                <AccordionTrigger className="py-5 text-left">
+                  How is this different from Google Analytics?
+                </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Modovisa focuses on clarity and actionability with privacy-first insights, beautiful visualizations, and session replay—without the complexity of traditional analytics tools.
+                  Modovisa focuses on clarity and actionability with privacy-first
+                  insights, beautiful visualizations, and session replay—without the
+                  complexity of traditional analytics tools.
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-3" className="rounded-2xl border bg-card px-6">
-                <AccordionTrigger className="py-5 text-left">Do I need to install any code to get started?</AccordionTrigger>
+              <AccordionItem
+                value="item-3"
+                className="rounded-2xl border bg-card px-6"
+              >
+                <AccordionTrigger className="py-5 text-left">
+                  Do I need to install any code to get started?
+                </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Yes, you’ll add a lightweight script to your site. It’s optimized for performance and won’t slow down your pages.
+                  Yes, you’ll add a lightweight script to your site. It’s optimized for
+                  performance and won’t slow down your pages.
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-4" className="rounded-2xl border bg-card px-6">
-                <AccordionTrigger className="py-5 text-left">Is there a free plan available?</AccordionTrigger>
+              <AccordionItem
+                value="item-4"
+                className="rounded-2xl border bg-card px-6"
+              >
+                <AccordionTrigger className="py-5 text-left">
+                  Is there a free plan available?
+                </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Absolutely. Our free plan includes generous limits so you can explore the product and get value before upgrading.
+                  Absolutely. Our free plan includes generous limits so you can explore
+                  the product and get value before upgrading.
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-5" className="rounded-2xl border bg-card px-6">
-                <AccordionTrigger className="py-5 text-left">Will using this tool affect my website's load time?</AccordionTrigger>
+              <AccordionItem
+                value="item-5"
+                className="rounded-2xl border bg-card px-6"
+              >
+                <AccordionTrigger className="py-5 text-left">
+                  Will using this tool affect my website&apos;s load time?
+                </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  No—our script is tiny, loads asynchronously, and is designed to have negligible impact on performance.
+                  No—our script is tiny, loads asynchronously, and is designed to have
+                  negligible impact on performance.
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-6" className="rounded-2xl border bg-card px-6">
-                <AccordionTrigger className="py-5 text-left">Can I track custom events like form submissions or product clicks?</AccordionTrigger>
+              <AccordionItem
+                value="item-6"
+                className="rounded-2xl border bg-card px-6"
+              >
+                <AccordionTrigger className="py-5 text-left">
+                  Can I track custom events like form submissions or product clicks?
+                </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Yes, you can define and track custom events to measure the interactions that matter most to your business.
+                  Yes, you can define and track custom events to measure the
+                  interactions that matter most to your business.
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
