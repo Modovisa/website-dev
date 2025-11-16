@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
-import type { GeoCityPoint } from "@/services/dashboardService";
+import type { GeoCityPoint } from "@/services/homepage-checkout.store";
 
 type CountryRow = { country: string; count: number };
 type Props = {
