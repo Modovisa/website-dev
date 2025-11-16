@@ -109,7 +109,7 @@ function getApiBase(): string {
   // 3) Heuristic: dev host → dev API
   const host = window.location.hostname;
   if (host.startsWith("dev.")) {
-    return "https://dev-api.modovisa.com";
+    return "https://api.modovisa.com";
   }
 
   // 4) Fallback: prod API
