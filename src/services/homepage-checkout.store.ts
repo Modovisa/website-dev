@@ -468,6 +468,8 @@ async function createEmbeddedSession(intent: BillingIntent) {
  * So we create a card container and an inner empty div (`#mv-stripe-embedded-root`)
  * just for Stripe to mount into.
  */
+// Replace ONLY this function in src/services/homepage-checkout.store.ts
+
 async function mountEmbeddedCheckoutOverlay(
   clientSecret: string,
   opts?: { onComplete?: () => void },
@@ -486,39 +488,50 @@ async function mountEmbeddedCheckoutOverlay(
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
   overlay.style.zIndex = "9999";
-  overlay.style.background = "rgba(0, 0, 0, 0.45)";
+  overlay.style.background = "rgba(0, 0, 0, 0.6)";
   overlay.style.display = "flex";
-  overlay.style.alignItems = "center";
+  overlay.style.alignItems = "flex-start"; // top-ish, not vertically centered
   overlay.style.justifyContent = "center";
+  overlay.style.overflowY = "auto"; // ✅ scroll on short screens
+  overlay.style.padding = "24px 12px";
 
-  // Card container (visual frame)
+  // Card container (visual frame for Stripe)
   const card = document.createElement("div");
   card.style.position = "relative";
-  card.style.width = "min(480px, 100%)";
+  card.style.width = "min(520px, 100%)";
   card.style.maxWidth = "100%";
-  card.style.background = "#0b0b0f";
-  card.style.borderRadius = "16px";
-  card.style.padding = "24px";
-  card.style.boxShadow = "0 24px 60px rgba(0, 0, 0, 0.65)";
+  card.style.maxHeight = "100%";
   card.style.boxSizing = "border-box";
+  card.style.display = "flex";
+  card.style.flexDirection = "column";
+  card.style.margin = "0 auto 24px auto";
+  card.style.boxShadow = "0 24px 60px rgba(0, 0, 0, 0.75)";
 
-  // Close button
+  // Close button (always clearly visible)
   const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
   closeBtn.textContent = "×";
   closeBtn.style.position = "absolute";
-  closeBtn.style.top = "16px";
-  closeBtn.style.right = "16px";
-  closeBtn.style.fontSize = "24px";
-  closeBtn.style.background = "transparent";
-  closeBtn.style.color = "#ffffff";
-  closeBtn.style.border = "none";
+  closeBtn.style.top = "10px";
+  closeBtn.style.right = "14px";
+  closeBtn.style.fontSize = "20px";
+  closeBtn.style.lineHeight = "1";
+  closeBtn.style.background = "rgba(15, 23, 42, 0.95)";
+  closeBtn.style.borderRadius = "9999px";
+  closeBtn.style.padding = "2px 10px";
+  closeBtn.style.border = "1px solid rgba(148, 163, 184, 0.5)";
+  closeBtn.style.color = "#e5e7eb";
   closeBtn.style.cursor = "pointer";
+  closeBtn.style.zIndex = "2";
 
   // Empty root for Stripe (must be childless at mount time)
   const checkoutRoot = document.createElement("div");
   checkoutRoot.id = "mv-stripe-embedded-root";
-  checkoutRoot.style.minHeight = "420px"; // just to avoid flicker while it loads
+  checkoutRoot.style.minHeight = "480px"; // avoids weird squish on load
   checkoutRoot.style.width = "100%";
+  checkoutRoot.style.background = "#ffffff"; // ✅ white box, gets rid of black border look
+  checkoutRoot.style.borderRadius = "20px";
+  checkoutRoot.style.overflow = "hidden";
 
   // Wire everything together
   card.appendChild(closeBtn);
@@ -551,6 +564,7 @@ async function mountEmbeddedCheckoutOverlay(
   // Important: pass the DOM node, not a selector string
   checkout.mount(checkoutRoot);
 }
+
 
 /* ---------------- Intent → SelectedTierMeta (for logging/debug) ---------------- */
 
