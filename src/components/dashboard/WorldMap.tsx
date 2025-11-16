@@ -5,6 +5,7 @@ import * as echarts from "echarts";
 import type { GeoCityPoint } from "@/services/homepage-checkout.store";
 
 type CountryRow = { country: string; count: number };
+
 type Props = {
   countries: CountryRow[];
   cities?: GeoCityPoint[];
@@ -53,16 +54,29 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
       setReady(true);
 
       const maxVal = Math.max(10, ...countrySeries.map((d) => d.value || 0));
+
       chart.setOption({
         tooltip: {
           trigger: "item",
           formatter: (p: any) => {
-            if (typeof p.value === "number") return `${p.name}: ${p.value.toLocaleString()} visitors`;
-            if (Array.isArray(p.value)) {
-              const ids = p.data?.debug_ids;
-              return `${p.name}<br/>Live Visitors: ${p.value?.[2] ?? 0}${Array.isArray(ids) && ids.length ? `<br/>IDs: ${ids.join(", ")}` : ""}`;
+            const v = p.value;
+
+            // Country map tooltip
+            if (typeof v === "number" || typeof v === "string") {
+              const num = Number(v);
+              const safe = Number.isFinite(num) ? num : 0;
+              return `${p.name}: ${safe.toLocaleString()} visitors`;
             }
-            return `${p.name}: 0`;
+
+            // Live city scatter tooltip
+            if (Array.isArray(v)) {
+              const rawCount = Number(v[2] ?? 0);
+              const count = Number.isFinite(rawCount) ? rawCount : 0;
+              return `${p.name}<br/>Live Visitors: ${count.toLocaleString()}`;
+            }
+
+            // Fallback
+            return `${p.name}: 0 visitors`;
           },
         },
         visualMap: {
@@ -84,17 +98,33 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
           emphasis: { itemStyle: { areaColor: "#e0f2fe" } },
         },
         series: [
-          { name: "Visitors", type: "map", map: "world", geoIndex: 0, data: countrySeries },
+          {
+            name: "Visitors",
+            type: "map",
+            map: "world",
+            geoIndex: 0,
+            data: countrySeries,
+          },
           {
             id: "live-scatter",
             name: "Live Visitors",
             type: "effectScatter",
             coordinateSystem: "geo",
             data: citySeries,
-            symbolSize: (val: any[]) => Math.max(8, Math.sqrt(Number(val?.[2] ?? 1)) * 3),
+            symbolSize: (val: any[]) => {
+              const rawCount = Number(val?.[2] ?? 1);
+              const count = Number.isFinite(rawCount) ? rawCount : 1;
+              return Math.max(8, Math.sqrt(count) * 3);
+            },
             showEffectOn: "render",
             rippleEffect: { brushType: "stroke", scale: 5, period: 4 },
-            itemStyle: { color: "#ff4d4f", borderColor: "#ff4d4f", borderWidth: 2, shadowBlur: 15, shadowColor: "rgba(255,0,0,0.5)" },
+            itemStyle: {
+              color: "#ff4d4f",
+              borderColor: "#ff4d4f",
+              borderWidth: 2,
+              shadowBlur: 15,
+              shadowColor: "rgba(255,0,0,0.5)",
+            },
             zlevel: 10,
           },
         ],
@@ -107,14 +137,17 @@ export default function WorldMap({ countries = [], cities = [], rangeLabel, heig
         chart?.dispose();
       };
     })();
-  }, []); // mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount only; data updates handled below
 
   // Update datasets without re-init
   useEffect(() => {
     if (!ready || !ref.current) return;
     const chart = echarts.getInstanceByDom(ref.current);
     if (!chart) return;
+
     const maxVal = Math.max(10, ...countrySeries.map((d) => d.value || 0));
+
     chart.setOption(
       {
         visualMap: { max: maxVal },
