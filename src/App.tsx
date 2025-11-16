@@ -114,6 +114,15 @@ const App = () => (
           />
 
           {/* Admin Routes (protected) */}
+          {/* Base admin path goes to dashboard */}
+          <Route
+            path="/mv-admin"
+            element={
+              <RequireAdminAuth>
+                <AdminDashboard />
+              </RequireAdminAuth>
+            }
+          />
           <Route
             path="/mv-admin/dashboard"
             element={
