@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { secureAdminFetch } from "@/lib/auth/adminAuth";
 
-// 🔽 same chart stack as app dashboard
+// Charts (same stack as app dashboard)
 import { Line } from "react-chartjs-2";
 import { chartTheme, useBaseOptions } from "@/components/dashboard/ChartKit";
 
@@ -116,6 +116,18 @@ function formatNumber(value: number | null | undefined): string {
   return value.toLocaleString();
 }
 
+// simple helper to add alpha to a hex color (for area background)
+function withAlphaHex(hex: string, alpha: number) {
+  const a = Math.max(0, Math.min(1, alpha));
+  const aa = Math.round(a * 255)
+    .toString(16)
+    .padStart(2, "0");
+  const h = hex.replace("#", "");
+  const full =
+    h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6);
+  return `#${full}${aa}`;
+}
+
 const tzOptions = [
   { value: "Asia/Kolkata", label: "IST (Asia/Kolkata)" },
   { value: "UTC", label: "UTC" },
@@ -145,24 +157,27 @@ const AdminDashboard = () => {
   });
 
   // ── Load KPIs (respecting TZ) ──────────────────────────────────────────────
-  const loadKpis = useCallback(async (tzValue: string) => {
-    setKpiLoading(true);
-    try {
-      const url = `${API}/api/admin/dashboard-metrics?window=calendar&tz=${encodeURIComponent(
-        tzValue,
-      )}&_=${Date.now()}`;
-      const res = await secureAdminFetch(url, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const json = (await res.json().catch(() => ({}))) as DashboardMetricsResponse;
-      setTotals(json.totals ?? {});
-    } catch (e) {
-      console.warn("[admin dashboard] loadKpis error:", e);
-    } finally {
-      setKpiLoading(false);
-    }
-  }, []);
+  const loadKpis = useCallback(
+    async (tzValue: string) => {
+      setKpiLoading(true);
+      try {
+        const url = `${API}/api/admin/dashboard-metrics?window=calendar&tz=${encodeURIComponent(
+          tzValue,
+        )}&_=${Date.now()}`;
+        const res = await secureAdminFetch(url, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = (await res.json().catch(() => ({}))) as DashboardMetricsResponse;
+        setTotals(json.totals ?? {});
+      } catch (e) {
+        console.warn("[admin dashboard] loadKpis error:", e);
+      } finally {
+        setKpiLoading(false);
+      }
+    },
+    [],
+  );
 
   // ── Load Action Center ─────────────────────────────────────────────────────
   const loadActionCenter = useCallback(async () => {
@@ -196,7 +211,6 @@ const AdminDashboard = () => {
         cache: "no-store",
       });
       const json = (await res.json().catch(() => ({}))) as MrrSeriesResponse;
-      // keep old data if BE returns null/undefined
       const pts = Array.isArray(json.points) ? json.points : [];
       setMrrPoints(pts);
     } catch (e) {
@@ -272,10 +286,10 @@ const AdminDashboard = () => {
           label: "MRR",
           data: mrrValues.slice(),
           borderColor: chartTheme.info,
-          backgroundColor: chartTheme.info,
+          backgroundColor: withAlphaHex(chartTheme.info, 0.18),
           tension: 0.35,
           borderWidth: 2,
-          fill: false,
+          fill: true,
           pointRadius: 3,
           pointHoverRadius: 5,
           pointBorderWidth: 2,
@@ -455,7 +469,7 @@ const AdminDashboard = () => {
         {/* Action Center + MRR Growth */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Action Center */}
-          <Card className="h-full min-h-[640px]">
+          <Card className="h-full min-h-[440px]">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">Action Center</CardTitle>
@@ -479,7 +493,8 @@ const AdminDashboard = () => {
                   </Badge>
                 </div>
 
-                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                {/* Increased max height so ~10 rows show before scroll */}
+                <div className="border rounded-lg max-h-[420px] overflow-y-auto">
                   {opsLoading && !ingestion.length ? (
                     <div className="px-3 py-2 text-xs text-muted-foreground">
                       Loading ingestion signals…
@@ -590,7 +605,7 @@ const AdminDashboard = () => {
           </Card>
 
           {/* MRR Growth */}
-          <Card className="h-full min-h-[640px]">
+          <Card className="h-full min-h-[440px]">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">MRR Growth</CardTitle>
@@ -614,11 +629,11 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               {mrrLoading && !mrrPoints.length ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                <div className="h-72 flex items-center justify-center text-sm text-muted-foreground">
                   Loading MRR…
                 </div>
               ) : !mrrPoints.length ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                <div className="h-72 flex items-center justify-center text-sm text-muted-foreground">
                   No MRR data for the selected range.
                 </div>
               ) : (
