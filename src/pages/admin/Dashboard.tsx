@@ -21,6 +21,10 @@ import {
 } from "lucide-react";
 import { secureAdminFetch } from "@/lib/auth/adminAuth";
 
+// 🔽 same chart stack as app dashboard
+import { Line } from "react-chartjs-2";
+import { chartTheme, useBaseOptions } from "@/components/dashboard/ChartKit";
+
 const API = "https://api.modovisa.com";
 const REFRESH_MS = 60_000;
 const REFRESH_MRR_MS = 120_000;
@@ -134,6 +138,12 @@ const AdminDashboard = () => {
   const [mrrPoints, setMrrPoints] = useState<MrrPoint[]>([]);
   const [mrrLoading, setMrrLoading] = useState(false);
 
+  // shared chart options baseline (same as app charts)
+  const baseChartOptions = useBaseOptions({
+    yBeginAtZero: true,
+    showLegend: false,
+  });
+
   // ── Load KPIs (respecting TZ) ──────────────────────────────────────────────
   const loadKpis = useCallback(async (tzValue: string) => {
     setKpiLoading(true);
@@ -186,7 +196,9 @@ const AdminDashboard = () => {
         cache: "no-store",
       });
       const json = (await res.json().catch(() => ({}))) as MrrSeriesResponse;
-      setMrrPoints(Array.isArray(json.points) ? json.points : []);
+      // keep old data if BE returns null/undefined
+      const pts = Array.isArray(json.points) ? json.points : [];
+      setMrrPoints(pts);
     } catch (e) {
       console.warn("[admin dashboard] loadMrr error:", e);
     } finally {
@@ -242,10 +254,61 @@ const AdminDashboard = () => {
     [tz],
   );
 
-  const maxMrr = useMemo(() => {
-    if (!mrrPoints.length) return 0;
-    return Math.max(...mrrPoints.map((p) => Number(p.mrr || 0)));
-  }, [mrrPoints]);
+  // ── MRR chart data/options (Chart.js) ─────────────────────────────────────
+  const mrrLabels = useMemo(
+    () => mrrPoints.map((p) => p.month),
+    [mrrPoints],
+  );
+  const mrrValues = useMemo(
+    () => mrrPoints.map((p) => Number(p.mrr || 0)),
+    [mrrPoints],
+  );
+
+  const mrrChartData = useMemo(
+    () => ({
+      labels: mrrLabels,
+      datasets: [
+        {
+          label: "MRR",
+          data: mrrValues.slice(),
+          borderColor: chartTheme.info,
+          backgroundColor: chartTheme.info,
+          tension: 0.35,
+          borderWidth: 2,
+          fill: false,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBorderWidth: 2,
+          pointBackgroundColor: chartTheme.info,
+          pointBorderColor: "#ffffff",
+          spanGaps: true,
+        },
+      ],
+    }),
+    [mrrLabels, mrrValues],
+  );
+
+  const mrrChartOptions = useMemo(
+    () =>
+      ({
+        ...baseChartOptions,
+        interaction: { mode: "index" as const, intersect: false },
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            beginAtZero: true,
+            grid: { color: chartTheme.grid },
+          },
+        },
+        plugins: {
+          ...baseChartOptions.plugins,
+          legend: { display: false },
+          tooltip: { mode: "index" as const, intersect: false },
+        },
+        maintainAspectRatio: false,
+      } as const),
+    [baseChartOptions],
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -559,44 +622,9 @@ const AdminDashboard = () => {
                   No MRR data for the selected range.
                 </div>
               ) : (
-                <>
-                  <div className="h-64 flex items-end justify-between gap-2">
-                    {mrrPoints.map((p) => {
-                      const value = Number(p.mrr || 0);
-                      const pct =
-                        maxMrr > 0 ? Math.max(8, (value / maxMrr) * 100) : 8;
-                      return (
-                        <div
-                          key={p.month}
-                          className="flex-1 flex flex-col items-center"
-                        >
-                          <div
-                            className="w-full rounded-t bg-primary/20"
-                            style={{ height: `${pct}%` }}
-                            title={`${p.month}: ${value.toLocaleString()}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                    {mrrPoints.length <= 6 ? (
-                      mrrPoints.map((p) => <span key={p.month}>{p.month}</span>)
-                    ) : (
-                      <>
-                        <span>{mrrPoints[0].month}</span>
-                        <span>
-                          {
-                            mrrPoints[
-                              Math.floor(mrrPoints.length / 2)
-                            ].month
-                          }
-                        </span>
-                        <span>{mrrPoints[mrrPoints.length - 1].month}</span>
-                      </>
-                    )}
-                  </div>
-                </>
+                <div className="h-72">
+                  <Line data={mrrChartData} options={mrrChartOptions} />
+                </div>
               )}
             </CardContent>
           </Card>
