@@ -545,12 +545,13 @@ const LiveTracking = () => {
 
       {isSuspended && (
         <div className="mx-6 mb-4">
-          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded flex items-center justify-center gap-2">
-            <strong>Live Tracking Suspended</strong>
-            <span className="text-sm">You’ve reached your monthly event limit.</span>
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded">
+            <p className="font-semibold text-sm mb-1">Live Tracking Suspended</p>
+            <p className="text-sm">You’ve reached your monthly event limit.</p>
           </div>
         </div>
       )}
+
 
       <ScrollArea className="flex-1">
         {isLoading ? (
