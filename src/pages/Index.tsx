@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { secureFetch } from "@/lib/auth";
+import { secureFetch } from "@/lib/auth/auth";
 import { apiBase } from "@/lib/api";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 

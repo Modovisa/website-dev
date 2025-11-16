@@ -10,7 +10,7 @@
  */
 
 import { apiBase } from "@/lib/api";
-import { secureFetch } from "@/lib/auth";
+import { secureFetch } from "@/lib/auth/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 /* ============================================

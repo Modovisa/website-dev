@@ -17,7 +17,7 @@
 //    connectWS, useDashboard, getTrackingWebsites.
 
 import { useSyncExternalStore } from "react";
-import { secureFetch } from "@/lib/auth";
+import { secureFetch } from "@/lib/auth/auth";
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
 /* ---------------- Types ---------------- */

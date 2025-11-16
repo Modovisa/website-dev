@@ -1,5 +1,5 @@
 // src/services/http.ts
-import { secureFetch } from "@/lib/auth";
+import { secureFetch } from "@/lib/auth/auth";
 import { apiBase } from "@/lib/api";
 
 export const API_BASE = apiBase();

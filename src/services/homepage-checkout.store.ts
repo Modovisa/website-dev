@@ -3,7 +3,7 @@
 
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 import { apiBase } from "@/lib/api";
-import { secureFetch } from "@/lib/auth";
+import { secureFetch } from "@/lib/auth/auth";
 
 /* ---------------- Types ---------------- */
 export type GeoCityPoint = {
