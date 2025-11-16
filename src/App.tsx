@@ -190,7 +190,7 @@ const App = () => (
             path="/mv-admin/user-profile"
             element={
               <RequireAdminAuth>
-                <AdminUserProfile />
+                <AdminUserProfilePage />
               </RequireAdminAuth>
             }
           />
