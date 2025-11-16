@@ -2,6 +2,8 @@
 // Homepage → registration → Stripe embedded checkout flow
 
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
+import { apiBase } from "@/lib/api";
+import { secureFetch } from "@/lib/auth";
 
 /* ---------------- Types ---------------- */
 export type GeoCityPoint = {
@@ -267,7 +269,10 @@ async function getStripe(): Promise<any> {
 
     let res: Response;
     try {
-      res = await apiFetch("/api/stripe/runtime-config");
+      res = await fetch(`${apiBase()}/api/stripe/runtime-config`, {
+        cache: "no-store",
+        credentials: "include",
+      });
     } catch (err) {
       console.error(
         "[homepage-checkout] /api/stripe/runtime-config failed:",
@@ -308,8 +313,8 @@ async function getStripe(): Promise<any> {
 }
 
 /**
- * IMPORTANT: payload mirrors billing.store.ts
- * (sends both tierId and tier_id so the BE can accept either).
+ * IMPORTANT: payload + auth mirror billing.store.ts
+ * (sends both tierId and tier_id so BE can handle either).
  */
 async function createEmbeddedSession(intent: BillingIntent) {
   console.log(
@@ -319,7 +324,7 @@ async function createEmbeddedSession(intent: BillingIntent) {
 
   let res: Response;
   try {
-    res = await apiFetch("/api/stripe/embedded-session", {
+    res = await secureFetch(`${apiBase()}/api/stripe/embedded-session`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -339,6 +344,15 @@ async function createEmbeddedSession(intent: BillingIntent) {
   }
 
   const data = await res.json().catch(() => ({} as any));
+
+  if (res.status === 401) {
+    console.error(
+      "[homepage-checkout] embedded-session 401 (unauthorized). " +
+        "If Billing & Plans works but this does not, double-check that register/login " +
+        "are wiring the same auth cookies / tokens used by secureFetch.",
+      data,
+    );
+  }
 
   if (!res.ok || !data?.clientSecret) {
     clearBillingIntent();
