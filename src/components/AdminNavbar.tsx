@@ -227,14 +227,16 @@ export default function AdminNavbar({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {/* 🔐 Admin profile route */}
             <DropdownMenuItem asChild>
-              <Link to="/app/profile" className="cursor-pointer">
+              <Link to="/mv-admin/profile" className="cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </Link>
             </DropdownMenuItem>
+            {/* 🔐 Admin settings route */}
             <DropdownMenuItem asChild>
-              <Link to="/app/settings" className="cursor-pointer">
+              <Link to="/mv-admin/profile" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </Link>
