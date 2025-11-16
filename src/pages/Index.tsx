@@ -27,6 +27,7 @@ import {
 import SiteFooter from "@/components/SiteFooter";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { secureFetch } from "@/lib/auth";
+import { apiBase } from "@/lib/api";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 
 // TypeScript declaration for Gradient + Bootstrap
@@ -66,12 +67,43 @@ const INTENT_KEY = "intent_upgrade";
 
 // Fallback in case the public tiers endpoint is unavailable.
 // Only used as a safety net; real environments should rely on the API.
+// IMPORTANT: These IDs now mirror the real D1 table (start at 2).
 const FALLBACK_PAID_TIERS: PublicPricingTier[] = [
-  { id: 1, name: "Pro 25k", min_events: 25_000, max_events: 25_000, monthly_price: 14 },
-  { id: 2, name: "Pro 50k", min_events: 50_000, max_events: 50_000, monthly_price: 24 },
-  { id: 3, name: "Pro 100k", min_events: 100_000, max_events: 100_000, monthly_price: 44 },
-  { id: 4, name: "Pro 250k", min_events: 250_000, max_events: 250_000, monthly_price: 99 },
-  { id: 5, name: "Pro 500k", min_events: 500_000, max_events: 500_000, monthly_price: 179 },
+  {
+    id: 2,
+    name: "Standard plan",
+    min_events: 3_001,
+    max_events: 25_000,
+    monthly_price: 14,
+  },
+  {
+    id: 3,
+    name: "Growth plan",
+    min_events: 25_001,
+    max_events: 100_000,
+    monthly_price: 24,
+  },
+  {
+    id: 4,
+    name: "Pro Lite",
+    min_events: 100_001,
+    max_events: 250_000,
+    monthly_price: 34,
+  },
+  {
+    id: 5,
+    name: "Pro Core",
+    min_events: 250_001,
+    max_events: 500_000,
+    monthly_price: 59,
+  },
+  {
+    id: 6,
+    name: "Pro Advanced",
+    min_events: 500_001,
+    max_events: 1_000_000,
+    monthly_price: 99,
+  },
 ];
 
 const Index = () => {
@@ -136,14 +168,25 @@ const Index = () => {
     async function loadTiers() {
       setTiersLoading(true);
       try {
-        const res = await secureFetch("/api/billing-pricing-tiers?public=1");
+        // ⚠️ DO NOT use secureFetch here - this endpoint is public
+        const res = await fetch(
+          `${apiBase()}/api/billing-pricing-tiers?public=1`,
+          {
+            credentials: "include",
+            cache: "no-store",
+          },
+        );
         if (!res.ok) {
           console.error("[landing] failed to fetch pricing tiers:", res.status);
           return;
         }
         const data = await res.json();
         if (!cancelled && Array.isArray(data)) {
-          setTiers(data);
+          setTiers(
+            data.filter(
+              (t: any) => Number(t.monthly_price ?? 0) > 0, // strip free tier
+            ),
+          );
         }
       } catch (err) {
         console.error("[landing] error fetching pricing tiers:", err);
@@ -173,7 +216,7 @@ const Index = () => {
           typeof t.min_events === "number" &&
           typeof t.max_events === "number" &&
           selectedEvents >= t.min_events &&
-          selectedEvents <= t.max_events
+          selectedEvents <= t.max_events,
       ) ?? paidTiers[0];
     return tier || null;
   }, [paidTiers, selectedEvents]);
@@ -184,28 +227,12 @@ const Index = () => {
     return isYearly ? Math.ceil(base * 0.8) : base;
   }, [matchedTier, isYearly]);
 
-  // Keep a simple upgrade intent in localStorage, same key as Bootstrap
-  useEffect(() => {
-    if (!matchedTier || typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        INTENT_KEY,
-        JSON.stringify({
-          tier_id: matchedTier.id,
-          interval: isYearly ? "year" : "month",
-        })
-      );
-    } catch (err) {
-      console.warn("[landing] unable to persist pricing intent", err);
-    }
-  }, [matchedTier, isYearly]);
-
   // 🔑 Pro plan CTA behavior:
   // - If NOT logged in → open React RegisterModal
   // - If logged in → redirect to /app/user-profile with loading modal
+  // NOTE: Only this click writes intent_upgrade + mv_new_signup for checkout.
   const handleProPlanClick = async () => {
     try {
-      // Persist latest intent explicitly (defensive)
       if (matchedTier && typeof window !== "undefined") {
         try {
           window.localStorage.setItem(
@@ -213,8 +240,9 @@ const Index = () => {
             JSON.stringify({
               tier_id: matchedTier.id,
               interval: isYearly ? "year" : "month",
-            })
+            }),
           );
+          window.localStorage.setItem("mv_new_signup", "1");
         } catch {
           // non-fatal
         }
@@ -318,7 +346,7 @@ const Index = () => {
               actionable insights.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
-              {/* Hero CTA: simple link to /register (no modal) */}
+              {/* Hero CTA: simple link to /register (Free path – no intent set) */}
               <Link to="/register">
                 <Button
                   size="lg"
@@ -416,7 +444,7 @@ const Index = () => {
                 </div>
               </div>
 
-              {/* Free plan Get Started → /register (no modal) */}
+              {/* Free plan Get Started → /register (no intent set) */}
               <Link to="/register" className="block">
                 <Button
                   variant="outline"
@@ -541,7 +569,7 @@ const Index = () => {
                 </div>
               </div>
 
-              {/* 🔥 Only this button opens the React register modal */}
+              {/* 🔥 Only this button drives paid checkout intent */}
               <Button
                 className="w-full h-12 text-base"
                 size="lg"
@@ -568,7 +596,7 @@ const Index = () => {
             Join thousands of teams already using Modovisa to understand their users
             better.
           </p>
-          {/* Bottom CTA: still goes straight to /register */}
+          {/* Bottom CTA: still goes straight to /register (Free path) */}
           <Link to="/register">
             <Button
               size="lg"

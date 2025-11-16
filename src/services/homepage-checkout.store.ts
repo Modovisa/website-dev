@@ -191,6 +191,11 @@ function clearNewSignupFlag() {
 
 /* ---------------- Pricing tiers ---------------- */
 
+/**
+ * NOTE: This is ONLY used for checkout.
+ * We explicitly filter out free / zero-priced tiers so that
+ * checkout always starts from tier 2 (first paid plan).
+ */
 async function fetchPublicPricingTiers(): Promise<PublicPricingTier[]> {
   console.log("[homepage-checkout] fetching public pricing tiers...");
 
@@ -232,9 +237,11 @@ async function fetchPublicPricingTiers(): Promise<PublicPricingTier[]> {
     return [];
   }
 
+  const raw = json as PublicPricingTier[];
+
   console.log(
-    "[homepage-checkout] fetched pricing tiers:",
-    json.map((t: any) => ({
+    "[homepage-checkout] fetched pricing tiers (raw):",
+    raw.map((t: any) => ({
       id: t.id,
       name: t.name,
       max_events: t.max_events,
@@ -242,7 +249,19 @@ async function fetchPublicPricingTiers(): Promise<PublicPricingTier[]> {
     })),
   );
 
-  return json as PublicPricingTier[];
+  // 🔥 Strip out free / zero-priced tiers so checkout never uses tier 1
+  const paid = raw.filter(
+    (t) => Number((t as any).monthly_price ?? 0) > 0,
+  );
+
+  if (paid.length !== raw.length) {
+    console.log(
+      "[homepage-checkout] filtered out free/zero-priced tiers for checkout:",
+      { total: raw.length, paid: paid.length, removed: raw.length - paid.length },
+    );
+  }
+
+  return paid;
 }
 
 export async function getPublicPricingTiers(): Promise<PublicPricingTier[]> {
@@ -526,7 +545,7 @@ export async function routeAfterLoginFromHomepageReact(
     return;
   }
 
-  // New user, no subscription yet → need intent
+  // New user, no subscription yet → need intent IF this is a paid plan.
   let intent = getValidParsedIntent();
   console.log("[homepage-checkout] initial intent from storage:", intent);
 
@@ -539,23 +558,12 @@ export async function routeAfterLoginFromHomepageReact(
 
   console.log("[homepage-checkout] tiers in router:", tiers);
 
+  // ❗ NO INTENT = treat as Free plan signup → skip Stripe entirely.
   if (!intent) {
-    // Fallback: smallest tier, monthly
-    const cheapest = pickCheapestTier(tiers);
-    console.log("[homepage-checkout] cheapest tier fallback:", cheapest);
-    if (cheapest) {
-      intent = {
-        tier_id: Number((cheapest as any).id),
-        interval: "month",
-      };
-      setIntent(intent);
-    }
-  }
-
-  if (!intent) {
-    console.warn(
-      "[homepage-checkout] no intent and no tiers → falling back to /app/tracking-setup",
+    console.log(
+      "[homepage-checkout] no pricing intent found → treating as Free plan signup (no Stripe).",
     );
+    clearBillingIntent();
     clearNewSignupFlag();
     if (window.showGlobalLoadingModal) {
       window.showGlobalLoadingModal("Setting up your dashboard...");
@@ -587,7 +595,7 @@ export async function routeAfterLoginFromHomepageReact(
     const fallback = pickCheapestTier(tiers);
     if (fallback) {
       console.warn(
-        "[homepage-checkout] no exact tier match; falling back to cheapest tier for labels only.",
+        "[homepage-checkout] no exact tier match; falling back to cheapest paid tier for labels only.",
       );
       tier = fallback;
     }
