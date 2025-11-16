@@ -1,3 +1,5 @@
+// src/components/AdminLayout.tsx
+
 import { ReactNode, useState } from "react";
 import { AdminSidebar } from "./AdminSidebar";
 import AdminNavbar from "./AdminNavbar";

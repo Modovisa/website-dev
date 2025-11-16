@@ -32,6 +32,7 @@ import Billing from "./pages/admin/Billing";
 import Logs from "./pages/admin/Logs";
 import Permissions from "./pages/admin/Permissions";
 import Settings from "./pages/admin/Settings";
+import AdminUserProfile from "./pages/admin/AdminUserProfile";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminTwoFactorAuth from "./pages/admin/AdminTwoFactorAuth";
 import AdminForgotPassword from "./pages/admin/AdminForgotPassword";
@@ -173,6 +174,14 @@ const App = () => (
             element={
               <RequireAdminAuth>
                 <Settings />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/admin-user-profile"
+            element={
+              <RequireAdminAuth>
+                <AdminUserProfile />
               </RequireAdminAuth>
             }
           />
