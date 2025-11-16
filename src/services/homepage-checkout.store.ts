@@ -1,11 +1,5 @@
 // src/services/homepage-checkout.store.ts
-// One-time REST seed per (siteId:range) + 100% WS stream thereafter.
-// - Ranges aligned to BE: 24h | 7d | 30d | 12mo (any 90d → 30d)
-// - For 24h: never rotate axis (local 12 AM → 11 PM), never rebase to UTC
-// - WS frames only PATCH the anchored seed; only elapsed hours (≤ current local hour) may change
-// - Normalizes all 24h series to fixed hour order and clamps future hours to 0
-// - Merges partial frames: TGV + all 24h count series
-// - Watchdog pings WS for series if KPIs move but TGV stalls
+// Homepage → registration → Stripe embedded checkout flow
 
 import type { RangeKey, DashboardPayload } from "@/types/dashboard";
 
@@ -22,11 +16,11 @@ export type GeoCityPoint = {
 export type Interval = "month" | "year";
 
 export type PublicPricingTier = {
-  id: number;
+  id: number | string;
   name: string;
-  min_events: number;
-  max_events: number;
-  monthly_price: number;
+  min_events: number | string;
+  max_events: number | string;
+  monthly_price: number | string;
   plan_id?: number;
   stripe_price_id_month?: string | null;
   stripe_price_id_year?: string | null;
@@ -78,7 +72,10 @@ const DEFAULT_API_BASE = "https://api.modovisa.com";
 /**
  * Try very hard to mirror the old Bootstrap flow:
  * - Prefer global getApiBaseUrl()/__MV_API_BASE__ if present
- * - Otherwise pick dev/prod API based on current hostname
+ * - Otherwise pick API based on current hostname
+ *
+ * NOTE: For dev.* we force https://api.modovisa.com (NOT dev-api)
+ * because dev-api currently has CORS/credentials issues.
  */
 function getApiBase(): string {
   if (typeof window === "undefined") {
@@ -106,7 +103,7 @@ function getApiBase(): string {
     return anyWin.__MV_API_BASE__;
   }
 
-  // 3) Heuristic: dev host → dev API
+  // 3) Heuristic: dev host → **main** API (not dev-api)
   const host = window.location.hostname;
   if (host.startsWith("dev.")) {
     return "https://api.modovisa.com";
@@ -118,8 +115,8 @@ function getApiBase(): string {
 
 /**
  * Cookie-based fetch that talks directly to the Worker API.
- * This is intentionally "dumb" – no auth/refresh magic – to
- * behave exactly like the working Bootstrap flow.
+ * This deliberately does NOT use secureFetch – it mirrors the
+ * old Bootstrap behaviour so cookies drive auth.
  */
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const base = getApiBase();
@@ -141,11 +138,13 @@ export function getValidParsedIntent(): BillingIntent | null {
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
-    if (!parsed.tier_id || !parsed.interval) return null;
-    if (parsed.interval !== "month" && parsed.interval !== "year") return null;
+    const rawTier = (parsed as any).tier_id ?? (parsed as any).tierId;
+    const interval = (parsed as any).interval;
+    if (!rawTier || !interval) return null;
+    if (interval !== "month" && interval !== "year") return null;
     return {
-      tier_id: Number(parsed.tier_id),
-      interval: parsed.interval as Interval,
+      tier_id: Number(rawTier),
+      interval,
     };
   } catch {
     return null;
@@ -253,11 +252,12 @@ export async function getPublicPricingTiers(): Promise<PublicPricingTier[]> {
 function pickCheapestTier(tiers: PublicPricingTier[]): PublicPricingTier | null {
   if (!tiers.length) return null;
   return [...tiers].sort(
-    (a, b) => (a.max_events ?? 0) - (b.max_events ?? 0),
+    (a, b) =>
+      Number(a.max_events ?? 0) - Number(b.max_events ?? 0),
   )[0];
 }
 
-/* ---------------- Stripe helpers ---------------- */
+/* ---------------- Stripe helpers (mirrors billing.store) ---------------- */
 
 async function getStripe(): Promise<any> {
   if (stripePromise) return stripePromise;
@@ -307,6 +307,10 @@ async function getStripe(): Promise<any> {
   return stripePromise;
 }
 
+/**
+ * IMPORTANT: payload mirrors billing.store.ts
+ * (sends both tierId and tier_id so the BE can accept either).
+ */
 async function createEmbeddedSession(intent: BillingIntent) {
   console.log(
     "[homepage-checkout] creating embedded session for intent:",
@@ -321,6 +325,7 @@ async function createEmbeddedSession(intent: BillingIntent) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        tierId: intent.tier_id,
         tier_id: intent.tier_id,
         interval: intent.interval,
       }),
@@ -425,25 +430,28 @@ async function mountEmbeddedCheckoutOverlay(
   checkout.mount("#mv-stripe-embedded-root");
 }
 
-/* ---------------- Intent → SelectedTierMeta ---------------- */
+/* ---------------- Intent → SelectedTierMeta (for logging/debug) ---------------- */
 
 function buildSelectedTierMeta(
   tier: PublicPricingTier,
   intent: BillingIntent,
 ): SelectedTierMeta {
-  const baseMonthly = tier.monthly_price ?? 0;
+  const baseMonthly = Number(tier.monthly_price ?? 0);
   const isYearly = intent.interval === "year";
   const price = isYearly ? Math.ceil(baseMonthly * 0.8) : baseMonthly;
 
+  const tierId = Number((tier as any).id ?? intent.tier_id);
+  const maxEvents = Number(tier.max_events ?? 0);
+
   return {
-    tier_id: tier.id,
+    tier_id: tierId,
     plan_id: tier.plan_id,
     interval: intent.interval,
     price,
     stripe_price_id: isYearly
       ? tier.stripe_price_id_year ?? null
       : tier.stripe_price_id_month ?? null,
-    label: `${tier.max_events.toLocaleString()} events/${
+    label: `${maxEvents.toLocaleString()} events/${
       isYearly ? "year" : "month"
     }`,
   };
@@ -451,21 +459,6 @@ function buildSelectedTierMeta(
 
 /* ---------------- Main router (React entry point) ---------------- */
 
-/**
- * React-friendly version of the Bootstrap `routeAfterLoginFromHomepage`.
- *
- * Usage: after a successful homepage registration (modal),
- * call:
- *
- *   await routeAfterLoginFromHomepageReact({ navigate });
- *
- * It will:
- *  - Fetch /api/me
- *  - Decide new vs existing user
- *  - For existing user or already subscribed → go to /app/user-profile
- *  - For new user without subscription → derive intent and open embedded checkout
- *  - On successful checkout completion → route to /app/tracking-setup
- */
 export async function routeAfterLoginFromHomepageReact(
   opts: RouteOptions,
 ): Promise<void> {
@@ -505,7 +498,7 @@ export async function routeAfterLoginFromHomepageReact(
     treatAsNew,
   });
 
-  // Existing user or already subscribed → profile (no checkout here)
+  // Existing user or already subscribed → profile (no homepage checkout here)
   if (!treatAsNew || hasSub) {
     console.log(
       "[homepage-checkout] existing user or already subscribed → /app/user-profile",
@@ -537,7 +530,10 @@ export async function routeAfterLoginFromHomepageReact(
     const cheapest = pickCheapestTier(tiers);
     console.log("[homepage-checkout] cheapest tier fallback:", cheapest);
     if (cheapest) {
-      intent = { tier_id: cheapest.id, interval: "month" };
+      intent = {
+        tier_id: Number((cheapest as any).id),
+        interval: "month",
+      };
       setIntent(intent);
     }
   }
@@ -563,24 +559,34 @@ export async function routeAfterLoginFromHomepageReact(
     return;
   }
 
-  const tier = tiers.find((t) => t.id === intent!.tier_id);
-  console.log("[homepage-checkout] selected tier from intent:", tier);
+  // Try to match tier purely for logging / label purposes;
+  // do NOT block checkout if we can't find it.
+  let tier: PublicPricingTier | null =
+    tiers.find(
+      (t: any) =>
+        Number((t as any).id) === Number(intent!.tier_id),
+    ) || null;
+
+  console.log("[homepage-checkout] tier for intent (may be null):", tier);
 
   if (!tier) {
-    console.warn(
-      "[homepage-checkout] no tier found for intent → /app/tracking-setup",
-    );
-    clearBillingIntent();
-    clearNewSignupFlag();
-    if (window.showGlobalLoadingModal) {
-      window.showGlobalLoadingModal("Setting up your dashboard...");
+    const fallback = pickCheapestTier(tiers);
+    if (fallback) {
+      console.warn(
+        "[homepage-checkout] no exact tier match; falling back to cheapest tier for labels only.",
+      );
+      tier = fallback;
     }
-    navigate("/app/tracking-setup");
-    return;
   }
 
-  const selected = buildSelectedTierMeta(tier, intent);
-  console.log("[homepage-checkout] final selected meta:", selected);
+  if (tier) {
+    const selected = buildSelectedTierMeta(tier, intent);
+    console.log("[homepage-checkout] final selected meta:", selected);
+  } else {
+    console.warn(
+      "[homepage-checkout] still no tier object – proceeding with checkout using intent only.",
+    );
+  }
 
   if (window.showGlobalLoadingModal) {
     window.showGlobalLoadingModal("Preparing checkout...");
