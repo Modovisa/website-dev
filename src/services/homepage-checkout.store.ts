@@ -393,6 +393,10 @@ async function createEmbeddedSession(intent: BillingIntent) {
 /**
  * Very simple fullscreen overlay for embedded checkout.
  * Doesn't depend on any React component – pure DOM so it works from anywhere.
+ *
+ * NOTE: Stripe Embedded Checkout MUST mount into an element that has **no child nodes**.
+ * So we create a card container and an inner empty div (`#mv-stripe-embedded-root`)
+ * just for Stripe to mount into.
  */
 async function mountEmbeddedCheckoutOverlay(
   clientSecret: string,
@@ -400,7 +404,13 @@ async function mountEmbeddedCheckoutOverlay(
 ) {
   const stripe = await getStripe();
 
-  // Create overlay
+  // If somehow an old overlay exists, remove it first (defensive)
+  const existing = document.getElementById("mv-stripe-overlay");
+  if (existing?.parentNode) {
+    existing.parentNode.removeChild(existing);
+  }
+
+  // Backdrop
   const overlay = document.createElement("div");
   overlay.id = "mv-stripe-overlay";
   overlay.style.position = "fixed";
@@ -411,17 +421,18 @@ async function mountEmbeddedCheckoutOverlay(
   overlay.style.alignItems = "center";
   overlay.style.justifyContent = "center";
 
-  const container = document.createElement("div");
-  container.id = "mv-stripe-embedded-root";
-  container.style.position = "relative";
-  container.style.width = "min(480px, 100%)";
-  container.style.maxWidth = "100%";
-  container.style.background = "#0b0b0f";
-  container.style.borderRadius = "16px";
-  container.style.padding = "24px";
-  container.style.boxShadow = "0 24px 60px rgba(0, 0, 0, 0.65)";
+  // Card container (visual frame)
+  const card = document.createElement("div");
+  card.style.position = "relative";
+  card.style.width = "min(480px, 100%)";
+  card.style.maxWidth = "100%";
+  card.style.background = "#0b0b0f";
+  card.style.borderRadius = "16px";
+  card.style.padding = "24px";
+  card.style.boxShadow = "0 24px 60px rgba(0, 0, 0, 0.65)";
+  card.style.boxSizing = "border-box";
 
-  // Optional close X (in case user bounces)
+  // Close button
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "×";
   closeBtn.style.position = "absolute";
@@ -433,35 +444,44 @@ async function mountEmbeddedCheckoutOverlay(
   closeBtn.style.border = "none";
   closeBtn.style.cursor = "pointer";
 
-  closeBtn.addEventListener("click", () => {
-    try {
-      document.body.removeChild(overlay);
-    } catch {
-      // ignore
-    }
-  });
+  // Empty root for Stripe (must be childless at mount time)
+  const checkoutRoot = document.createElement("div");
+  checkoutRoot.id = "mv-stripe-embedded-root";
+  checkoutRoot.style.minHeight = "420px"; // just to avoid flicker while it loads
+  checkoutRoot.style.width = "100%";
 
-  container.appendChild(closeBtn);
-  overlay.appendChild(container);
+  // Wire everything together
+  card.appendChild(closeBtn);
+  card.appendChild(checkoutRoot);
+  overlay.appendChild(card);
   document.body.appendChild(overlay);
 
   const cleanup = () => {
     try {
-      document.body.removeChild(overlay);
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
     } catch {
       // ignore
     }
     opts?.onComplete?.();
   };
 
-  // NOTE: initEmbeddedCheckout returns quickly; onComplete fires when payment finishes.
+  // Close button just dismisses the overlay (no redirect logic here)
+  closeBtn.addEventListener("click", () => {
+    cleanup();
+  });
+
+  // Stripe: init + mount into the EMPTY checkoutRoot element
   const checkout = await stripe.initEmbeddedCheckout({
     clientSecret,
     onComplete: cleanup,
   });
 
-  checkout.mount("#mv-stripe-embedded-root");
+  // Important: pass the DOM node, not a selector string
+  checkout.mount(checkoutRoot);
 }
+
 
 /* ---------------- Intent → SelectedTierMeta (for logging/debug) ---------------- */
 
