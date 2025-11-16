@@ -67,10 +67,7 @@ const AdminLogin = () => {
       // 2FA path (mirrors your Bootstrap logic)
       if (json.twofa_required && json.temp_token && json.admin_id) {
         sessionStorage.setItem("admin_twofa_temp_token", json.temp_token);
-        sessionStorage.setItem(
-          "pending_admin_2fa_id",
-          String(json.admin_id),
-        );
+        sessionStorage.setItem("pending_admin_2fa_id", String(json.admin_id),);
         window.location.href = "/mv-admin/two-step-verification";
         return;
       }
@@ -187,7 +184,7 @@ const AdminLogin = () => {
             </div>
             {/* If/when you have a React admin reset page, point here */}
             <a
-              href="/mv-admin/reset"
+              href="/mv-admin/forgot-password"
               className="text-sm text-primary hover:underline"
             >
               Forgot Password?

@@ -33,6 +33,8 @@ import Logs from "./pages/admin/Logs";
 import Permissions from "./pages/admin/Permissions";
 import Settings from "./pages/admin/Settings";
 import AdminLogin from "./pages/admin/AdminLogin";
+import AdminTwoFactorAuth from "./pages/admin/AdminTwoFactorAuth";
+import AdminForgotPassword from "./pages/admin/AdminForgotPassword";
 import { RequireAdminAuth } from "./components/admin/RequireAdminAuth";
 
 // 📚 Docs pages
@@ -98,8 +100,16 @@ const App = () => (
           <Route path="/docs/install/webflow" element={<Webflow />} />
           <Route path="/docs/install/ghost" element={<Ghost />} />
 
-          {/* Admin Login (public) */}
+          {/* Admin Login + 2FA (public) */}
           <Route path="/mv-admin/login" element={<AdminLogin />} />
+          <Route
+            path="/mv-admin/two-step-verification"
+            element={<AdminTwoFactorAuth />}
+          />
+          <Route
+            path="/mv-admin/forgot-password"
+            element={<AdminForgotPassword />}
+          />
 
           {/* Admin Routes (protected) */}
           <Route
