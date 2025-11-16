@@ -67,6 +67,76 @@ export const INTENT_KEY = "intent_upgrade";
 let pricingTiersCache: PublicPricingTier[] | null = null;
 let stripePromise: Promise<any> | null = null;
 
+/* ---------------- Loading overlay helpers ---------------- */
+
+function showCheckoutLoading(message: string) {
+  if (typeof window === "undefined") return;
+
+  // Prefer existing global helper if present
+  if (window.showGlobalLoadingModal) {
+    window.showGlobalLoadingModal(message);
+    return;
+  }
+
+  // Fallback: simple fullscreen spinner overlay
+  let overlay = document.getElementById(
+    "mv-checkout-loading-overlay",
+  ) as HTMLDivElement | null;
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "mv-checkout-loading-overlay";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "9998";
+    overlay.style.background = "rgba(0,0,0,0.6)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.backdropFilter = "blur(4px)";
+
+    const spinner = document.createElement("div");
+    spinner.style.width = "48px";
+    spinner.style.height = "48px";
+    spinner.style.borderRadius = "9999px";
+    spinner.style.border = "4px solid rgba(255,255,255,0.2)";
+    spinner.style.borderTopColor = "#a855f7";
+    spinner.style.animation = "mv-spin 0.75s linear infinite";
+
+    overlay.appendChild(spinner);
+    document.body.appendChild(overlay);
+
+    // Inject keyframes once
+    if (!document.getElementById("mv-checkout-loading-style")) {
+      const style = document.createElement("style");
+      style.id = "mv-checkout-loading-style";
+      style.textContent =
+        "@keyframes mv-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+      document.head.appendChild(style);
+    }
+  } else {
+    overlay.style.display = "flex";
+  }
+}
+
+function hideCheckoutLoading() {
+  if (typeof window === "undefined") return;
+
+  // Hide global helper if present
+  if (window.hideGlobalLoadingModal) {
+    try {
+      window.hideGlobalLoadingModal();
+    } catch {
+      // ignore
+    }
+  }
+
+  // Remove fallback overlay if present
+  const overlay = document.getElementById("mv-checkout-loading-overlay");
+  if (overlay && overlay.parentNode) {
+    overlay.parentNode.removeChild(overlay);
+  }
+}
+
 /* ---------------- API base + fetch helpers ---------------- */
 
 const DEFAULT_API_BASE = "https://api.modovisa.com";
@@ -482,7 +552,6 @@ async function mountEmbeddedCheckoutOverlay(
   checkout.mount(checkoutRoot);
 }
 
-
 /* ---------------- Intent → SelectedTierMeta (for logging/debug) ---------------- */
 
 function buildSelectedTierMeta(
@@ -521,10 +590,8 @@ export async function routeAfterLoginFromHomepageReact(
     autoCheckout,
   });
 
-  // 🔄 Show global loading as soon as we start the post-login flow
-  if (window.showGlobalLoadingModal) {
-    window.showGlobalLoadingModal("Preparing checkout...");
-  }
+  // Show loading immediately once we leave the modal
+  showCheckoutLoading("Preparing checkout...");
 
   let me: any = null;
   try {
@@ -534,11 +601,13 @@ export async function routeAfterLoginFromHomepageReact(
         "[homepage-checkout] /api/me non-200, aborting routing:",
         res.status,
       );
+      hideCheckoutLoading();
       return;
     }
     me = await res.json().catch(() => null);
   } catch (err) {
     console.error("[homepage-checkout] /api/me failed:", err);
+    hideCheckoutLoading();
     return;
   }
 
@@ -563,10 +632,9 @@ export async function routeAfterLoginFromHomepageReact(
     );
     clearBillingIntent();
     clearNewSignupFlag();
-    if (window.showGlobalLoadingModal) {
-      window.showGlobalLoadingModal("Redirecting to your profile...");
-    }
+    showCheckoutLoading("Redirecting to your profile...");
     navigate("/app/user-profile");
+    hideCheckoutLoading();
     return;
   }
 
@@ -590,10 +658,9 @@ export async function routeAfterLoginFromHomepageReact(
     );
     clearBillingIntent();
     clearNewSignupFlag();
-    if (window.showGlobalLoadingModal) {
-      window.showGlobalLoadingModal("Setting up your dashboard...");
-    }
+    showCheckoutLoading("Setting up your dashboard...");
     navigate("/app/tracking-setup");
+    hideCheckoutLoading();
     return;
   }
 
@@ -603,6 +670,7 @@ export async function routeAfterLoginFromHomepageReact(
       "[homepage-checkout] autoCheckout=false → /app/user-profile (no embed)",
     );
     navigate("/app/user-profile");
+    hideCheckoutLoading();
     return;
   }
 
@@ -636,16 +704,12 @@ export async function routeAfterLoginFromHomepageReact(
   }
 
   try {
-    // ⏳ Keep the global loader up while we talk to /embedded-session
-    if (window.showGlobalLoadingModal) {
-      window.showGlobalLoadingModal("Preparing checkout...");
-    }
+    showCheckoutLoading("Preparing checkout...");
 
     const clientSecret = await createEmbeddedSession(intent);
 
-    // ✅ As soon as we have a clientSecret and are about to mount Stripe,
-    //    drop the global loading overlay so only the Stripe card is visible.
-    window.hideGlobalLoadingModal?.();
+    // Drop the loader just before showing the Stripe card
+    hideCheckoutLoading();
 
     console.log(
       "[homepage-checkout] mounting Stripe embedded checkout overlay...",
@@ -658,23 +722,17 @@ export async function routeAfterLoginFromHomepageReact(
         );
         clearBillingIntent();
         clearNewSignupFlag();
-        if (window.showGlobalLoadingModal) {
-          window.showGlobalLoadingModal("Setting up your dashboard...");
-        }
+        showCheckoutLoading("Setting up your dashboard...");
         navigate("/app/tracking-setup");
+        hideCheckoutLoading();
       },
     });
   } catch (err) {
     console.error("[homepage-checkout] embedded checkout error:", err);
     clearBillingIntent();
     clearNewSignupFlag();
-    if (window.showGlobalLoadingModal) {
-      window.showGlobalLoadingModal("Setting up your dashboard...");
-    }
+    showCheckoutLoading("Setting up your dashboard...");
     navigate("/app/tracking-setup");
-  } finally {
-    // Safety: if anything went weird and the loader is still up, clear it.
-    window.hideGlobalLoadingModal?.();
+    hideCheckoutLoading();
   }
 }
-
