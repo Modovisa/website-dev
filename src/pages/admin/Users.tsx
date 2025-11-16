@@ -234,7 +234,7 @@ const Users = () => {
   const [filterPlan, setFilterPlan] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  // Add user sheet
+  // Add user sheet (offcanvas)
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
@@ -277,13 +277,10 @@ const Users = () => {
   const loadUsersKpis = useCallback(async () => {
     setKpiLoading(true);
     try {
-      const res = await secureAdminFetch(
-        `${API}/api/admin/users/metrics`,
-        {
-          method: "GET",
-          cache: "no-store",
-        },
-      );
+      const res = await secureAdminFetch(`${API}/api/admin/users/metrics`, {
+        method: "GET",
+        cache: "no-store",
+      });
       const json = (await res.json().catch(() => ({}))) as UsersKpiResponse;
       if (json.totals) setKpis(json.totals);
     } catch (err) {
@@ -319,7 +316,6 @@ const Users = () => {
 
   const loadDropdowns = useCallback(async () => {
     try {
-      // Countries
       const [countriesRes, rolesRes, plansRes] = await Promise.all([
         secureAdminFetch(`${API}/api/dropdown/countries`, {
           method: "GET",
@@ -341,9 +337,17 @@ const Users = () => {
         plansRes.json().catch(() => ({})),
       ]);
 
-      setCountries(Array.isArray(countriesJson.countries) ? countriesJson.countries : []);
-      setRoles(Array.isArray(rolesJson.roles) ? rolesJson.roles : []);
-      setPlans(Array.isArray(plansJson.plans) ? plansJson.plans : []);
+      setCountries(
+        Array.isArray(countriesJson.countries)
+          ? countriesJson.countries
+          : [],
+      );
+      setRoles(
+        Array.isArray(rolesJson.roles) ? rolesJson.roles : [],
+      );
+      setPlans(
+        Array.isArray(plansJson.plans) ? plansJson.plans : [],
+      );
     } catch (err) {
       console.warn("[admin users] loadDropdowns error:", err);
     }
@@ -379,6 +383,13 @@ const Users = () => {
   useEffect(() => {
     setPage(1);
   }, [search, filterRole, filterPlan, filterStatus, pageSize]);
+
+  // Clear errors when the add-user sheet is opened
+  useEffect(() => {
+    if (isAddUserOpen) {
+      setAddErrors({});
+    }
+  }, [isAddUserOpen]);
 
   /* ---------------------- Derived state ---------------------- */
 
@@ -856,6 +867,8 @@ const Users = () => {
       if (!res.ok) throw new Error(j.error || "Failed to create user");
 
       window.alert("User created successfully.");
+
+      // Mirror Bootstrap behavior: close offcanvas + reload list & KPIs
       setIsAddUserOpen(false);
       setAddName("");
       setAddEmail("");
@@ -1044,7 +1057,7 @@ const Users = () => {
                     />
 
                     <div className="flex gap-2">
-                      {/* Export menu – visual mirror, no-op for now */}
+                      {/* Export menu – mirror Bootstrap layout (no-op actions for now) */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline">
@@ -1092,7 +1105,7 @@ const Users = () => {
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      {/* Add User */}
+                      {/* Add User – React offcanvas equivalent of Bootstrap offcanvas */}
                       <Sheet
                         open={isAddUserOpen}
                         onOpenChange={setIsAddUserOpen}
@@ -1106,21 +1119,34 @@ const Users = () => {
                             <span className="sm:hidden">Add</span>
                           </Button>
                         </SheetTrigger>
-                        <SheetContent className="w-full sm:w-[460px]">
-                          <SheetHeader>
+                        <SheetContent
+                          side="right"
+                          className="w-full sm:w-[460px]"
+                        >
+                          <SheetHeader className="border-b pb-3">
                             <SheetTitle>Add User</SheetTitle>
                             <SheetDescription>
                               Enter details to create a new platform
                               user.
                             </SheetDescription>
                           </SheetHeader>
-                          <div className="space-y-4 py-4">
+
+                          {/* Offcanvas form – mirrors Bootstrap addNewUserForm */}
+                          <form
+                            className="space-y-4 py-4 h-[calc(100%-4rem)] flex flex-col"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (!addSubmitting) {
+                                void handleAddUserSubmit();
+                              }
+                            }}
+                          >
                             <div className="space-y-1.5">
-                              <Label htmlFor="name">
+                              <Label htmlFor="add-user-fullname">
                                 Full Name
                               </Label>
                               <Input
-                                id="name"
+                                id="add-user-fullname"
                                 placeholder="John Doe"
                                 value={addName}
                                 onChange={(e) =>
@@ -1133,12 +1159,13 @@ const Users = () => {
                                 </p>
                               )}
                             </div>
+
                             <div className="space-y-1.5">
-                              <Label htmlFor="email">
+                              <Label htmlFor="add-user-email">
                                 Email
                               </Label>
                               <Input
-                                id="email"
+                                id="add-user-email"
                                 type="email"
                                 placeholder="john.doe@example.com"
                                 value={addEmail}
@@ -1152,12 +1179,13 @@ const Users = () => {
                                 </p>
                               )}
                             </div>
+
                             <div className="space-y-1.5">
-                              <Label htmlFor="contact">
+                              <Label htmlFor="add-user-contact">
                                 Contact
                               </Label>
                               <Input
-                                id="contact"
+                                id="add-user-contact"
                                 placeholder="+1 (609) 988-44-11"
                                 value={addPhone}
                                 onChange={(e) =>
@@ -1165,12 +1193,13 @@ const Users = () => {
                                 }
                               />
                             </div>
+
                             <div className="space-y-1.5">
-                              <Label htmlFor="company">
+                              <Label htmlFor="add-user-company">
                                 Company
                               </Label>
                               <Input
-                                id="company"
+                                id="add-user-company"
                                 placeholder="Web Developer"
                                 value={addCompany}
                                 onChange={(e) =>
@@ -1260,27 +1289,29 @@ const Users = () => {
                               </Select>
                             </div>
 
-                            <div className="flex gap-2 pt-2">
+                            {/* Actions pinned to bottom of offcanvas */}
+                            <div className="mt-auto flex gap-2 pt-2">
                               <Button
                                 className="flex-1"
+                                type="submit"
                                 disabled={addSubmitting}
-                                onClick={handleAddUserSubmit}
                               >
                                 {addSubmitting
                                   ? "Submitting…"
                                   : "Submit"}
                               </Button>
                               <Button
+                                type="button"
                                 variant="outline"
                                 className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:text-red-700"
-                                onClick={() =>
-                                  setIsAddUserOpen(false)
-                                }
+                                onClick={() => {
+                                  setIsAddUserOpen(false);
+                                }}
                               >
                                 Cancel
                               </Button>
                             </div>
-                          </div>
+                          </form>
                         </SheetContent>
                       </Sheet>
                     </div>
