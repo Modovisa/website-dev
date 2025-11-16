@@ -1,6 +1,6 @@
 // src/components/auth/HomepageRegisterForm.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -36,6 +36,12 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // 🔁 Keep a ref in sync so the Google callback always sees the latest value
+  const termsAcceptedRef = useRef(false);
+  useEffect(() => {
+    termsAcceptedRef.current = termsAccepted;
+  }, [termsAccepted]);
 
   // Validation feedback
   const [usernameFeedback, setUsernameFeedback] = useState<Feedback>({
@@ -160,8 +166,6 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
         // ignore
       }
 
-      // Hand over to the caller: this will run the Bootstrap-mirrored flow
-      // (routeAfterLoginFromHomepageReact → Stripe embed → /app/tracking-setup).
       await onSuccess();
     } catch (err) {
       console.error("[homepage-register] Register error:", err);
@@ -173,7 +177,8 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
   /* ---------------- Google sign-in (uses same API as /register.tsx) ---------------- */
 
   const handleGoogleResponse = async (response: any) => {
-    if (!termsAccepted) {
+    // ✅ Use the ref so we don't get a stale false from the initial render
+    if (!termsAcceptedRef.current) {
       setGoogleError(
         "Please agree to the Privacy Policy and Terms before using Google sign-in.",
       );
@@ -217,8 +222,6 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
       }
 
       if (res.ok) {
-        // Don’t set mv_new_signup here — whether they are “new” is determined
-        // by /api/me (is_new_user) inside routeAfterLoginFromHomepageReact.
         await onSuccess();
       } else {
         setIsLoading(false);
@@ -238,15 +241,15 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
       'script[src="https://accounts.google.com/gsi/client"]',
     );
     if (existing) {
-      if (window.google?.accounts?.id) {
+      if ((window as any).google?.accounts?.id) {
         const buttonDiv = document.getElementById("google-signin-button-homepage");
         if (buttonDiv) {
-          window.google.accounts.id.initialize({
+          (window as any).google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleGoogleResponse,
             auto_select: false,
           });
-          window.google.accounts.id.renderButton(buttonDiv, {
+          (window as any).google.accounts.id.renderButton(buttonDiv, {
             theme: "outline",
             size: "large",
             width: buttonDiv.offsetWidth,
@@ -263,8 +266,8 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     document.head.appendChild(script);
 
     script.onload = () => {
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
+      if ((window as any).google?.accounts?.id) {
+        (window as any).google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleGoogleResponse,
           auto_select: false,
@@ -272,15 +275,15 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
 
         const buttonDiv = document.getElementById("google-signin-button-homepage");
         if (buttonDiv) {
-          window.google.accounts.id.renderButton(buttonDiv, {
+          (window as any).google.accounts.id.renderButton(buttonDiv, {
             theme: "outline",
             size: "large",
             width: buttonDiv.offsetWidth,
           });
         }
 
-        if (termsAccepted) {
-          window.google.accounts.id.prompt();
+        if (termsAcceptedRef.current) {
+          (window as any).google.accounts.id.prompt();
         }
       }
     };
@@ -293,8 +296,8 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
 
   // Optional: “one-tap” style prompt once terms are accepted
   useEffect(() => {
-    if (termsAccepted && window.google?.accounts?.id) {
-      window.google.accounts.id.prompt();
+    if (termsAccepted && (window as any).google?.accounts?.id) {
+      (window as any).google.accounts.id.prompt();
     }
   }, [termsAccepted]);
 
@@ -392,7 +395,11 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 disabled={isLoading}
               >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
               </button>
             </div>
             {passwordFeedback && (
