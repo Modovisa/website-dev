@@ -13,6 +13,9 @@ import {
   TabsTrigger,
   TabsContent,
 } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { secureAdminFetch } from "@/lib/auth/adminAuth";
 
 const API = "https://api.modovisa.com";
@@ -28,10 +31,12 @@ type AdminProfile = {
   twofa_enabled?: boolean;
 };
 
-type MessageState = {
-  type: "success" | "error";
-  text: string;
-} | null;
+type MessageState =
+  | {
+      type: "success" | "error";
+      text: string;
+    }
+  | null;
 
 function toInitials(name: string) {
   const caps = (name.match(/\b\w/g) || [])
@@ -65,6 +70,12 @@ export default function AdminUserProfile() {
   const [pwBusy, setPwBusy] = useState(false);
   const [pwMessage, setPwMessage] = useState<MessageState>(null);
 
+  // Toggle visibility (match user profile UX)
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPasswordAlert, setShowPasswordAlert] = useState(true);
+
   // 2FA state
   const [twofaEnabled, setTwofaEnabled] = useState<boolean | null>(null);
   const [twofaBusy, setTwofaBusy] = useState(false);
@@ -72,8 +83,11 @@ export default function AdminUserProfile() {
   const [otpSecret, setOtpSecret] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [twofaMessage, setTwofaMessage] = useState<MessageState>(null);
+  const [show2FASetup, setShow2FASetup] = useState(false);
 
-  // Load admin profile (and initial 2FA status)
+  const [activeTab, setActiveTab] = useState<"security">("security");
+
+  // Load admin profile
   useEffect(() => {
     let cancelled = false;
 
@@ -127,10 +141,12 @@ export default function AdminUserProfile() {
     };
   }, []);
 
-  const initials = useMemo(
-    () => toInitials(profile?.username || "Admin"),
-    [profile?.username],
+  const username = useMemo(
+    () => profile?.username || profile?.email?.split("@")[0] || "Admin",
+    [profile?.username, profile?.email],
   );
+
+  const initials = useMemo(() => toInitials(username), [username]);
 
   const statusBadgeVariant =
     profile?.status === "active"
@@ -141,8 +157,7 @@ export default function AdminUserProfile() {
 
   /* ---------------- Change Password ---------------- */
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleChangePassword = async () => {
     setPwMessage(null);
 
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -153,27 +168,27 @@ export default function AdminUserProfile() {
       setPwMessage({ type: "error", text: "New passwords do not match." });
       return;
     }
-    if (newPassword.length < 8) {
+
+    const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!strong.test(newPassword)) {
       setPwMessage({
         type: "error",
-        text: "Password must be at least 8 characters long.",
+        text:
+          "Password must be 8+ chars with uppercase, lowercase, digit, and special character.",
       });
       return;
     }
 
     setPwBusy(true);
     try {
-      const res = await secureAdminFetch(
-        `${API}/api/admin-change-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            old_password: oldPassword,
-            new_password: newPassword,
-          }),
-        },
-      );
+      const res = await secureAdminFetch(`${API}/api/admin-change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          old_password: oldPassword,
+          new_password: newPassword,
+        }),
+      });
 
       const json = await res.json().catch(() => ({} as any));
 
@@ -212,13 +227,9 @@ export default function AdminUserProfile() {
     setOtpSecret(null);
 
     try {
-      // Adjust endpoint/response field names to match your backend if needed
-      const res = await secureAdminFetch(
-        `${API}/api/admin-2fa-init`,
-        {
-          method: "POST",
-        },
-      );
+      const res = await secureAdminFetch(`${API}/api/admin-2fa-init`, {
+        method: "POST",
+      });
       const json = await res.json().catch(() => ({} as any));
 
       if (!res.ok) {
@@ -231,12 +242,12 @@ export default function AdminUserProfile() {
 
       const svg =
         json.qr_svg || json.qr || json.qr_svg_html || json.qrCodeSvg || "";
-      const secret =
-        json.secret || json.otp_secret || json.otpSecret || "";
+      const secret = json.secret || json.otp_secret || json.otpSecret || "";
 
       if (svg) setQrSvg(svg);
       if (secret) setOtpSecret(secret);
 
+      setShow2FASetup(true);
       setTwofaMessage({
         type: "success",
         text: "Scan the QR code with your authenticator app, then enter the 6-digit code below.",
@@ -265,14 +276,11 @@ export default function AdminUserProfile() {
 
     setTwofaBusy(true);
     try {
-      const res = await secureAdminFetch(
-        `${API}/api/admin-2fa-verify`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ otp: otpCode.trim() }),
-        },
-      );
+      const res = await secureAdminFetch(`${API}/api/admin-2fa-verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp: otpCode.trim() }),
+      });
       const json = await res.json().catch(() => ({} as any));
 
       if (!res.ok) {
@@ -287,6 +295,7 @@ export default function AdminUserProfile() {
       setQrSvg(null);
       setOtpSecret(null);
       setOtpCode("");
+      setShow2FASetup(false);
       setTwofaMessage({
         type: "success",
         text: "Two-factor authentication has been enabled.",
@@ -303,7 +312,7 @@ export default function AdminUserProfile() {
   };
 
   const handleReset2fa = async () => {
-    if (!window.confirm("Are you sure you want to disable 2FA for this account?")) {
+    if (!window.confirm("Disable 2FA for this admin account?")) {
       return;
     }
 
@@ -311,12 +320,9 @@ export default function AdminUserProfile() {
     setTwofaMessage(null);
 
     try {
-      const res = await secureAdminFetch(
-        `${API}/api/admin-2fa-reset`,
-        {
-          method: "POST",
-        },
-      );
+      const res = await secureAdminFetch(`${API}/api/admin-2fa-reset`, {
+        method: "POST",
+      });
       const json = await res.json().catch(() => ({} as any));
 
       if (!res.ok) {
@@ -331,6 +337,7 @@ export default function AdminUserProfile() {
       setQrSvg(null);
       setOtpSecret(null);
       setOtpCode("");
+      setShow2FASetup(false);
       setTwofaMessage({
         type: "success",
         text: "Two-factor authentication has been disabled.",
@@ -350,328 +357,405 @@ export default function AdminUserProfile() {
 
   return (
     <AdminLayout>
-      <div className="w-full max-w-6xl mx-auto px-4 lg:px-6 py-6 lg:py-8">
-        {loadingProfile ? (
-          <div className="text-sm text-muted-foreground">Loading profile…</div>
-        ) : profileError ? (
-          <div className="text-sm text-red-500">{profileError}</div>
-        ) : !profile ? (
-          <div className="text-sm text-red-500">
-            No profile information available.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* LEFT: User card */}
-            <Card className="lg:col-span-1">
-              <CardContent className="pt-8">
-                <div className="flex flex-col items-center space-y-3">
-                  <div className="h-16 w-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-semibold">
-                    {initials}
-                  </div>
-                  <div className="text-center space-y-1">
-                    <h2 className="text-lg font-semibold">
-                      {profile.username}
-                    </h2>
+      <div className="flex flex-col lg:flex-row h-full">
+        {/* LEFT SIDEBAR – same structure as user Profile, adapted for admin */}
+        <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
+          <Card className="border-primary/20">
+            <CardContent className="pt-6 space-y-6">
+              {loadingProfile ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading admin profile…
+                </div>
+              ) : profileError ? (
+                <div className="text-sm text-red-500">{profileError}</div>
+              ) : !profile ? (
+                <div className="text-sm text-red-500">
+                  No profile information available.
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center space-y-4">
+                    <Avatar className="h-24 w-24 ring-4 ring-primary/20">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-semibold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+
                     <Badge
                       variant={statusBadgeVariant}
-                      className="mt-1 capitalize"
+                      className="capitalize"
                     >
                       {profile.status || "unknown"}
                     </Badge>
-                  </div>
-                </div>
 
-                <div className="mt-8 border-t pt-4 space-y-2 text-sm">
-                  <p>
-                    <span className="font-semibold">Username:</span>{" "}
-                    <span className="text-muted-foreground">
-                      @{profile.username || "username"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Email:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {profile.email || "–"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Role:</span>{" "}
-                    <span className="capitalize text-muted-foreground">
-                      {profile.role || "admin"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Created:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {formatDate(profile.created_at)}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Last Login:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {formatDate(profile.last_login_at)}
-                    </span>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* RIGHT: Tabs & Security */}
-            <div className="lg:col-span-2 space-y-6">
-              <Tabs defaultValue="security" className="w-full">
-                <TabsList className="w-full justify-start">
-                  <TabsTrigger value="security">Security</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="security" className="space-y-6 mt-4">
-                  {/* Change Password */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Change Password</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Minimum 8 characters, with at least one uppercase letter
-                        and a symbol.
+                    <div className="text-center">
+                      <div className="bg-primary/10 rounded-lg p-3 inline-block mb-2">
+                        <ShieldCheck className="h-6 w-6 text-primary" />
+                      </div>
+                      <p className="text-2xl font-bold capitalize">
+                        {profile.role || "admin"}
                       </p>
-                    </CardHeader>
-                    <CardContent>
-                      <form
-                        className="space-y-4"
-                        onSubmit={handleChangePassword}
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2 md:col-span-2">
-                            <Label htmlFor="oldPassword">Old Password</Label>
-                            <Input
-                              id="oldPassword"
-                              type="password"
-                              autoComplete="current-password"
-                              value={oldPassword}
-                              onChange={(e) =>
-                                setOldPassword(e.target.value)
-                              }
-                              disabled={pwBusy}
-                            />
-                          </div>
+                      <p className="text-sm text-muted-foreground">
+                        Admin role
+                      </p>
+                    </div>
+                  </div>
 
-                          <div className="space-y-2">
-                            <Label htmlFor="newPassword">New Password</Label>
-                            <Input
-                              id="newPassword"
-                              type="password"
-                              autoComplete="new-password"
-                              value={newPassword}
-                              onChange={(e) =>
-                                setNewPassword(e.target.value)
-                              }
-                              disabled={pwBusy}
-                            />
-                          </div>
+                  <div className="space-y-3 pt-6 border-t">
+                    <h3 className="font-semibold">Details</h3>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">
+                          Username:
+                        </span>
+                        <span className="ml-2 font-medium">@{username}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Email:</span>
+                        <span className="ml-2 font-medium">
+                          {profile.email || "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Status:</span>
+                        <span className="ml-2 font-medium capitalize">
+                          {profile.status || "unknown"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Created:</span>
+                        <span className="ml-2 font-medium">
+                          {formatDate(profile.created_at)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">
+                          Last Login:
+                        </span>
+                        <span className="ml-2 font-medium">
+                          {formatDate(profile.last_login_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-                          <div className="space-y-2">
-                            <Label htmlFor="confirmPassword">
-                              Confirm New Password
-                            </Label>
-                            <Input
-                              id="confirmPassword"
-                              type="password"
-                              autoComplete="new-password"
-                              value={confirmPassword}
-                              onChange={(e) =>
-                                setConfirmPassword(e.target.value)
-                              }
-                              disabled={pwBusy}
-                            />
-                          </div>
-                        </div>
+        {/* RIGHT – Tabs, currently only Security (match user Profile structure) */}
+        <div className="flex-1 p-4 md:p-8">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as "security")}
+            className="space-y-6"
+          >
+            <TabsList className="grid w-full max-w-md grid-cols-1">
+              <TabsTrigger value="security">Security</TabsTrigger>
+            </TabsList>
 
-                        <div className="space-y-2">
-                          <Button type="submit" disabled={pwBusy}>
-                            {pwBusy ? "Changing…" : "Change Password"}
-                          </Button>
-                          {pwMessage && (
-                            <div
-                              className={`text-sm ${
-                                pwMessage.type === "success"
-                                  ? "text-emerald-600"
-                                  : "text-red-500"
-                              }`}
-                            >
-                              {pwMessage.text}
-                            </div>
-                          )}
-                        </div>
-                      </form>
-                    </CardContent>
-                  </Card>
+            <TabsContent value="security" className="space-y-6">
+              {/* Change Password – visually aligned with user Profile */}
+              <Card>
+                <CardContent className="pt-6 space-y-6">
+                  <h2 className="text-2xl font-semibold">Change Password</h2>
 
-                  {/* Two-Factor Authentication */}
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between gap-2">
+                  {showPasswordAlert && (
+                    <Alert className="bg-warning/10 border-warning/20">
+                      <AlertDescription className="flex items-start justify-between">
                         <div>
-                          <CardTitle>Two-factor Authentication</CardTitle>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Secure your admin account with an authenticator app.
+                          <p className="font-semibold text-warning mb-1">
+                            Ensure that these requirements are met
+                          </p>
+                          <p className="text-sm text-warning/90">
+                            Minimum 8 characters long, uppercase, lowercase,
+                            number & symbol
                           </p>
                         </div>
-                        <Badge
-                          variant={
-                            twofaEnabled ? "outline" : "secondary"
-                          }
-                          className="capitalize"
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-0 hover:bg-transparent"
+                          onClick={() => setShowPasswordAlert(false)}
                         >
-                          {twofaEnabled ? "Enabled" : "Disabled"}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {qrSvg && (
-                        <div className="flex flex-col items-center space-y-3">
-                          <div
-                            className="border rounded-xl p-3 bg-muted"
-                            dangerouslySetInnerHTML={{ __html: qrSvg }}
-                          />
-                          {otpSecret && (
-                            <div className="text-xs text-muted-foreground text-center">
-                              <p className="mb-1">
-                                Or manually enter this key:
-                              </p>
-                              <code className="break-all text-primary font-semibold">
-                                {otpSecret}
-                              </code>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                          <EyeOff className="h-4 w-4 text-warning opacity-0" />
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                      <div className="space-y-2 max-w-xs">
-                        <Label htmlFor="otpInput">
-                          Code from authenticator app
-                        </Label>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="old-password">Old Password</Label>
+                      <div className="relative">
                         <Input
-                          id="otpInput"
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          placeholder="123456"
-                          value={otpCode}
-                          onChange={(e) =>
-                            setOtpCode(e.target.value.replace(/\D/g, ""))
-                          }
-                          disabled={twofaBusy}
+                          id="old-password"
+                          type={showOldPassword ? "text" : "password"}
+                          placeholder="Old Password"
+                          value={oldPassword}
+                          onChange={(e) => setOldPassword(e.target.value)}
+                          className="pr-10"
+                          autoComplete="current-password"
+                          disabled={pwBusy}
                         />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowOldPassword(!showOldPassword)}
+                        >
+                          {showOldPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="new-password"
+                            type={showNewPassword ? "text" : "password"}
+                            placeholder="New Password"
+                            value={newPassword}
+                            onChange={(e) =>
+                              setNewPassword(e.target.value)
+                            }
+                            className="pr-10"
+                            autoComplete="new-password"
+                            disabled={pwBusy}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() =>
+                              setShowNewPassword(!showNewPassword)
+                            }
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
 
-                      {twofaMessage && (
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm-password">
+                          Confirm New Password
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="confirm-password"
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="Confirm Password"
+                            value={confirmPassword}
+                            onChange={(e) =>
+                              setConfirmPassword(e.target.value)
+                            }
+                            className="pr-10"
+                            autoComplete="new-password"
+                            disabled={pwBusy}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Button
+                        className="bg-primary hover:bg-primary/90"
+                        onClick={handleChangePassword}
+                        disabled={pwBusy}
+                      >
+                        {pwBusy ? "Changing..." : "Change Password"}
+                      </Button>
+                      {pwMessage && (
                         <div
                           className={`text-sm ${
-                            twofaMessage.type === "success"
+                            pwMessage.type === "success"
                               ? "text-emerald-600"
                               : "text-red-500"
                           }`}
                         >
-                          {twofaMessage.text}
+                          {pwMessage.text}
                         </div>
                       )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
+              {/* Two-Factor Authentication */}
+              <Card>
+                <CardContent className="pt-6 space-y-6">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-semibold">
+                      Two-factor Authentication
+                    </h2>
+                    <Badge
+                      className={
+                        twofaEnabled ? "bg-success" : "bg-secondary"
+                      }
+                    >
+                      {twofaEnabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  </div>
+
+                  <p className="text-muted-foreground">
+                    Secure your admin account with an authenticator app.
+                  </p>
+
+                  {show2FASetup && qrSvg && (
+                    <div className="space-y-4 p-4 border rounded-lg">
+                      <div className="text-center">
+                        <div
+                          dangerouslySetInnerHTML={{ __html: qrSvg }}
+                        />
+                        {otpSecret && (
+                          <p className="mt-2 text-sm">
+                            Secret: <code>{otpSecret}</code>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {twofaMessage && (
+                    <div
+                      className={`text-sm ${
+                        twofaMessage.type === "success"
+                          ? "text-emerald-600"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {twofaMessage.text}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="space-y-2 max-w-xs">
+                      <Label htmlFor="2fa-code">
+                        Enter code from authenticator app
+                      </Label>
+                      <Input
+                        id="2fa-code"
+                        type="text"
+                        placeholder="123456"
+                        value={otpCode}
+                        onChange={(e) =>
+                          setOtpCode(
+                            e.target.value.replace(/\D/g, ""),
+                          )
+                        }
+                        maxLength={6}
+                        disabled={twofaBusy}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {!twofaEnabled && (
                         <Button
-                          type="button"
                           variant="outline"
+                          className="border-primary text-primary hover:bg-primary/10"
                           onClick={handleSetup2fa}
                           disabled={twofaBusy}
                         >
-                          {twofaBusy ? "Working…" : "Show QR Code"}
+                          Show QR Code
                         </Button>
+                      )}
+                      <Button
+                        className="bg-primary hover:bg-primary/90"
+                        onClick={handleVerify2fa}
+                        disabled={twofaBusy || !otpCode}
+                      >
+                        Verify Code
+                      </Button>
+                      {twofaEnabled && (
                         <Button
-                          type="button"
-                          onClick={handleVerify2fa}
-                          disabled={twofaBusy}
-                        >
-                          Verify Code
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="text-red-600 hover:text-red-700"
+                          variant="link"
+                          className="text-destructive hover:text-destructive/90 p-0"
                           onClick={handleReset2fa}
                           disabled={twofaBusy}
                         >
                           Reset 2FA
                         </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                  {/* Recent Devices (static demo) */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Recent Devices</CardTitle>
-                    </CardHeader>
-                    <CardContent className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="border-b text-muted-foreground text-left">
-                          <tr>
-                            <th className="py-2 pr-4">Browser</th>
-                            <th className="py-2 pr-4">Device</th>
-                            <th className="py-2 pr-4">Location</th>
-                            <th className="py-2">Recent Activity</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="border-b last:border-0">
-                            <td className="py-2 pr-4">
-                              Chrome on Windows
-                            </td>
-                            <td className="py-2 pr-4">
-                              HP Spectre 360
-                            </td>
-                            <td className="py-2 pr-4">Switzerland</td>
-                            <td className="py-2">
-                              10 July 2021, 20:07
-                            </td>
-                          </tr>
-                          <tr className="border-b last:border-0">
-                            <td className="py-2 pr-4">
-                              Chrome on iPhone
-                            </td>
-                            <td className="py-2 pr-4">iPhone 12x</td>
-                            <td className="py-2 pr-4">Australia</td>
-                            <td className="py-2">
-                              13 July 2021, 10:10
-                            </td>
-                          </tr>
-                          <tr className="border-b last:border-0">
-                            <td className="py-2 pr-4">
-                              Chrome on Android
-                            </td>
-                            <td className="py-2 pr-4">
-                              OnePlus 9 Pro
-                            </td>
-                            <td className="py-2 pr-4">Dubai</td>
-                            <td className="py-2">
-                              14 July 2021, 15:15
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="py-2 pr-4">
-                              Chrome on macOS
-                            </td>
-                            <td className="py-2 pr-4">iMac</td>
-                            <td className="py-2 pr-4">India</td>
-                            <td className="py-2">
-                              16 July 2021, 16:17
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-        )}
+              {/* Recent Devices (static demo, same as before) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Devices</CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b text-muted-foreground text-left">
+                      <tr>
+                        <th className="py-2 pr-4">Browser</th>
+                        <th className="py-2 pr-4">Device</th>
+                        <th className="py-2 pr-4">Location</th>
+                        <th className="py-2">Recent Activity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b last:border-0">
+                        <td className="py-2 pr-4">Chrome on Windows</td>
+                        <td className="py-2 pr-4">HP Spectre 360</td>
+                        <td className="py-2 pr-4">Switzerland</td>
+                        <td className="py-2">10 July 2021, 20:07</td>
+                      </tr>
+                      <tr className="border-b last:border-0">
+                        <td className="py-2 pr-4">Chrome on iPhone</td>
+                        <td className="py-2 pr-4">iPhone 12x</td>
+                        <td className="py-2 pr-4">Australia</td>
+                        <td className="py-2">13 July 2021, 10:10</td>
+                      </tr>
+                      <tr className="border-b last:border-0">
+                        <td className="py-2 pr-4">Chrome on Android</td>
+                        <td className="py-2 pr-4">OnePlus 9 Pro</td>
+                        <td className="py-2 pr-4">Dubai</td>
+                        <td className="py-2">14 July 2021, 15:15</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 pr-4">Chrome on macOS</td>
+                        <td className="py-2 pr-4">iMac</td>
+                        <td className="py-2 pr-4">India</td>
+                        <td className="py-2">16 July 2021, 16:17</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </AdminLayout>
   );

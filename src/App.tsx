@@ -178,7 +178,7 @@ const App = () => (
             }
           />
           <Route
-            path="/mv-admin/admin-user-profile"
+            path="/mv-admin/profile"
             element={
               <RequireAdminAuth>
                 <AdminUserProfile />
