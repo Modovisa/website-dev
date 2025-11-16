@@ -32,10 +32,12 @@ import Billing from "./pages/admin/Billing";
 import Logs from "./pages/admin/Logs";
 import Permissions from "./pages/admin/Permissions";
 import Settings from "./pages/admin/Settings";
+import AdminLogin from "./pages/admin/AdminLogin";
+import { RequireAdminAuth } from "./components/admin/RequireAdminAuth";
 
 // 📚 Docs pages
 import Documentation from "@/pages/docs/Documentation";
-import DocsRegister from "@/pages/docs/Register";       // ⬅️ renamed to avoid clash
+import DocsRegister from "@/pages/docs/Register"; // ⬅️ renamed to avoid clash
 import SetupTracking from "@/pages/docs/SetupTracking";
 import WordPress from "@/pages/docs/WordPress";
 import Shopify from "@/pages/docs/Shopify";
@@ -96,15 +98,74 @@ const App = () => (
           <Route path="/docs/install/webflow" element={<Webflow />} />
           <Route path="/docs/install/ghost" element={<Ghost />} />
 
-          {/* Admin Routes */}
-          <Route path="/mv-admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/mv-admin/admin-users" element={<AdminUsers />} />
-          <Route path="/mv-admin/users" element={<Users />} />
-          <Route path="/mv-admin/sites" element={<Sites />} />
-          <Route path="/mv-admin/billing" element={<Billing />} />
-          <Route path="/mv-admin/logs" element={<Logs />} />
-          <Route path="/mv-admin/permissions" element={<Permissions />} />
-          <Route path="/mv-admin/settings" element={<Settings />} />
+          {/* Admin Login (public) */}
+          <Route path="/mv-admin/login" element={<AdminLogin />} />
+
+          {/* Admin Routes (protected) */}
+          <Route
+            path="/mv-admin/dashboard"
+            element={
+              <RequireAdminAuth>
+                <AdminDashboard />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/admin-users"
+            element={
+              <RequireAdminAuth>
+                <AdminUsers />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/users"
+            element={
+              <RequireAdminAuth>
+                <Users />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/sites"
+            element={
+              <RequireAdminAuth>
+                <Sites />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/billing"
+            element={
+              <RequireAdminAuth>
+                <Billing />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/logs"
+            element={
+              <RequireAdminAuth>
+                <Logs />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/permissions"
+            element={
+              <RequireAdminAuth>
+                <Permissions />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/settings"
+            element={
+              <RequireAdminAuth>
+                <Settings />
+              </RequireAdminAuth>
+            }
+          />
 
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />

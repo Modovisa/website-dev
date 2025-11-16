@@ -1,4 +1,4 @@
-// src/lib/auth.ts
+// src/lib/auth/auth.ts
 
 interface AccessToken {
   token: string;

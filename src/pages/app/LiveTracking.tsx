@@ -74,6 +74,10 @@ interface Website {
   domain: string;
 }
 
+/* ------------------------- array helper ------------------------- */
+const getLastPage = (pages?: Page[]) =>
+  pages && pages.length > 0 ? pages[pages.length - 1] : undefined;
+
 /* --------------------------- small components ------------------------ */
 
 const SidebarLoadingSkeleton = () => (
@@ -169,8 +173,9 @@ const LiveTracking = () => {
 
   // refs
   const wsRef = useRef<WebSocket | null>(null);
-  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const rebucketTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rebucketTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
 
   // site isolation refs (avoid bleed-through)
   const currentSiteIdRef = useRef<string | number | null>(null);
