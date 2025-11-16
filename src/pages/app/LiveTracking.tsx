@@ -190,8 +190,12 @@ const LiveTracking = () => {
     return "#";
   };
 
-  const getLastTimestamp = (visitor: Visitor) =>
-    new Date(visitor.pages?.at(-1)?.timestamp || visitor.last_activity || 0).getTime();
+  const getLastTimestamp = (visitor: Visitor) => {
+    const lastPage = getLastPage(visitor.pages);
+    const ts = lastPage?.timestamp || visitor.last_activity || 0;
+    return new Date(ts).getTime();
+  };
+
 
   const getBucketFor = (now: number, visitor: Visitor) => {
     const age = now - getLastTimestamp(visitor);
@@ -256,7 +260,7 @@ const LiveTracking = () => {
             const visitor: Visitor = await res.json();
 
             // normalize activeness + is_active flag
-            const latestPage = visitor.pages?.at(-1);
+            const latestPage = getLastPage(visitor.pages);
             const latestTime = new Date(latestPage?.timestamp || visitor.last_seen || 0).getTime();
             const isActiveNow = Date.now() - latestTime <= ACTIVE_MAX_AGE_MS;
 
@@ -339,7 +343,8 @@ const LiveTracking = () => {
       const now = Date.now();
       const normalized: Record<string, Visitor> = {};
       visitors.forEach((v: Visitor) => {
-        const lastTs = new Date(v.pages?.at(-1)?.timestamp || v.last_seen || 0).getTime();
+        const lastPage = getLastPage(v.pages);
+        const lastTs = new Date(lastPage?.timestamp || v.last_seen || 0).getTime();
         const isActiveNow = now - lastTs <= ACTIVE_MAX_AGE_MS;
 
         v.status = isActiveNow ? "active" : "left";
@@ -349,6 +354,7 @@ const LiveTracking = () => {
         }
         normalized[v.id] = v;
       });
+
 
       // ignore if site switched mid-flight
       if (myEpoch !== siteEpochRef.current) return;
