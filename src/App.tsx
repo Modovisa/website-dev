@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
+import AdminUserProfilePage from "./pages/admin/UserProfile";
 import Users from "./pages/admin/Users";
 import Sites from "./pages/admin/Sites";
 import Billing from "./pages/admin/Billing";
@@ -179,6 +180,14 @@ const App = () => (
           />
           <Route
             path="/mv-admin/profile"
+            element={
+              <RequireAdminAuth>
+                <AdminUserProfile />
+              </RequireAdminAuth>
+            }
+          />
+          <Route
+            path="/mv-admin/user-profile"
             element={
               <RequireAdminAuth>
                 <AdminUserProfile />
