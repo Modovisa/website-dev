@@ -1218,17 +1218,20 @@ const Users = () => {
                                   <SelectValue placeholder="Select" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">
-                                    Select
-                                  </SelectItem>
-                                  {countries.map((c) => (
-                                    <SelectItem
-                                      key={c.iso_code}
-                                      value={c.iso_code}
-                                    >
-                                      {c.name}
-                                    </SelectItem>
-                                  ))}
+                                  {countries
+                                    .filter(
+                                      (c) =>
+                                        c.iso_code &&
+                                        c.iso_code.trim() !== "",
+                                    )
+                                    .map((c) => (
+                                      <SelectItem
+                                        key={c.iso_code}
+                                        value={c.iso_code}
+                                      >
+                                        {c.name}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1243,23 +1246,26 @@ const Users = () => {
                                   <SelectValue placeholder="Select Role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">
-                                    Select Role
-                                  </SelectItem>
-                                  {roles.map((r) => (
-                                    <SelectItem
-                                      key={r.name}
-                                      value={r.name}
-                                    >
-                                      {r.name
-                                        .replace(/_/g, " ")
-                                        .replace(
-                                          /\b\w/g,
-                                          (c) =>
-                                            c.toUpperCase(),
-                                        )}
-                                    </SelectItem>
-                                  ))}
+                                  {roles
+                                    .filter(
+                                      (r) =>
+                                        r.name &&
+                                        r.name.trim() !== "",
+                                    )
+                                    .map((r) => (
+                                      <SelectItem
+                                        key={r.name}
+                                        value={r.name}
+                                      >
+                                        {r.name
+                                          .replace(/_/g, " ")
+                                          .replace(
+                                            /\b\w/g,
+                                            (c) =>
+                                              c.toUpperCase(),
+                                          )}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1274,17 +1280,20 @@ const Users = () => {
                                   <SelectValue placeholder="Select Plan" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">
-                                    Select Plan
-                                  </SelectItem>
-                                  {plans.map((p) => (
-                                    <SelectItem
-                                      key={p.name}
-                                      value={p.name.toLowerCase()}
-                                    >
-                                      {p.name}
-                                    </SelectItem>
-                                  ))}
+                                  {plans
+                                    .filter(
+                                      (p) =>
+                                        p.name &&
+                                        p.name.trim() !== "",
+                                    )
+                                    .map((p) => (
+                                      <SelectItem
+                                        key={p.name}
+                                        value={p.name.toLowerCase()}
+                                      >
+                                        {p.name}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
                             </div>

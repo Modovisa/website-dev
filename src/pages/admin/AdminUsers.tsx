@@ -1,3 +1,5 @@
+// src/pages/admin/AdminUsers.tsx
+
 import { useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
