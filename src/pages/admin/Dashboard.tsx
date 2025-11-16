@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -169,7 +170,9 @@ const AdminDashboard = () => {
           cache: "no-store",
         });
         const json = (await res.json().catch(() => ({}))) as DashboardMetricsResponse;
-        setTotals(json.totals ?? {});
+        if (json.totals) {
+          setTotals(json.totals);
+        }
       } catch (e) {
         console.warn("[admin dashboard] loadKpis error:", e);
       } finally {
@@ -340,7 +343,7 @@ const AdminDashboard = () => {
                   </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
-                      {kpiLoading ? "…" : formatNumber(eventsToday)}
+                      {kpiLoading && !totals ? "…" : formatNumber(eventsToday)}
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -364,7 +367,7 @@ const AdminDashboard = () => {
                   </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
-                      {kpiLoading ? "…" : formatNumber(newSignups7d)}
+                      {kpiLoading && !totals ? "…" : formatNumber(newSignups7d)}
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">Last 7 days</p>
@@ -386,7 +389,7 @@ const AdminDashboard = () => {
                   </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
-                      {kpiLoading ? "…" : formatNumber(activeSubs)}
+                      {kpiLoading && !totals ? "…" : formatNumber(activeSubs)}
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -410,7 +413,7 @@ const AdminDashboard = () => {
                   </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
-                      {kpiLoading ? "…" : formatNumber(failedPayments7d)}
+                      {kpiLoading && !totals ? "…" : formatNumber(failedPayments7d)}
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">Last 7 days</p>
@@ -431,7 +434,24 @@ const AdminDashboard = () => {
                     <h5 className="text-sm font-semibold text-foreground">
                       Timezone
                     </h5>
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground"
+                          aria-label="Timezone info"
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="max-w-xs text-xs leading-relaxed"
+                      >
+                        Choose the timezone used for “today” and rolling 7-day
+                        windows in this admin view.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Used for calendar-day KPIs
@@ -486,10 +506,29 @@ const AdminDashboard = () => {
                     <h4 className="text-sm font-semibold">
                       Ingestion Health (last 60m)
                     </h4>
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground"
+                          aria-label="Ingestion Health info"
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="max-w-xs text-xs leading-relaxed"
+                      >
+                        Sites that were active in the last 7 days but have been
+                        silent for ≥60 minutes. Useful to catch broken snippets,
+                        CSP/DNS/CDN issues, ad-block interference, or quota
+                        problems.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                   <Badge variant="secondary">
-                    {opsLoading ? "…" : ingestion.length.toString()}
+                    {opsLoading && !ingestion.length ? "…" : ingestion.length.toString()}
                   </Badge>
                 </div>
 
@@ -544,10 +583,28 @@ const AdminDashboard = () => {
                     <h4 className="text-sm font-semibold">
                       Dunning &amp; At-Risk Accounts
                     </h4>
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground"
+                          aria-label="Dunning and at-risk accounts info"
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="max-w-xs text-xs leading-relaxed"
+                      >
+                        Customers with failed subscription payments within the
+                        last 21 days. Count indicates total failed attempts per
+                        user; address promptly to prevent involuntary churn.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                   <Badge variant="secondary">
-                    {opsLoading ? "…" : dunning.length.toString()}
+                    {opsLoading && !dunning.length ? "…" : dunning.length.toString()}
                   </Badge>
                 </div>
 

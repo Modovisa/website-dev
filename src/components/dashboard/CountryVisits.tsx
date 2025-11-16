@@ -59,7 +59,7 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
                     alt={name}
                     width={25}
                     height={20}
-                    className="rounded"
+                    className="rounded shadow-sm border"
                     onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
                   />
                 ) : null}
