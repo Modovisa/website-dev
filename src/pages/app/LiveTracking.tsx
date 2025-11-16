@@ -74,6 +74,8 @@ interface Website {
   domain: string;
 }
 
+type UserStatus = "active" | "suspended" | "blocked" | "limit_reached" | "unknown";
+
 /* ------------------------- array helper ------------------------- */
 const getLastPage = (pages?: Page[]) =>
   pages && pages.length > 0 ? pages[pages.length - 1] : undefined;
@@ -109,40 +111,58 @@ const InlineNoVisitors = () => (
 
 const IconWindow = ({ className = "h-5 w-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
-    <path fill="currentColor" d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"/>
+    <path
+      fill="currentColor"
+      d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"
+    />
   </svg>
 );
 
 const IconAddToCart = ({ className = "h-5 w-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
-    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor"/>
-    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor"/>
-    <path fill="currentColor" d="M13 13h2v-2.99h2.99v-2H15V5.03h-2v2.98h-2.99v2H13z"/>
-    <path fill="currentColor" d="M10 17h8a1 1 0 0 0 .93-.64L21.76 9h-2.14l-2.31 6h-6.64L6.18 4.23A2 2 0 0 0 4.33 3H2v2h2.33l4.75 11.38A1 1 0 0 0 10 17"/>
+    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" />
+    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" />
+    <path fill="currentColor" d="M13 13h2v-2.99h2.99v-2H15V5.03h-2v2.98h-2.99v2H13z" />
+    <path
+      fill="currentColor"
+      d="M10 17h8a1 1 0 0 0 .93-.64L21.76 9h-2.14l-2.31 6h-6.64L6.18 4.23A2 2 0 0 0 4.33 3H2v2h2.33l4.75 11.38A1 1 0 0 0 10 17"
+    />
   </svg>
 );
 
 const IconCheckout = ({ className = "h-5 w-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
-    <path fill="currentColor" d="M21.822 7.431A1 1 0 0 0 21 7H7.333L6.179 4.23A1.99 1.99 0 0 0 4.333 3H2v2h2.333l4.744 11.385A1 1 0 0 0 10 17h8c.417 0 .79-.259.937-.648l3-8a1 1 0 0 0-.115-.921M17.307 15h-6.64l-2.5-6h11.39z"/>
-    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor"/>
-    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor"/>
+    <path
+      fill="currentColor"
+      d="M21.822 7.431A1 1 0 0 0 21 7H7.333L6.179 4.23A1.99 1.99 0 0 0 4.333 3H2v2h2.333l4.744 11.385A1 1 0 0 0 10 17h8c.417 0 .79-.259.937-.648l3-8a1 1 0 0 0-.115-.921M17.307 15h-6.64l-2.5-6h11.39z"
+    />
+    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" />
+    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" />
   </svg>
 );
 
 const IconThankYou = ({ className = "h-5 w-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
-    <path fill="currentColor" d="M12 15c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1"/>
-    <path fill="currentColor" d="M5 2H2v2h2v17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4h2V2zm13 18H6V4h12z"/>
+    <path
+      fill="currentColor"
+      d="M12 15c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1"
+    />
+    <path
+      fill="currentColor"
+      d="M5 2H2v2h2v17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4h2V2zm13 18H6V4h12z"
+    />
   </svg>
 );
 
 /* Helpers for stage ➜ icon + label */
 const stageMeta = (stage?: string | null) => {
-  if (stage === "cart")       return { Icon: IconAddToCart, label: "Product added to cart", className: "text-[#56ca00]" };
-  if (stage === "checkout")   return { Icon: IconCheckout,  label: "Visitor started checkout", className: "text-[#56ca00]" };
-  if (stage === "thank_you")  return { Icon: IconThankYou,  label: "Order completed", className: "text-[#56ca00]" };
-  return { Icon: IconWindow,   label: null, className: "text-[#ffab00]" }; // page view = orange
+  if (stage === "cart")
+    return { Icon: IconAddToCart, label: "Product added to cart", className: "text-[#56ca00]" };
+  if (stage === "checkout")
+    return { Icon: IconCheckout, label: "Visitor started checkout", className: "text-[#56ca00]" };
+  if (stage === "thank_you")
+    return { Icon: IconThankYou, label: "Order completed", className: "text-[#56ca00]" };
+  return { Icon: IconWindow, label: null, className: "text-[#ffab00]" }; // page view = orange
 };
 
 /* -------------------------------- page -------------------------------- */
@@ -168,14 +188,19 @@ const LiveTracking = () => {
   const [currentWebsite, setCurrentWebsite] = useState<Website | null>(null);
   const [visitorDataMap, setVisitorDataMap] = useState<Record<string, Visitor>>({});
   const [selectedVisitorId, setSelectedVisitorId] = useState<string | null>(null);
-  const [isSuspended, setIsSuspended] = useState(false);
+
+  // full user status + reason (mirrors Bootstrap showStatusBadge)
+  const [userStatus, setUserStatus] = useState<UserStatus>("unknown");
+  const [statusReason, setStatusReason] = useState<"limit" | "admin" | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
+
+  const isSuspended = userStatus === "suspended";
 
   // refs
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rebucketTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
 
   // site isolation refs (avoid bleed-through)
   const currentSiteIdRef = useRef<string | number | null>(null);
@@ -196,12 +221,60 @@ const LiveTracking = () => {
     return new Date(ts).getTime();
   };
 
-
   const getBucketFor = (now: number, visitor: Visitor) => {
     const age = now - getLastTimestamp(visitor);
     if (age <= ACTIVE_MAX_AGE_MS) return "active";
     if (age <= RECENT_MAX_AGE_MS) return "recent";
     return "expired";
+  };
+
+  /* -------------------------- status banner --------------------------- */
+  const renderStatusBanner = () => {
+    if (userStatus === "blocked") {
+      return (
+        <div className="mx-6 mb-4">
+          <div className="bg-red-50 border border-red-300 text-red-900 px-4 py-3 rounded">
+            <p className="font-semibold text-sm mb-1">Account Blocked</p>
+            <p className="text-sm">Your account has been permanently blocked.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (userStatus === "suspended") {
+      let message = "Live tracking is currently suspended.";
+
+      if (statusReason === "admin") {
+        message = "Live tracking has been manually suspended by an administrator.";
+      } else if (statusReason === "limit") {
+        message = "You've reached your monthly event limit. Upgrade to resume tracking.";
+      }
+
+      return (
+        <div className="mx-6 mb-4">
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded">
+            <p className="font-semibold text-sm mb-1">Live Tracking Suspended</p>
+            <p className="text-sm">{message}</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (userStatus === "limit_reached") {
+      // kept for parity with Bootstrap, in case you re-use it later
+      return (
+        <div className="mx-6 mb-4">
+          <div className="bg-sky-50 border border-sky-300 text-sky-900 px-4 py-3 rounded">
+            <p className="font-semibold text-sm mb-1">Free Plan Limit Reached</p>
+            <p className="text-sm">
+              You've reached 3,000 events this month. Upgrade to resume live tracking.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   /* ---------------------------- websocket ----------------------------- */
@@ -213,7 +286,9 @@ const LiveTracking = () => {
     currentSiteIdRef.current = currentWebsite.id;
 
     if (wsRef.current) {
-      try { wsRef.current.close(); } catch {}
+      try {
+        wsRef.current.close();
+      } catch {}
     }
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
 
@@ -226,7 +301,6 @@ const LiveTracking = () => {
       if (!tRes.ok) return;
 
       const { ticket } = await tRes.json();
-      // NB: server ticket is scoped to this site; we still guard client-side
       const ws = new WebSocket(
         `wss://api.modovisa.com/ws/visitor-tracking?ticket=${encodeURIComponent(ticket)}`
       );
@@ -261,13 +335,17 @@ const LiveTracking = () => {
 
             // normalize activeness + is_active flag
             const latestPage = getLastPage(visitor.pages);
-            const latestTime = new Date(latestPage?.timestamp || visitor.last_seen || 0).getTime();
+            const latestTime = new Date(
+              latestPage?.timestamp || visitor.last_seen || 0
+            ).getTime();
             const isActiveNow = Date.now() - latestTime <= ACTIVE_MAX_AGE_MS;
 
             visitor.status = isActiveNow ? "active" : "left";
             if (Array.isArray(visitor.pages) && visitor.pages.length) {
               const lastIndex = visitor.pages.length - 1;
-              visitor.pages.forEach((p: Page, i: number) => (p.is_active = i === lastIndex && isActiveNow));
+              visitor.pages.forEach((p: Page, i: number) => {
+                p.is_active = i === lastIndex && isActiveNow;
+              });
             }
 
             setVisitorDataMap((prev) => ({ ...prev, [visitor.id]: visitor }));
@@ -282,7 +360,24 @@ const LiveTracking = () => {
         }
 
         if (data.type === "user_status") {
-          setIsSuspended(data.status === "suspended");
+          // DO + backend both send { type, site_id, payload: { status, reason } }
+          const payload = (data.payload || data) as {
+            status?: string;
+            reason?: string | null;
+          };
+
+          const status = (payload.status || "active") as UserStatus;
+          const reason =
+            payload.reason === "limit" || payload.reason === "admin"
+              ? (payload.reason as "limit" | "admin")
+              : null;
+
+          setUserStatus(status);
+          setStatusReason(status === "suspended" ? reason : null);
+
+          if (status === "blocked") {
+            navigate("/login", { replace: true });
+          }
         }
       });
 
@@ -298,7 +393,7 @@ const LiveTracking = () => {
     } catch (err) {
       console.error("❌ Failed to setup WebSocket", err);
     }
-  }, [currentWebsite, isSuspended, selectedVisitorId]);
+  }, [currentWebsite, isSuspended, selectedVisitorId, navigate]);
 
   /* -------------------------- initial/refresh -------------------------- */
   const refreshVisitorList = useCallback(async () => {
@@ -321,18 +416,29 @@ const LiveTracking = () => {
 
       if (res.status === 403) {
         const errorText = (visitors?.error || "").toLowerCase();
+        const reasonRaw = visitors?.reason as string | undefined;
+        const reason =
+          reasonRaw === "limit" || reasonRaw === "admin" ? (reasonRaw as "limit" | "admin") : null;
+
         if (errorText.includes("suspended")) {
-          setIsSuspended(true);
-          setupWebSocket();
+          setUserStatus("suspended");
+          setStatusReason(reason);
+          setupWebSocket(); // keep listening for status changes
           return;
         }
         if (errorText.includes("blocked")) {
+          setUserStatus("blocked");
+          setStatusReason(null);
           navigate("/login", { replace: true });
           return;
         }
       }
 
-      if (isSuspended) setIsSuspended(false);
+      // If we were suspended but the endpoint now returns 200 again, clear it.
+      if (userStatus === "suspended") {
+        setUserStatus("active");
+        setStatusReason(null);
+      }
 
       if (!Array.isArray(visitors)) {
         console.warn("⚠️ Unexpected visitor data format");
@@ -350,11 +456,12 @@ const LiveTracking = () => {
         v.status = isActiveNow ? "active" : "left";
         if (Array.isArray(v.pages) && v.pages.length) {
           const lastIndex = v.pages.length - 1;
-          v.pages.forEach((p, i) => (p.is_active = i === lastIndex && isActiveNow));
+          v.pages.forEach((p, i) => {
+            p.is_active = i === lastIndex && isActiveNow;
+          });
         }
         normalized[v.id] = v;
       });
-
 
       // ignore if site switched mid-flight
       if (myEpoch !== siteEpochRef.current) return;
@@ -371,7 +478,7 @@ const LiveTracking = () => {
       console.error("❌ Failed to refresh visitor list", err);
       setIsLoading(false);
     }
-  }, [currentWebsite, isSuspended, selectedVisitorId, navigate, setupWebSocket]);
+  }, [currentWebsite, selectedVisitorId, navigate, setupWebSocket, userStatus]);
 
   useEffect(() => {
     if (!currentWebsite) return;
@@ -444,7 +551,9 @@ const LiveTracking = () => {
 
     return () => {
       if (wsRef.current) {
-        try { wsRef.current.close(); } catch {}
+        try {
+          wsRef.current.close();
+        } catch {}
       }
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     };
@@ -505,7 +614,9 @@ const LiveTracking = () => {
               <DropdownMenuLabel>Choose Website</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {websites.length === 0 ? (
-                <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  No websites found
+                </div>
               ) : (
                 websites.map((site) => (
                   <DropdownMenuItem
@@ -527,6 +638,10 @@ const LiveTracking = () => {
                       setActiveShowLimit(INITIAL_ACTIVE_LIMIT);
                       setRecentShowLimit(INITIAL_ACTIVE_LIMIT);
 
+                      // reset status banner to unknown for new site
+                      setUserStatus("unknown");
+                      setStatusReason(null);
+
                       localStorage.setItem("active_website_domain", site.domain);
                     }}
                   >
@@ -543,15 +658,7 @@ const LiveTracking = () => {
         </div>
       </div>
 
-      {isSuspended && (
-        <div className="mx-6 mb-4">
-          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded">
-            <p className="font-semibold text-sm mb-1">Live Tracking Suspended</p>
-            <p className="text-sm">You’ve reached your monthly event limit.</p>
-          </div>
-        </div>
-      )}
-
+      {renderStatusBanner()}
 
       <ScrollArea className="flex-1">
         {isLoading ? (
@@ -667,7 +774,9 @@ const LiveTracking = () => {
                       <span className="text-md font-semibold">No Live Visitors</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">0</span>
+                      <span className="text-sm font-bold text-primary bg-white rounded-full px-2 py-1">
+                        0
+                      </span>
                       <ChevronDown className="h-4 w-4 text-muted-foreground opacity-40 pointer-events-none" />
                     </div>
                   </div>
@@ -822,7 +931,9 @@ const LiveTracking = () => {
                     <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Location:</p>
-                      <p className="text-sm font-medium text-[#ff3e1d]">{selectedVisitor.location || "Unknown"}</p>
+                      <p className="text-sm font-medium text-[#ff3e1d]">
+                        {selectedVisitor.location || "Unknown"}
+                      </p>
                     </div>
                   </div>
 
@@ -840,7 +951,9 @@ const LiveTracking = () => {
                     <Monitor className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Device:</p>
-                      <p className="text-sm font-medium text-[#ff3e1d]">{selectedVisitor.device || "Unknown"}</p>
+                      <p className="text-sm font-medium text-[#ff3e1d]">
+                        {selectedVisitor.device || "Unknown"}
+                      </p>
                     </div>
                   </div>
 
@@ -848,7 +961,9 @@ const LiveTracking = () => {
                     <Globe className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Browser:</p>
-                      <p className="text-sm font-medium text-[#ff3e1d]">{selectedVisitor.browser || "Unknown"}</p>
+                      <p className="text-sm font-medium text-[#ff3e1d]">
+                        {selectedVisitor.browser || "Unknown"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -867,7 +982,9 @@ const LiveTracking = () => {
                               key={idx}
                               className={`jt-item ${page.is_active ? "is-active" : "is-left"} flex items-center m-2 ${
                                 page.is_active ? "shadow-sm" : ""
-                              } rounded-md border p-3 ${!page.is_active ? "bg-muted/30" : "bg-card"}`}
+                              } rounded-md border p-3 ${
+                                !page.is_active ? "bg-muted/30" : "bg-card"
+                              }`}
                             >
                               <span className="jt-dot"></span>
                               <div className="flex items-center w-full">
@@ -910,7 +1027,9 @@ const LiveTracking = () => {
                           );
                         })
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground">No page views yet</div>
+                        <div className="text-center py-8 text-muted-foreground">
+                          No page views yet
+                        </div>
                       )}
                     </ul>
                   </CardContent>
