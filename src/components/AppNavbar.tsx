@@ -1,4 +1,4 @@
-// src/components/AppSidebar.tsx
+// src/components/AppNavbar.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -28,16 +28,32 @@ async function serverLogout(source = "menu") {
       cache: "no-store",
     });
   } catch (e) {
-    console.warn("[logout:user] server logout failed, continuing client cleanup:", e);
+    console.warn(
+      "[logout:user] server logout failed, continuing client cleanup:",
+      e,
+    );
   }
 }
 
 function clearUiCaches() {
-  try { localStorage.removeItem("username"); } catch {}
-  try { localStorage.removeItem("active_website_domain"); } catch {}
-  try { localStorage.removeItem("tracking_token"); } catch {}
-  try { sessionStorage.clear(); } catch {}
-  try { (window as any).__mvAccess = null; } catch {}
+  try {
+    localStorage.removeItem("username");
+  } catch {}
+  try {
+    localStorage.removeItem("active_website_domain");
+  } catch {}
+  try {
+    localStorage.removeItem("tracking_token");
+  } catch {}
+  try {
+    localStorage.removeItem("mv_new_signup");
+  } catch {}
+  try {
+    sessionStorage.clear();
+  } catch {}
+  try {
+    (window as any).__mvAccess = null;
+  } catch {}
   try {
     const w: any = window as any;
     if (w.ws && typeof w.ws.close === "function") w.ws.close();
@@ -46,6 +62,19 @@ function clearUiCaches() {
     const w: any = window as any;
     if (w._mvBucketTimer) clearInterval(w._mvBucketTimer);
   } catch {}
+}
+
+function broadcastLogout(source = "menu") {
+  try {
+    const bc = new BroadcastChannel("mv-auth");
+    bc.postMessage({
+      type: "logout",
+      source,
+      ts: Date.now(),
+    });
+  } catch {
+    // Ignore cross-tab broadcast failures
+  }
 }
 
 function nameToInitials(s: string) {
@@ -58,12 +87,21 @@ async function fetchMe(): Promise<{ name: string; email: string } | null> {
   let name = cached;
 
   try {
-    const res = await fetch(`${API}/api/me`, { method: "GET", credentials: "include" });
+    const res = await fetch(`${API}/api/me`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
     if (res.ok) {
       const me = await res.json();
-      const nm = me.username || me.name || (me.email ? String(me.email).split("@")[0] : "User");
+      const nm =
+        me.username ||
+        me.name ||
+        (me.email ? String(me.email).split("@")[0] : "User");
       name = nm || name || "User";
-      localStorage.setItem("username", name);
+      try {
+        localStorage.setItem("username", name);
+      } catch {}
       return { name, email: me.email ?? "" };
     }
   } catch (e) {
@@ -75,11 +113,16 @@ async function fetchMe(): Promise<{ name: string; email: string } | null> {
 }
 
 /** ── Component ───────────────────────────────────────────────────────────── */
-export default function AppNavbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
+export default function AppNavbar({
+  onOpenMobileMenu,
+}: {
+  onOpenMobileMenu: () => void;
+}) {
   const [name, setName] = useState<string>("User");
   const [email, setEmail] = useState<string>("");
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
 
+  // Load user info
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -88,9 +131,12 @@ export default function AppNavbar({ onOpenMobileMenu }: { onOpenMobileMenu: () =
       setName(me.name);
       setEmail(me.email || "");
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  // Use active site favicon as avatar when available
   useEffect(() => {
     const domain = localStorage.getItem("active_website_domain");
     if (!domain) {
@@ -107,10 +153,14 @@ export default function AppNavbar({ onOpenMobileMenu }: { onOpenMobileMenu: () =
   const initials = useMemo(() => nameToInitials(name), [name]);
 
   const onLogout = async () => {
-    await serverLogout("menu");
-    clearUiCaches();
-    try { new BroadcastChannel("mv-auth").postMessage({ type: "logout" }); } catch {}
-    window.location.replace(DEFAULT_LOGIN_URL);
+    const source = "app-navbar";
+    try {
+      await serverLogout(source);
+    } finally {
+      clearUiCaches();
+      broadcastLogout(source);
+      window.location.replace(DEFAULT_LOGIN_URL);
+    }
   };
 
   return (
@@ -132,7 +182,11 @@ export default function AppNavbar({ onOpenMobileMenu }: { onOpenMobileMenu: () =
       {/* Avatar + menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0" aria-label="Account menu">
+          <Button
+            variant="ghost"
+            className="relative h-10 w-10 rounded-full p-0"
+            aria-label="Account menu"
+          >
             <Avatar className="h-10 w-10 ring-2 ring-primary/20 hover:ring-primary/50 transition-all overflow-hidden">
               {avatarSrc ? (
                 // eslint-disable-next-line jsx-a11y/alt-text
@@ -149,28 +203,37 @@ export default function AppNavbar({ onOpenMobileMenu }: { onOpenMobileMenu: () =
         <DropdownMenuContent className="w-56 bg-card" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none truncate">{name || "User"}</p>
-              {email ? <p className="text-xs leading-none text-muted-foreground truncate">{email}</p> : null}
+              <p className="text-sm font-medium leading-none truncate">
+                {name || "User"}
+              </p>
+              {email ? (
+                <p className="text-xs leading-none text-muted-foreground truncate">
+                  {email}
+                </p>
+              ) : null}
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link to="/app/profile" className="cursor-pointer">
-              <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link to="/app/settings" className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="cursor-pointer" onClick={onLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Log out</span>
-          </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/app/profile" className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/app/settings" className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={onLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
