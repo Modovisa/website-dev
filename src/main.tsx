@@ -3,7 +3,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { initAuth } from "./lib/auth";
+import { initAuth } from "./lib/auth/auth";
 
 // Initialize auth and then render app
 initAuth()
