@@ -59,7 +59,7 @@ type OpsQueueResponse = {
 };
 
 type MrrPoint = {
-  month: string; // "2025-08"
+  month: string;
   mrr: number;
 };
 
@@ -135,29 +135,26 @@ const AdminDashboard = () => {
   const [mrrLoading, setMrrLoading] = useState(false);
 
   // ── Load KPIs (respecting TZ) ──────────────────────────────────────────────
-  const loadKpis = useCallback(
-    async (tzValue: string) => {
-      setKpiLoading(true);
-      try {
-        const url = `${API}/api/admin/dashboard-metrics?window=calendar&tz=${encodeURIComponent(
-          tzValue,
-        )}&_=${Date.now()}`;
-        const res = await secureAdminFetch(url, {
-          method: "GET",
-          cache: "no-store",
-        });
-        const json = (await res.json().catch(() => ({}))) as DashboardMetricsResponse;
-        setTotals(json.totals ?? {});
-      } catch (e) {
-        console.warn("[admin dashboard] loadKpis error:", e);
-      } finally {
-        setKpiLoading(false);
-      }
-    },
-    [],
-  );
+  const loadKpis = useCallback(async (tzValue: string) => {
+    setKpiLoading(true);
+    try {
+      const url = `${API}/api/admin/dashboard-metrics?window=calendar&tz=${encodeURIComponent(
+        tzValue,
+      )}&_=${Date.now()}`;
+      const res = await secureAdminFetch(url, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const json = (await res.json().catch(() => ({}))) as DashboardMetricsResponse;
+      setTotals(json.totals ?? {});
+    } catch (e) {
+      console.warn("[admin dashboard] loadKpis error:", e);
+    } finally {
+      setKpiLoading(false);
+    }
+  }, []);
 
-  // ── Load Action Center (Ingestion + Dunning) ───────────────────────────────
+  // ── Load Action Center ─────────────────────────────────────────────────────
   const loadActionCenter = useCallback(async () => {
     setOpsLoading(true);
     try {
@@ -167,7 +164,9 @@ const AdminDashboard = () => {
         cache: "no-store",
       });
       const json = (await res.json().catch(() => ({}))) as OpsQueueResponse;
-      setIngestion(Array.isArray(json.ingestion_silence) ? json.ingestion_silence : []);
+      setIngestion(
+        Array.isArray(json.ingestion_silence) ? json.ingestion_silence : [],
+      );
       setDunning(Array.isArray(json.dunning) ? json.dunning : []);
     } catch (e) {
       console.warn("[admin dashboard] loadActionCenter error:", e);
@@ -177,26 +176,23 @@ const AdminDashboard = () => {
   }, []);
 
   // ── Load MRR series ───────────────────────────────────────────────────────
-  const loadMrr = useCallback(
-    async (months: number) => {
-      const clamped = Math.max(1, Math.min(36, Number(months || 12)));
-      setMrrLoading(true);
-      try {
-        const url = `${API}/api/admin/mrr-series?months=${clamped}`;
-        const res = await secureAdminFetch(url, {
-          method: "GET",
-          cache: "no-store",
-        });
-        const json = (await res.json().catch(() => ({}))) as MrrSeriesResponse;
-        setMrrPoints(Array.isArray(json.points) ? json.points : []);
-      } catch (e) {
-        console.warn("[admin dashboard] loadMrr error:", e);
-      } finally {
-        setMrrLoading(false);
-      }
-    },
-    [],
-  );
+  const loadMrr = useCallback(async (months: number) => {
+    const clamped = Math.max(1, Math.min(36, Number(months || 12)));
+    setMrrLoading(true);
+    try {
+      const url = `${API}/api/admin/mrr-series?months=${clamped}`;
+      const res = await secureAdminFetch(url, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const json = (await res.json().catch(() => ({}))) as MrrSeriesResponse;
+      setMrrPoints(Array.isArray(json.points) ? json.points : []);
+    } catch (e) {
+      console.warn("[admin dashboard] loadMrr error:", e);
+    } finally {
+      setMrrLoading(false);
+    }
+  }, []);
 
   // Initial + interval refresh for KPIs + Action Center
   useEffect(() => {
@@ -236,7 +232,7 @@ const AdminDashboard = () => {
   }, [mrrMonths, loadMrr]);
 
   // ── Derived KPI values ────────────────────────────────────────────────────
-  const eventsToday = totals?.events_24h ?? totals?.unique_visitors_24h ?? undefined;
+  const eventsToday = totals?.events_24h ?? totals?.unique_visitors_24h;
   const newSignups7d = totals?.new_signups_7d;
   const activeSubs = totals?.paying_users;
   const failedPayments7d = totals?.failed_payments_7d;
@@ -259,17 +255,20 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Events Today */}
           <Card className="h-full">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 pb-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h5 className="text-sm font-semibold text-foreground">Events Today</h5>
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Events Today
+                  </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
                       {kpiLoading ? "…" : formatNumber(eventsToday)}
                     </p>
-                    {/* Placeholder for delta if you add it later */}
                   </div>
-                  <p className="text-xs text-muted-foreground">{eventsSubtitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {eventsSubtitle}
+                  </p>
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                   <Activity className="h-5 w-5 text-primary" />
@@ -280,10 +279,12 @@ const AdminDashboard = () => {
 
           {/* New Signups */}
           <Card className="h-full">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 pb-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h5 className="text-sm font-semibold text-foreground">New Signups</h5>
+                  <h5 className="text-sm font-semibold text-foreground">
+                    New Signups
+                  </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
                       {kpiLoading ? "…" : formatNumber(newSignups7d)}
@@ -300,16 +301,20 @@ const AdminDashboard = () => {
 
           {/* Active Subscriptions */}
           <Card className="h-full">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 pb-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h5 className="text-sm font-semibold text-foreground">Active Subscriptions</h5>
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Active Subscriptions
+                  </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
                       {kpiLoading ? "…" : formatNumber(activeSubs)}
                     </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">Stripe status = active</p>
+                  <p className="text-xs text-muted-foreground">
+                    Stripe status = active
+                  </p>
                 </div>
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500" />
@@ -320,10 +325,12 @@ const AdminDashboard = () => {
 
           {/* Failed Payments */}
           <Card className="h-full">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 pb-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h5 className="text-sm font-semibold text-foreground">Failed Payments</h5>
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Failed Payments
+                  </h5>
                   <div className="flex items-baseline gap-2 my-1">
                     <p className="text-3xl font-bold">
                       {kpiLoading ? "…" : formatNumber(failedPayments7d)}
@@ -338,13 +345,15 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Timezone selector (5th KPI) */}
+          {/* Timezone selector */}
           <Card className="h-full">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 pb-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h5 className="text-sm font-semibold text-foreground">Timezone</h5>
+                    <h5 className="text-sm font-semibold text-foreground">
+                      Timezone
+                    </h5>
                     <Info className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -381,13 +390,15 @@ const AdminDashboard = () => {
         </div>
 
         {/* Action Center + MRR Growth */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Action Center */}
-          <Card className="h-full">
+          <Card className="h-full min-h-[440px]">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">Action Center</CardTitle>
-                <p className="text-sm text-muted-foreground">Live platform signals</p>
+                <p className="text-sm text-muted-foreground">
+                  Live platform signals
+                </p>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -423,7 +434,11 @@ const AdminDashboard = () => {
                         <div
                           key={`${item.site_id}-${item.domain}`}
                           className="flex items-center justify-between px-3 py-2 border-b last:border-b-0 text-sm"
-                          title={`Last seen: ${fmtUtc(item.last_seen)} • Quiet ${item.minutes_since}m • site_id ${item.site_id}`}
+                          title={`Last seen: ${fmtUtc(
+                            item.last_seen,
+                          )} • Quiet ${item.minutes_since}m • site_id ${
+                            item.site_id
+                          }`}
                         >
                           <span className="truncate flex-1">{item.domain}</span>
                           <div className="flex items-center gap-2 ml-3">
@@ -484,7 +499,11 @@ const AdminDashboard = () => {
                         <div
                           key={`${d.user_id}-${d.last_failed}`}
                           className="flex items-center justify-between px-3 py-2 border-b last:border-b-0 text-sm"
-                          title={`Last failed: ${fmtUtc(d.last_failed)} • Failures: ${d.fail_count} • user_id ${d.user_id}`}
+                          title={`Last failed: ${fmtUtc(
+                            d.last_failed,
+                          )} • Failures: ${d.fail_count} • user_id ${
+                            d.user_id
+                          }`}
                         >
                           <span className="truncate flex-1">{who}</span>
                           <div className="flex items-center gap-2 ml-3">
@@ -508,7 +527,7 @@ const AdminDashboard = () => {
           </Card>
 
           {/* MRR Growth */}
-          <Card className="h-full">
+          <Card className="h-full min-h-[440px]">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">MRR Growth</CardTitle>
@@ -562,9 +581,7 @@ const AdminDashboard = () => {
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground mt-2">
                     {mrrPoints.length <= 6 ? (
-                      mrrPoints.map((p) => (
-                        <span key={p.month}>{p.month}</span>
-                      ))
+                      mrrPoints.map((p) => <span key={p.month}>{p.month}</span>)
                     ) : (
                       <>
                         <span>{mrrPoints[0].month}</span>
