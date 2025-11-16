@@ -245,10 +245,12 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
 
         const buttonDiv = document.getElementById("google-signin-button");
         if (buttonDiv) {
+          const width = Math.min(buttonDiv.offsetWidth || 320, 360);
+
           window.google.accounts.id.renderButton(buttonDiv, {
             theme: "outline",
             size: "large",
-            width: buttonDiv.offsetWidth,
+            width,
           });
         }
 
@@ -469,17 +471,19 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
               </Alert>
             )}
 
-            <div
-              id="google-signin-button"
-              className={`w-full ${
-                !termsAccepted ? "opacity-50 pointer-events-none" : ""
-              }`}
-              title={
-                !termsAccepted
-                  ? "Please agree to the Privacy Policy and Terms first"
-                  : ""
-              }
-            />
+            <div className="w-full flex justify-center">
+              <div
+                id="google-signin-button"
+                className={`w-full max-w-xs ${
+                  !termsAccepted ? "opacity-50 pointer-events-none" : ""
+                }`}
+                title={
+                  !termsAccepted
+                    ? "Please agree to the Privacy Policy and Terms first"
+                    : ""
+                }
+              />
+            </div>
           </form>
         </div>
       </div>
@@ -504,20 +508,5 @@ const Register = (props: RegisterProps) => {
     </AnimatedGradientBackground>
   );
 };
-
-// Extend Window interface for Google Sign-In
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: any) => void;
-          renderButton: (element: HTMLElement, config: any) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
 
 export default Register;

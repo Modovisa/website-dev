@@ -19,25 +19,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const GOOGLE_CLIENT_ID = '1057403058678-pak64aj4vthcedsnr81r30qbo6pia6d3.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID =
+  "1057403058678-pak64aj4vthcedsnr81r30qbo6pia6d3.apps.googleusercontent.com";
 
 const Login = () => {
   const navigate = useNavigate();
-  
+
   // Form state
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+
   // Error states
   const [loginError, setLoginError] = useState("");
   const [googleError, setGoogleError] = useState("");
-  
+
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
-  
+
   // JIT Consent Modal (for new Google users)
   const [showJitConsent, setShowJitConsent] = useState(false);
   const [jitConsentChecked, setJitConsentChecked] = useState(false);
@@ -46,7 +47,13 @@ const Login = () => {
 
   // Helper to derive display name
   const deriveDisplayName = (result: any, emailOrUsername: string): string => {
-    return result?.username || result?.name || result?.email?.split('@')[0] || emailOrUsername.split('@')[0] || 'User';
+    return (
+      result?.username ||
+      result?.name ||
+      result?.email?.split("@")[0] ||
+      emailOrUsername.split("@")[0] ||
+      "User"
+    );
   };
 
   // Handle manual login (email/password)
@@ -57,14 +64,14 @@ const Login = () => {
     setLoadingMessage("Signing you in...");
 
     try {
-      const response = await fetch('https://api.modovisa.com/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          email: emailOrUsername.trim(), 
-          password 
-        })
+      const response = await fetch("https://api.modovisa.com/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: emailOrUsername.trim(),
+          password,
+        }),
       });
 
       const result = await response.json();
@@ -72,21 +79,21 @@ const Login = () => {
       if (response.ok) {
         // Check if 2FA is required
         if (result.twofa_required) {
-          sessionStorage.setItem('twofa_temp_token', result.temp_token);
-          sessionStorage.setItem('pending_2fa_user_id', result.user_id);
+          sessionStorage.setItem("twofa_temp_token", result.temp_token);
+          sessionStorage.setItem("pending_2fa_user_id", result.user_id);
           setLoadingMessage("Redirecting to verification...");
-          navigate('/2fa');
+          navigate("/2fa");
           return;
         }
 
         // Successful login without 2FA
         if (result.ok || result.redirect || result.token) {
           const displayName = deriveDisplayName(result, emailOrUsername);
-          localStorage.setItem('username', displayName);
-          
+          localStorage.setItem("username", displayName);
+
           setLoadingMessage("Setting up your dashboard...");
           setTimeout(() => {
-            navigate(result.redirect || '/app/live-tracking');
+            navigate(result.redirect || "/app/live-tracking");
           }, 150);
           return;
         }
@@ -95,7 +102,6 @@ const Login = () => {
       // Login failed
       setIsLoading(false);
       setLoginError(result.error || "Login failed. Please try again.");
-      
     } catch (err) {
       console.error("❌ Login error:", err);
       setIsLoading(false);
@@ -115,15 +121,15 @@ const Login = () => {
     setLoadingMessage("Recording consent...");
 
     try {
-      const res = await fetch('https://api.modovisa.com/api/consent', {
-        method: 'POST',
-        credentials: 'include',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          consent: true, 
-          consent_at: new Date().toISOString() 
-        })
+      const res = await fetch("https://api.modovisa.com/api/consent", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consent: true,
+          consent_at: new Date().toISOString(),
+        }),
       });
 
       if (!res.ok) {
@@ -135,16 +141,15 @@ const Login = () => {
       // Consent recorded successfully
       setShowJitConsent(false);
       setLoadingMessage("Setting up your dashboard...");
-      
+
       // Mark as new signup
-      localStorage.setItem('mv_new_signup', '1');
+      localStorage.setItem("mv_new_signup", "1");
 
       // Redirect
-      const redirect = pendingGoogleResult?.redirect || '/app/live-tracking';
+      const redirect = pendingGoogleResult?.redirect || "/app/live-tracking";
       setTimeout(() => {
         window.location.replace(redirect);
       }, 150);
-
     } catch (err) {
       console.error("❌ Consent error:", err);
       setIsLoading(false);
@@ -156,17 +161,19 @@ const Login = () => {
   const handleJitConsentCancel = async () => {
     // User refused consent - log them out
     try {
-      await fetch('https://api.modovisa.com/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-        cache: 'no-store'
+      await fetch("https://api.modovisa.com/api/logout", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
       });
     } catch (err) {
       console.error("❌ Logout error:", err);
     }
 
     setShowJitConsent(false);
-    setGoogleError("Consent is required to continue. You have not been signed in.");
+    setGoogleError(
+      "Consent is required to continue. You have not been signed in.",
+    );
     setPendingGoogleResult(null);
   };
 
@@ -177,13 +184,13 @@ const Login = () => {
     setLoadingMessage("Signing you in with Google...");
 
     try {
-      const res = await fetch('https://api.modovisa.com/api/google-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const res = await fetch("https://api.modovisa.com/api/google-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
-          credential: response?.credential
-        })
+          credential: response?.credential,
+        }),
       });
 
       const result = await res.json().catch(() => ({}));
@@ -191,28 +198,34 @@ const Login = () => {
       // Handle provider mismatch (email already exists with password)
       if (res.status === 409 && result?.code === "PROVIDER_MISMATCH") {
         setIsLoading(false);
-        setGoogleError(result.error || "This email is registered with a password. Please sign in with email/password.");
+        setGoogleError(
+          result.error ||
+            "This email is registered with a password. Please sign in with email/password.",
+        );
         return;
       }
 
       // Handle 2FA requirement
-      if (result?.temp_token && result?.redirect?.includes("two-step-verification")) {
-        sessionStorage.setItem('twofa_temp_token', result.temp_token);
-        sessionStorage.setItem('pending_2fa_user_id', result.user_id);
+      if (
+        result?.temp_token &&
+        result?.redirect?.includes("two-step-verification")
+      ) {
+        sessionStorage.setItem("twofa_temp_token", result.temp_token);
+        sessionStorage.setItem("pending_2fa_user_id", result.user_id);
         setLoadingMessage("Redirecting to verification...");
-        navigate('/2fa');
+        navigate("/2fa");
         return;
       }
 
       // Check if this is a new user (requires JIT consent)
       let isNewUser = !!result?.is_new_user;
-      
+
       // If backend doesn't provide is_new_user, check /api/me
-      if (!('is_new_user' in result) && res.ok) {
+      if (!("is_new_user" in result) && res.ok) {
         try {
-          const meRes = await fetch('https://api.modovisa.com/api/me', {
-            credentials: 'include',
-            cache: 'no-store'
+          const meRes = await fetch("https://api.modovisa.com/api/me", {
+            credentials: "include",
+            cache: "no-store",
           });
           if (meRes.ok) {
             const me = await meRes.json();
@@ -234,7 +247,7 @@ const Login = () => {
       // Existing user - proceed to redirect
       if (res.ok) {
         setLoadingMessage("Setting up your dashboard...");
-        const redirect = result.redirect || '/app/live-tracking';
+        const redirect = result.redirect || "/app/live-tracking";
         setTimeout(() => {
           window.location.replace(redirect);
         }, 150);
@@ -242,7 +255,6 @@ const Login = () => {
         setIsLoading(false);
         setGoogleError(result.error || "Google sign-in failed. Try again.");
       }
-
     } catch (err) {
       console.error("❌ Google login error:", err);
       setIsLoading(false);
@@ -256,9 +268,13 @@ const Login = () => {
 
     const initGoogle = async () => {
       // Load GSI script
-      if (!document.querySelector('script[src*="accounts.google.com/gsi/client"]')) {
-        gsiScript = document.createElement('script');
-        gsiScript.src = 'https://accounts.google.com/gsi/client';
+      if (
+        !document.querySelector(
+          'script[src*="accounts.google.com/gsi/client"]',
+        )
+      ) {
+        gsiScript = document.createElement("script");
+        gsiScript.src = "https://accounts.google.com/gsi/client";
         gsiScript.async = true;
         gsiScript.defer = true;
         document.head.appendChild(gsiScript);
@@ -272,7 +288,7 @@ const Login = () => {
             resolve();
           }
         }, 100);
-        
+
         // Timeout after 5 seconds
         setTimeout(() => {
           clearInterval(checkGsi);
@@ -290,20 +306,23 @@ const Login = () => {
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleGoogleResponse,
-          auto_select: false
+          auto_select: false,
         });
         (window as any).__mv_gsi_initialized = true;
       }
 
       // Render button
-      const buttonDiv = document.getElementById('google-signin-button');
+      const buttonDiv = document.getElementById("google-signin-button");
       if (buttonDiv && !(buttonDiv as any).dataset.rendered) {
-        buttonDiv.textContent = '';
+        buttonDiv.textContent = "";
+        const width = Math.min(buttonDiv.offsetWidth || 320, 360);
+
         window.google.accounts.id.renderButton(buttonDiv, {
           theme: "outline",
           size: "large",
-          width: buttonDiv.offsetWidth
+          width,
         });
+
         (buttonDiv as any).dataset.rendered = "1";
       }
 
@@ -311,13 +330,22 @@ const Login = () => {
       try {
         window.google.accounts.id.prompt((notification: any) => {
           if (notification.isNotDisplayed()) {
-            console.log('One Tap not displayed:', notification.getNotDisplayedReason());
+            console.log(
+              "One Tap not displayed:",
+              notification.getNotDisplayedReason(),
+            );
           }
           if (notification.isSkippedMoment()) {
-            console.log('One Tap skipped:', notification.getSkippedReason());
+            console.log(
+              "One Tap skipped:",
+              notification.getSkippedReason(),
+            );
           }
           if (notification.isDismissedMoment()) {
-            console.log('One Tap dismissed:', notification.getDismissedReason());
+            console.log(
+              "One Tap dismissed:",
+              notification.getDismissedReason(),
+            );
           }
         });
       } catch (err) {
@@ -329,19 +357,22 @@ const Login = () => {
 
     // Retry One Tap on visibility change
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && window.google?.accounts?.id) {
+      if (
+        document.visibilityState === "visible" &&
+        window.google?.accounts?.id
+      ) {
         try {
           window.google.accounts.id.prompt();
-        } catch (err) {
+        } catch {
           // Silently fail
         }
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (gsiScript && gsiScript.parentNode) {
         gsiScript.parentNode.removeChild(gsiScript);
       }
@@ -356,13 +387,17 @@ const Login = () => {
             <Logo showBeta={false} />
           </Link>
           <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
-          <h1 className="text-2xl font-semibold mt-6">Sign in to your account</h1>
+          <h1 className="text-2xl font-semibold mt-6">
+            Sign in to your account
+          </h1>
         </div>
 
         {isLoading && (
           <div className="text-center py-4">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <p className="mt-2 text-sm text-muted-foreground">{loadingMessage}</p>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              {loadingMessage}
+            </p>
           </div>
         )}
 
@@ -399,7 +434,11 @@ const Login = () => {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 disabled={isLoading}
               >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
               </button>
             </div>
           </div>
@@ -412,10 +451,12 @@ const Login = () => {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="remember" 
+              <Checkbox
+                id="remember"
                 checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked === true)}
+                onCheckedChange={(checked) =>
+                  setRememberMe(checked === true)
+                }
                 disabled={isLoading}
               />
               <label
@@ -425,23 +466,29 @@ const Login = () => {
                 Remember Me
               </label>
             </div>
-            <Link to="/forgot-password" className="text-sm text-primary hover:underline">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-primary hover:underline"
+            >
               Forgot Password?
             </Link>
           </div>
 
-          <Button 
-            className="w-full h-12 text-base" 
-            size="lg" 
+          <Button
+            className="w-full h-12 text-base"
+            size="lg"
             type="submit"
             disabled={isLoading}
           >
-            {isLoading ? 'Signing in...' : 'Login'}
+            {isLoading ? "Signing in..." : "Login"}
           </Button>
 
           <div className="text-center text-sm">
             New to Modovisa?{" "}
-            <Link to="/register" className="text-primary hover:underline font-medium">
+            <Link
+              to="/register"
+              className="text-primary hover:underline font-medium"
+            >
               Create an account
             </Link>
           </div>
@@ -461,7 +508,9 @@ const Login = () => {
             </Alert>
           )}
 
-          <div id="google-signin-button" className="w-full"></div>
+          <div className="w-full flex justify-center">
+            <div id="google-signin-button" className="w-full max-w-xs" />
+          </div>
         </form>
       </div>
 
@@ -471,42 +520,43 @@ const Login = () => {
           <DialogHeader>
             <DialogTitle>Consent required</DialogTitle>
             <DialogDescription>
-              We use a visitor ID cookie to measure website traffic. Please confirm that you agree to our{" "}
-              <a 
-                href="/legal/privacy" 
-                target="_blank" 
-                rel="noopener" 
+              We use a visitor ID cookie to measure website traffic. Please
+              confirm that you agree to our{" "}
+              <a
+                href="/legal/privacy"
+                target="_blank"
+                rel="noopener"
                 className="text-primary hover:underline"
               >
                 Privacy Policy
               </a>{" "}
               and{" "}
-              <a 
-                href="/legal/terms-and-conditions" 
-                target="_blank" 
+              <a
+                href="/legal/terms-and-conditions"
+                target="_blank"
                 rel="noopener"
                 className="text-primary hover:underline"
               >
                 Terms of Service
-              </a>.
+              </a>
+              .
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="flex items-start space-x-2">
-              <Checkbox 
-                id="jit-consent" 
+              <Checkbox
+                id="jit-consent"
                 checked={jitConsentChecked}
-                onCheckedChange={(checked) => setJitConsentChecked(checked === true)}
+                onCheckedChange={(checked) =>
+                  setJitConsentChecked(checked === true)
+                }
               />
-              <label
-                htmlFor="jit-consent"
-                className="text-sm leading-relaxed"
-              >
+              <label htmlFor="jit-consent" className="text-sm leading-relaxed">
                 I agree to the Privacy Policy and Terms of Service
               </label>
             </div>
-            
+
             {jitConsentError && (
               <Alert variant="destructive">
                 <AlertDescription>{jitConsentError}</AlertDescription>
@@ -534,20 +584,5 @@ const Login = () => {
     </AnimatedGradientBackground>
   );
 };
-
-// Extend Window interface for Google Sign-In
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: any) => void;
-          renderButton: (element: HTMLElement, config: any) => void;
-          prompt: (callback?: (notification: any) => void) => void;
-        };
-      };
-    };
-  }
-}
 
 export default Login;

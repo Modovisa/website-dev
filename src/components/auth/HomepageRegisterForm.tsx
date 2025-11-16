@@ -214,7 +214,10 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
       }
 
       // Scenario 8: 2FA required → hand off to /two-step-verification
-      if (result?.temp_token && result?.redirect?.includes("two-step-verification")) {
+      if (
+        result?.temp_token &&
+        result?.redirect?.includes("two-step-verification")
+      ) {
         sessionStorage.setItem("twofa_temp_token", result.temp_token);
         sessionStorage.setItem("pending_2fa_user_id", result.user_id);
         window.location.href = result.redirect;
@@ -242,17 +245,22 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     );
     if (existing) {
       if ((window as any).google?.accounts?.id) {
-        const buttonDiv = document.getElementById("google-signin-button-homepage");
+        const buttonDiv = document.getElementById(
+          "google-signin-button-homepage",
+        );
         if (buttonDiv) {
           (window as any).google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleGoogleResponse,
             auto_select: false,
           });
+
+          const width = Math.min(buttonDiv.offsetWidth || 320, 360);
+
           (window as any).google.accounts.id.renderButton(buttonDiv, {
             theme: "outline",
             size: "large",
-            width: buttonDiv.offsetWidth,
+            width,
           });
         }
       }
@@ -273,12 +281,16 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
           auto_select: false,
         });
 
-        const buttonDiv = document.getElementById("google-signin-button-homepage");
+        const buttonDiv = document.getElementById(
+          "google-signin-button-homepage",
+        );
         if (buttonDiv) {
+          const width = Math.min(buttonDiv.offsetWidth || 320, 360);
+
           (window as any).google.accounts.id.renderButton(buttonDiv, {
             theme: "outline",
             size: "large",
-            width: buttonDiv.offsetWidth,
+            width,
           });
         }
 
@@ -319,7 +331,9 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
         {isLoading && (
           <div className="mb-6 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            <p className="mt-2 text-sm text-muted-foreground">{loadingMessage}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {loadingMessage}
+            </p>
           </div>
         )}
 
@@ -413,7 +427,9 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
               id="terms-homepage"
               className="mt-1"
               checked={termsAccepted}
-              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+              onCheckedChange={(checked) =>
+                setTermsAccepted(checked === true)
+              }
               disabled={isLoading}
             />
             <label htmlFor="terms-homepage" className="text-sm leading-relaxed">
@@ -441,7 +457,10 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
           {/* Already have account */}
           <div className="text-center text-sm">
             Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline font-medium">
+            <Link
+              to="/login"
+              className="text-primary hover:underline font-medium"
+            >
               Sign in
             </Link>
           </div>
@@ -464,17 +483,19 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
           )}
 
           {/* Google button */}
-          <div
-            id="google-signin-button-homepage"
-            className={`w-full ${
-              !termsAccepted ? "opacity-50 pointer-events-none" : ""
-            }`}
-            title={
-              !termsAccepted
-                ? "Please agree to the Privacy Policy and Terms first"
-                : ""
-            }
-          />
+          <div className="w-full flex justify-center">
+            <div
+              id="google-signin-button-homepage"
+              className={`w-full max-w-xs ${
+                !termsAccepted ? "opacity-50 pointer-events-none" : ""
+              }`}
+              title={
+                !termsAccepted
+                  ? "Please agree to the Privacy Policy and Terms first"
+                  : ""
+              }
+            />
+          </div>
         </form>
       </div>
     </div>
