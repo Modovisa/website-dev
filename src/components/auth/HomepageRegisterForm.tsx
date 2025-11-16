@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { secureFetch } from "@/lib/auth";
 
 const GOOGLE_CLIENT_ID =
   "1057403058678-pak64aj4vthcedsnr81r30qbo6pia6d3.apps.googleusercontent.com";
@@ -26,6 +25,9 @@ function validatePassword(pwd: string): boolean {
   const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
   return regex.test(pwd);
 }
+
+// NOTE: mirror the plain fetch behaviour from /src/pages/Register.tsx
+const API_BASE = "https://api.modovisa.com";
 
 export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
   // Form state
@@ -57,8 +59,10 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     if (!username.trim()) return;
 
     try {
-      const response = await secureFetch("/api/check-username", {
+      const response = await fetch(`${API_BASE}/api/check-username`, {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim() }),
       });
@@ -81,8 +85,10 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     if (!email.trim()) return;
 
     try {
-      const response = await secureFetch("/api/check-email", {
+      const response = await fetch(`${API_BASE}/api/check-email`, {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
@@ -124,8 +130,10 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     setLoadingMessage("Creating your account...");
 
     try {
-      const response = await secureFetch("/api/register", {
+      const response = await fetch(`${API_BASE}/api/register`, {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: username.trim(),
@@ -144,8 +152,8 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
         return;
       }
 
-      // Mark as new signup so routeAfterLoginFromHomepageReact treats them
-      // as "new" (Scenario 1).
+      // Mark as new signup so routeAfterLoginFromHomepageReact
+      // treats them as "new" (Scenario 1).
       try {
         window.localStorage.setItem("mv_new_signup", "1");
       } catch {
@@ -162,7 +170,7 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     }
   };
 
-  /* ---------------- Google sign-in (no mv_new_signup here) ---------------- */
+  /* ---------------- Google sign-in (uses same API as /register.tsx) ---------------- */
 
   const handleGoogleResponse = async (response: any) => {
     if (!termsAccepted) {
@@ -177,9 +185,10 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     setLoadingMessage("Signing you in with Google...");
 
     try {
-      const res = await secureFetch("/api/google-login", {
+      const res = await fetch(`${API_BASE}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           credential: response?.credential,
           consent: true,
@@ -269,11 +278,15 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
             width: buttonDiv.offsetWidth,
           });
         }
+
+        if (termsAccepted) {
+          window.google.accounts.id.prompt();
+        }
       }
     };
 
     return () => {
-      // Don’t remove the script (may be reused by /register page)
+      // keep script for /register reuse
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -460,5 +473,3 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     </div>
   );
 }
-
-// window.google type is already declared in Register.tsx global augmentation.
