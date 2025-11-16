@@ -521,6 +521,11 @@ export async function routeAfterLoginFromHomepageReact(
     autoCheckout,
   });
 
+  // 🔄 Show global loading as soon as we start the post-login flow
+  if (window.showGlobalLoadingModal) {
+    window.showGlobalLoadingModal("Preparing checkout...");
+  }
+
   let me: any = null;
   try {
     const res = await apiFetch("/api/me");
@@ -630,12 +635,17 @@ export async function routeAfterLoginFromHomepageReact(
     );
   }
 
-  if (window.showGlobalLoadingModal) {
-    window.showGlobalLoadingModal("Preparing checkout...");
-  }
-
   try {
+    // ⏳ Keep the global loader up while we talk to /embedded-session
+    if (window.showGlobalLoadingModal) {
+      window.showGlobalLoadingModal("Preparing checkout...");
+    }
+
     const clientSecret = await createEmbeddedSession(intent);
+
+    // ✅ As soon as we have a clientSecret and are about to mount Stripe,
+    //    drop the global loading overlay so only the Stripe card is visible.
+    window.hideGlobalLoadingModal?.();
 
     console.log(
       "[homepage-checkout] mounting Stripe embedded checkout overlay...",
@@ -663,6 +673,8 @@ export async function routeAfterLoginFromHomepageReact(
     }
     navigate("/app/tracking-setup");
   } finally {
+    // Safety: if anything went weird and the loader is still up, clear it.
     window.hideGlobalLoadingModal?.();
   }
 }
+
