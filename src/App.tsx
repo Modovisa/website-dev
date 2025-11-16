@@ -24,7 +24,7 @@ import Profile from "./pages/app/Profile";
 import ContactUs from "./pages/ContactUs";
 import NotFound from "./pages/NotFound";
 
-import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import Users from "./pages/admin/Users";
 import Sites from "./pages/admin/Sites";
