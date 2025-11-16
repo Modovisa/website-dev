@@ -455,7 +455,7 @@ const AdminDashboard = () => {
         {/* Action Center + MRR Growth */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Action Center */}
-          <Card className="h-full min-h-[440px]">
+          <Card className="h-full min-h-[640px]">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">Action Center</CardTitle>
@@ -590,7 +590,7 @@ const AdminDashboard = () => {
           </Card>
 
           {/* MRR Growth */}
-          <Card className="h-full min-h-[440px]">
+          <Card className="h-full min-h-[640px]">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">MRR Growth</CardTitle>
