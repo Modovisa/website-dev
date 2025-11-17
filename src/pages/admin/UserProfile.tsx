@@ -37,8 +37,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { secureFetch } from "@/lib/auth/auth";
 
-const API = "https://api.modovisa.com";
-
 type AdminUserProfile = {
   id: number;
   username?: string;
@@ -91,11 +89,13 @@ type UserStatus = "active" | "suspended" | "blocked" | "pending" | "inactive" | 
 
 const formatDate = (dateString?: string | null) =>
   dateString
-    ? new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }).replace(",", "")
+    ? new Date(dateString)
+        .toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+        .replace(",", "")
     : "–";
 
 const AdminUserProfilePage = () => {
@@ -116,9 +116,10 @@ const AdminUserProfilePage = () => {
   const [editForm, setEditForm] = useState({ name: "", timezone: "" });
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deletingWebsite, setDeletingWebsite] = useState<{ id: string | number; name: string } | null>(
-    null
-  );
+  const [deletingWebsite, setDeletingWebsite] = useState<{
+    id: string | number;
+    name: string;
+  } | null>(null);
 
   // Password state
   const [showOldPassword, setShowOldPassword] = useState(false);
@@ -132,15 +133,22 @@ const AdminUserProfilePage = () => {
   // Queries disabled if no userId
   const enabled = !!userId;
 
-  const { data: profile } = useQuery<AdminUserProfile>({
+  const { data: profile } = useQuery<AdminUserProfile | null>({
     queryKey: ["admin-user-profile", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`${API}/api/admin/user-profile?user_id=${userId}`, {
+      const res = await secureFetch(`/api/admin/user-profile?user_id=${userId}`, {
         method: "GET",
       });
-      if (!res.ok) throw new Error("Failed to load user profile");
-      return res.json();
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("admin user-profile failed", res.status, body);
+        throw new Error("Failed to load user profile");
+      }
+      const json = await res.json();
+      // Support { user: {...} } or { profile: {...} } or flat shape
+      const user = json?.user || json?.profile || json;
+      return user ?? null;
     },
   });
 
@@ -148,23 +156,34 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-user-status", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`${API}/api/admin/user-status?user_id=${userId}`, {
+      const res = await secureFetch(`/api/admin/user-status?user_id=${userId}`, {
         method: "GET",
       });
-      if (!res.ok) throw new Error("Failed to load user status");
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("admin user-status failed", res.status, body);
+        throw new Error("Failed to load user status");
+      }
       return res.json();
     },
   });
 
-  const { data: billingInfo } = useQuery<AdminBillingInfo>({
+  const { data: billingInfo } = useQuery<AdminBillingInfo | null>({
     queryKey: ["admin-billing-info", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`${API}/api/admin/user-billing-info?user_id=${userId}`, {
+      const res = await secureFetch(`/api/admin/user-billing-info?user_id=${userId}`, {
         method: "GET",
       });
-      if (!res.ok) throw new Error("Failed to load billing info");
-      return res.json();
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("admin user-billing-info failed", res.status, body);
+        throw new Error("Failed to load billing info");
+      }
+      const json = await res.json();
+      // Support { billing: {...} } or { data: {...} } or flat
+      const info = json?.billing || json?.data || json;
+      return info ?? null;
     },
   });
 
@@ -172,15 +191,23 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-tracking-websites", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`${API}/api/admin/tracking-websites?user_id=${userId}`, {
+      const res = await secureFetch(`/api/admin/tracking-websites?user_id=${userId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // backend already has user_id from query param; body optional
         body: JSON.stringify({}),
       });
-      if (!res.ok) throw new Error("Failed to load tracking websites");
-      const result = await res.json();
-      return result.projects || [];
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("admin tracking-websites failed", res.status, body);
+        throw new Error("Failed to load tracking websites");
+      }
+      const json = await res.json();
+      return (
+        json?.projects ||
+        json?.websites ||
+        json?.data ||
+        ([] as AdminWebsite[])
+      );
     },
   });
 
@@ -188,11 +215,18 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-user-invoices", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`${API}/api/admin/user/invoices?user_id=${userId}`, {
+      const res = await secureFetch(`/api/admin/user/invoices?user_id=${userId}`, {
         method: "GET",
       });
-      if (!res.ok) throw new Error("Failed to load invoices");
-      return res.json();
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("admin user invoices failed", res.status, body);
+        throw new Error("Failed to load invoices");
+      }
+      const json = await res.json();
+      const list: AdminInvoice[] =
+        json?.data || json?.invoices || json || [];
+      return { data: list };
     },
   });
   const invoices = invoicesData?.data || [];
@@ -223,7 +257,7 @@ const AdminUserProfilePage = () => {
 
   const toggleFreeForeverMutation = useMutation({
     mutationFn: async (nextValue: boolean) => {
-      const res = await secureFetch(`${API}/api/admin/set-free-forever`, {
+      const res = await secureFetch(`/api/admin/set-free-forever`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: Number(userId), is_free_forever: !!nextValue }),
@@ -261,11 +295,14 @@ const AdminUserProfilePage = () => {
       website_name: string;
       timezone: string;
     }) => {
-      const res = await secureFetch(`${API}/api/admin/update-tracking-config?user_id=${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, website_name, timezone }),
-      });
+      const res = await secureFetch(
+        `/api/admin/update-tracking-config?user_id=${userId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, website_name, timezone }),
+        }
+      );
       if (!res.ok) throw new Error("Failed to update tracking config");
       return res.json();
     },
@@ -284,11 +321,14 @@ const AdminUserProfilePage = () => {
 
   const deleteWebsiteMutation = useMutation({
     mutationFn: async ({ id }: { id: string | number }) => {
-      const res = await secureFetch(`${API}/api/admin/delete-tracking-config?user_id=${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
+      const res = await secureFetch(
+        `/api/admin/delete-tracking-config?user_id=${userId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        }
+      );
       if (!res.ok) throw new Error("Failed to delete tracking config");
       return res.json();
     },
@@ -313,11 +353,14 @@ const AdminUserProfilePage = () => {
       old_password: string;
       new_password: string;
     }) => {
-      const res = await secureFetch(`${API}/api/admin/update-password?user_id=${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ old_password, new_password }),
-      });
+      const res = await secureFetch(
+        `/api/admin/update-password?user_id=${userId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ old_password, new_password }),
+        }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Password update failed.");
       return data;
@@ -337,7 +380,7 @@ const AdminUserProfilePage = () => {
   const cancelSubscriptionMutation = useMutation({
     mutationFn: async () => {
       const res = await secureFetch(
-        `${API}/api/admin/cancel-subscription?user_id=${userId}`,
+        `/api/admin/cancel-subscription?user_id=${userId}`,
         { method: "POST" }
       );
       const data = await res.json().catch(() => ({}));
@@ -362,7 +405,7 @@ const AdminUserProfilePage = () => {
   const reactivateSubscriptionMutation = useMutation({
     mutationFn: async () => {
       const res = await secureFetch(
-        `${API}/api/admin/reactivate-subscription?user_id=${userId}`,
+        `/api/admin/reactivate-subscription?user_id=${userId}`,
         { method: "POST" }
       );
       const data = await res.json().catch(() => ({}));
@@ -390,7 +433,7 @@ const AdminUserProfilePage = () => {
   const cancelDowngradeMutation = useMutation({
     mutationFn: async () => {
       // Same endpoint as Bootstrap version
-      const res = await secureFetch(`${API}/api/cancel-downgrade`, { method: "POST" });
+      const res = await secureFetch(`/api/cancel-downgrade`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || "Failed to cancel scheduled downgrade.");
@@ -1159,7 +1202,9 @@ const AdminUserProfilePage = () => {
               <Input
                 id="website-name"
                 value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, name: e.target.value })
+                }
                 className="h-12"
               />
             </div>
@@ -1170,7 +1215,9 @@ const AdminUserProfilePage = () => {
               </Label>
               <Select
                 value={editForm.timezone}
-                onValueChange={(value) => setEditForm({ ...editForm, timezone: value })}
+                onValueChange={(value) =>
+                  setEditForm({ ...editForm, timezone: value })
+                }
               >
                 <SelectTrigger className="h-12">
                   <SelectValue placeholder="Select timezone" />
@@ -1188,14 +1235,17 @@ const AdminUserProfilePage = () => {
                   <SelectItem value="America/Los_Angeles">
                     (GMT-08:00) America/Los_Angeles
                   </SelectItem>
-                  <SelectItem value="Asia/Tokyo">(GMT+09:00) Asia/Tokyo</SelectItem>
+                  <SelectItem value="Asia/Tokyo">
+                    (GMT+09:00) Asia/Tokyo
+                  </SelectItem>
                   <SelectItem value="Australia/Sydney">
                     (GMT+11:00) Australia/Sydney
                   </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground pt-2">
-                Date ranges, time ranges, and visitor activity times will follow this timezone.
+                Date ranges, time ranges, and visitor activity times will follow this
+                timezone.
               </p>
             </div>
           </div>
