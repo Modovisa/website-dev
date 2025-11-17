@@ -30,9 +30,7 @@ export function KpiCard({
   reverseColor,
   loading,
 }: KpiCardProps) {
-  // ✅ Use nf.format, not nf(...)
-  const displayValue =
-    typeof value === "number" ? nf.format(value) : value;
+  const displayValue = typeof value === "number" ? nf.format(value) : value;
 
   const hasChange = typeof change === "number" && !Number.isNaN(change);
   const numericChange = hasChange ? Number(change) : 0;
@@ -46,19 +44,20 @@ export function KpiCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div className="flex items-center gap-1.5">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {title}
-          </CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {title}
+        </CardTitle>
+
+        <div className="flex items-center gap-2">
           {info && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border/40 bg-background text-[10px] text-muted-foreground hover:bg-muted"
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/40 bg-background text-[10px] text-muted-foreground hover:bg-muted"
                   aria-label={info}
                 >
-                  ?
+                  i
                 </button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs text-xs leading-relaxed">
@@ -66,8 +65,8 @@ export function KpiCard({
               </TooltipContent>
             </Tooltip>
           )}
+          <Icon className="h-5 w-5 text-muted-foreground" />
         </div>
-        <Icon className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
 
       <CardContent>
