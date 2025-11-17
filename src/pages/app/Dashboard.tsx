@@ -22,8 +22,6 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
-import { ChartCard } from "@/components/dashboard/ChartKit";
-
 
 import {
   useDashboard,
