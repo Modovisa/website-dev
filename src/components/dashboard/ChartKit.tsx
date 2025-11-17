@@ -2,19 +2,43 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
 
 import {
   Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, TimeScale, Filler, Tooltip, Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  TimeScale,
+  Filler,
+  Tooltip,
+  Legend,
 } from "chart.js";
 
 ChartJS.register(
-  CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, TimeScale, Filler, Tooltip, Legend
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  TimeScale,
+  Filler,
+  Tooltip,
+  Legend
 );
 
-ChartJS.defaults.font.family = "'Modovisa', system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+ChartJS.defaults.font.family =
+  "'Modovisa', system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
 ChartJS.defaults.color = "#1f2937";
 ChartJS.defaults.plugins.legend.labels.boxWidth = 12;
 ChartJS.defaults.plugins.legend.labels.padding = 15;
@@ -49,7 +73,11 @@ export function useBaseOptions(opts: BaseOpts = {}) {
       maintainAspectRatio: false,
       interaction: { mode: "index" as const, intersect: false },
       plugins: {
-        legend: { display: showLegend, position: "bottom" as const, labels: { color: chartTheme.axis } },
+        legend: {
+          display: showLegend,
+          position: "bottom" as const,
+          labels: { color: chartTheme.axis },
+        },
         tooltip: { enabled: true },
       },
       scales: {
@@ -75,11 +103,17 @@ export function InfoTip({ text }: { text: string }) {
     <TooltipProvider>
       <UITooltip>
         <TooltipTrigger asChild>
-          <button aria-label="info" className="ml-2 text-muted-foreground hover:text-foreground">
+          <button
+            aria-label="info"
+            className="ml-2 text-muted-foreground hover:text-foreground"
+          >
             <Info className="h-4 w-4" />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[280px] text-xs leading-5">
+        <TooltipContent
+          side="top"
+          className="max-w-[280px] text-xs leading-5"
+        >
           {text}
         </TooltipContent>
       </UITooltip>
@@ -111,8 +145,11 @@ export function ChartCard({
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
-        {info ? <InfoTip text={info} /> : null}
+        {/* Title + tooltip icon together on the left */}
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base font-semibold">{title}</CardTitle>
+          {info ? <InfoTip text={info} /> : null}
+        </div>
       </CardHeader>
       <CardContent>
         <div style={{ height }} className="relative">
@@ -127,7 +164,12 @@ export function ChartCard({
                 <div className="h-full w-full grid grid-cols-12">
                   {Array.from({ length: 12 }).map((_, i) => (
                     <div key={i} className="mx-1 flex items-end">
-                      <Skeleton className="w-full" style={{ height: Math.max(20, ((i + 3) % 12) * 12) }} />
+                      <Skeleton
+                        className="w-full"
+                        style={{
+                          height: Math.max(20, ((i + 3) % 12) * 12),
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
