@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { FileText, MoreVertical, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import { FileText, MoreVertical, Pencil, Trash2, Eye, EyeOff, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   DropdownMenu,
@@ -189,12 +189,9 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-tracking-websites", userId],
     enabled,
     queryFn: async () => {
-      // IMPORTANT: this must be GET, not POST, to avoid 405 and match backend route
       const res = await secureFetch(
         `/api/admin/tracking-websites?user_id=${userId}`,
-        {
-          method: "GET",
-        }
+        { method: "GET" }
       );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
@@ -215,25 +212,21 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-user-invoices", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(
-        `/api/admin/user/invoices?user_id=${userId}`,
-        {
-          method: "GET",
-        }
-      );
+      const res = await secureFetch(`/api/admin/user/invoices?user_id=${userId}`, {
+        method: "GET",
+      });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.error("admin user invoices failed", res.status, body);
         throw new Error("Failed to load invoices");
       }
       const json = await res.json();
-      const list: AdminInvoice[] =
-        json?.data || json?.invoices || json || [];
+      const list: AdminInvoice[] = json?.data || json?.invoices || json || [];
       return { data: list };
     },
   });
-  const invoices = invoicesData?.data || [];
 
+  const invoices = invoicesData?.data || [];
   const status: UserStatus = statusData?.status || "unknown";
 
   const isFreeForever =
@@ -286,8 +279,7 @@ const AdminUserProfilePage = () => {
     onError: (err: any) => {
       toast({
         title: "Error",
-        description:
-          err?.message || "Failed to update Free Forever status.",
+        description: err?.message || "Failed to update Free Forever status.",
         variant: "destructive",
       });
     },
@@ -611,7 +603,7 @@ const AdminUserProfilePage = () => {
   return (
     <DashboardLayout>
       <div className="flex flex-col lg:flex-row h-full">
-        {/* Left sidebar - match Profile.tsx layout */}
+        {/* Left sidebar – same structure as Profile.tsx, with admin extras */}
         <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
           <Card className="border-primary/20">
             <CardContent className="pt-6 space-y-6">
@@ -644,12 +636,8 @@ const AdminUserProfilePage = () => {
                 <h3 className="font-semibold">Details</h3>
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="text-muted-foreground">
-                      Username:
-                    </span>
-                    <span className="ml-2 font-medium">
-                      {username}
-                    </span>
+                    <span className="text-muted-foreground">Username:</span>
+                    <span className="ml-2 font-medium">{username}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Email:</span>
@@ -657,7 +645,7 @@ const AdminUserProfilePage = () => {
                       {profile?.email ?? "—"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div>
                     <span className="text-muted-foreground">Plan:</span>
                     {isFreeForever ? (
                       <Badge className="ml-2 bg-success text-primary-foreground text-xs">
@@ -686,18 +674,14 @@ const AdminUserProfilePage = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2">
-                    <span className="text-muted-foreground">
-                      Created:
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Created:</span>
                     <span className="ml-2 font-medium">
                       {formatDate(profile?.created_at)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">
-                      Last Login:
-                    </span>
+                    <span className="text-muted-foreground">Last Login:</span>
                     <span className="ml-2 font-medium">
                       {formatDate(profile?.last_login_at)}
                     </span>
@@ -708,7 +692,7 @@ const AdminUserProfilePage = () => {
           </Card>
         </div>
 
-        {/* Main content - Tabs (same structure as Profile.tsx) */}
+        {/* Main content – same Tabs structure as Profile.tsx */}
         <div className="flex-1 p-4 md:p-8">
           <Tabs
             value={activeTab}
@@ -716,22 +700,16 @@ const AdminUserProfilePage = () => {
             className="space-y-6"
           >
             <TabsList className="grid w-full max-w-2xl grid-cols-2 md:grid-cols-4">
-              <TabsTrigger value="tracked-sites">
-                Tracked Sites
-              </TabsTrigger>
+              <TabsTrigger value="tracked-sites">Tracked Sites</TabsTrigger>
               <TabsTrigger value="security">Security</TabsTrigger>
-              <TabsTrigger value="billing">
-                Billing & Plans
-              </TabsTrigger>
+              <TabsTrigger value="billing">Billing & Plans</TabsTrigger>
               <TabsTrigger value="account">Account</TabsTrigger>
             </TabsList>
 
-            {/* TRACKED SITES – same table layout as Profile.tsx */}
+            {/* TRACKED SITES – identical structure to Profile.tsx */}
             <TabsContent value="tracked-sites" className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">
-                  Website Tracking List
-                </h2>
+                <h2 className="text-2xl font-bold">Website Tracking List</h2>
                 <input
                   type="search"
                   placeholder="Search Websites"
@@ -857,8 +835,7 @@ const AdminUserProfilePage = () => {
 
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Showing 1 to {websites.length} of {websites.length}{" "}
-                  entries
+                  Showing 1 to {websites.length} of {websites.length} entries
                 </span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" disabled>
@@ -874,14 +851,12 @@ const AdminUserProfilePage = () => {
               </div>
             </TabsContent>
 
-            {/* SECURITY – matches Profile structure but admin-focused */}
+            {/* SECURITY – same card layout as Profile, admin-specific wording */}
             <TabsContent value="security" className="space-y-6">
               {/* Change Password (admin) */}
               <Card>
                 <CardContent className="pt-6 space-y-6">
-                  <h2 className="text-2xl font-semibold">
-                    Change Password (Admin)
-                  </h2>
+                  <h2 className="text-2xl font-semibold">Change Password (Admin)</h2>
 
                   {showPasswordAlert && (
                     <Alert className="bg-warning/10 border-warning/20">
@@ -899,11 +874,9 @@ const AdminUserProfilePage = () => {
                           variant="ghost"
                           size="sm"
                           className="h-auto p-0 hover:bg-transparent"
-                          onClick={() =>
-                            setShowPasswordAlert(false)
-                          }
+                          onClick={() => setShowPasswordAlert(false)}
                         >
-                          <EyeOff className="h-4 w-4 text-warning" />
+                          <X className="h-4 w-4 text-warning" />
                         </Button>
                       </AlertDescription>
                     </Alert>
@@ -911,23 +884,19 @@ const AdminUserProfilePage = () => {
 
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      This will change the password for this user account
-                      via admin endpoint. Use carefully.
+                      This will change the password for this user account via admin
+                      endpoint. Use carefully.
                     </p>
 
                     <div className="space-y-2">
-                      <Label htmlFor="old-password">
-                        Old Password
-                      </Label>
+                      <Label htmlFor="old-password">Old Password</Label>
                       <div className="relative">
                         <Input
                           id="old-password"
                           type={showOldPassword ? "text" : "password"}
                           placeholder="Old Password"
                           value={oldPassword}
-                          onChange={(e) =>
-                            setOldPassword(e.target.value)
-                          }
+                          onChange={(e) => setOldPassword(e.target.value)}
                           className="pr-10"
                         />
                         <Button
@@ -935,9 +904,7 @@ const AdminUserProfilePage = () => {
                           variant="ghost"
                           size="sm"
                           className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                          onClick={() =>
-                            setShowOldPassword(!showOldPassword)
-                          }
+                          onClick={() => setShowOldPassword(!showOldPassword)}
                         >
                           {showOldPassword ? (
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -950,18 +917,14 @@ const AdminUserProfilePage = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="new-password">
-                          New Password
-                        </Label>
+                        <Label htmlFor="new-password">New Password</Label>
                         <div className="relative">
                           <Input
                             id="new-password"
                             type={showNewPassword ? "text" : "password"}
                             placeholder="New Password"
                             value={newPassword}
-                            onChange={(e) =>
-                              setNewPassword(e.target.value)
-                            }
+                            onChange={(e) => setNewPassword(e.target.value)}
                             className="pr-10"
                           />
                           <Button
@@ -969,9 +932,7 @@ const AdminUserProfilePage = () => {
                             variant="ghost"
                             size="sm"
                             className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                            onClick={() =>
-                              setShowNewPassword(!showNewPassword)
-                            }
+                            onClick={() => setShowNewPassword(!showNewPassword)}
                           >
                             {showNewPassword ? (
                               <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -989,9 +950,7 @@ const AdminUserProfilePage = () => {
                         <div className="relative">
                           <Input
                             id="confirm-password"
-                            type={
-                              showConfirmPassword ? "text" : "password"
-                            }
+                            type={showConfirmPassword ? "text" : "password"}
                             placeholder="Confirm Password"
                             value={confirmPassword}
                             onChange={(e) =>
@@ -1005,9 +964,7 @@ const AdminUserProfilePage = () => {
                             size="sm"
                             className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                             onClick={() =>
-                              setShowConfirmPassword(
-                                !showConfirmPassword
-                              )
+                              setShowConfirmPassword(!showConfirmPassword)
                             }
                           >
                             {showConfirmPassword ? (
@@ -1033,7 +990,7 @@ const AdminUserProfilePage = () => {
                 </CardContent>
               </Card>
 
-              {/* 2FA status (read-only) */}
+              {/* 2FA status (read-only for admin) */}
               <Card>
                 <CardContent className="pt-6 space-y-6">
                   <div className="flex items-center gap-3">
@@ -1047,9 +1004,7 @@ const AdminUserProfilePage = () => {
                           : "bg-secondary"
                       }
                     >
-                      {profile?.twofa_enabled
-                        ? "Enabled"
-                        : "Disabled"}
+                      {profile?.twofa_enabled ? "Enabled" : "Disabled"}
                     </Badge>
                   </div>
 
@@ -1061,7 +1016,7 @@ const AdminUserProfilePage = () => {
               </Card>
             </TabsContent>
 
-            {/* BILLING & PLANS (admin view for this user) */}
+            {/* BILLING & PLANS (admin view) */}
             <TabsContent value="billing" className="space-y-6">
               <Card>
                 <CardContent className="pt-6 space-y-4">
@@ -1096,8 +1051,7 @@ const AdminUserProfilePage = () => {
                           : "Billing Period Progress"}
                       </p>
                       <p className="font-medium">
-                        {daysUsed} of {totalDays} days ({percent}
-                        %)
+                        {daysUsed} of {totalDays} days ({percent}%)
                       </p>
                     </div>
                     <div className="space-y-1">
@@ -1228,9 +1182,7 @@ const AdminUserProfilePage = () => {
                           onClick={() =>
                             cancelDowngradeMutation.mutate()
                           }
-                          disabled={
-                            cancelDowngradeMutation.isPending
-                          }
+                          disabled={cancelDowngradeMutation.isPending}
                         >
                           Cancel Downgrade
                         </Button>
@@ -1240,7 +1192,7 @@ const AdminUserProfilePage = () => {
                 </CardContent>
               </Card>
 
-              {/* Invoices table */}
+              {/* Invoices – admin-only, but same card/table layout pattern */}
               <Card>
                 <CardContent className="pt-6">
                   <h3 className="text-xl font-semibold mb-4">
@@ -1287,8 +1239,7 @@ const AdminUserProfilePage = () => {
                               {inv.issued_date}
                             </td>
                             <td className="px-4 py-3 text-sm">
-                              $
-                              {Number(inv.total).toFixed(2)}
+                              ${Number(inv.total).toFixed(2)}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               <Badge
