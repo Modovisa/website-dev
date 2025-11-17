@@ -122,7 +122,7 @@ export default function TimeGroupedVisits({
   return (
     <ChartCard
       title={titleMap[range] || "Visits"}
-      info="Shows visitors and page views over time for the selected range."
+      info="Shows the number of visitors and page views over time based on the selected range. Helps spot engagement trends."
       loading={loading}
       hasData={hasData}
       height={360}

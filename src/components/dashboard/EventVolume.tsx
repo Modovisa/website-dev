@@ -48,7 +48,12 @@ export default function EventVolume({
   } as const), [base]);
 
   return (
-    <ChartCard title="Event Volume" loading={loading} hasData={hasData} height={300}>
+    <ChartCard
+      title="Event Volume"
+      info="Total number of pageviews, clicks, and other user events tracked during the selected time period. Useful for gauging overall interaction."
+      loading={loading}
+      height={300}
+    >
       <Line data={ds} options={options} />
     </ChartCard>
   );

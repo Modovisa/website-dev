@@ -80,7 +80,7 @@ export default function UniqueReturning({
   return (
     <ChartCard
       title="Unique vs Returning"
-      info="Stacked unique vs returning visitors over time. Tooltip shows totals and share."
+      info="Tracks how many users are first-time visitors vs. returning ones. Helpful for measuring engagement and repeat visits."
       loading={loading}
       height={300}
     >
