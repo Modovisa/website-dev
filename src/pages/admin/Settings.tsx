@@ -89,6 +89,17 @@ const fallbackTiers: TierRow[] = [
   },
 ];
 
+// Same logic as Bootstrap JS: ceil(monthly × (1 − discount%))
+function computeYearlyPerMonth(
+  monthlyPrice: number | null,
+  discountPercent: number | null
+) {
+  const m = Number(monthlyPrice ?? 0) || 0;
+  const d = Number(discountPercent ?? 0) || 0;
+  const clamped = Math.max(0, Math.min(90, d)); // 0–90
+  return Math.ceil(m * (1 - clamped / 100));
+}
+
 const Settings = () => {
   // global dirty + sticky bar
   const [isDirty, setIsDirty] = useState(false);
@@ -151,7 +162,6 @@ const Settings = () => {
           return;
         }
 
-        // If the response is HTML (e.g. auth redirect), this will throw.
         const j = await res.json();
         if (!res.ok) {
           throw new Error(j.error || `HTTP ${res.status}`);
@@ -174,10 +184,11 @@ const Settings = () => {
               : "",
         });
 
+        // Mirror Bootstrap keys: stripe_mode / stripe_test_pk / stripe_live_pk
         setStripeSettings({
-          mode: (s.STRIPE_PUBLISHABLE_MODE || "test") as "test" | "live",
-          testPk: s.STRIPE_TEST_PUBLISHABLE_KEY || "",
-          livePk: s.STRIPE_LIVE_PUBLISHABLE_KEY || "",
+          mode: (s.stripe_mode || "test") as "test" | "live",
+          testPk: s.stripe_test_pk || "",
+          livePk: s.stripe_live_pk || "",
         });
       } catch (err) {
         console.error("Failed to load /api/admin/settings", err);
@@ -204,7 +215,6 @@ const Settings = () => {
         setUrlPatterns(patterns.length ? patterns : fallbackUrlPatterns);
       } catch (err) {
         console.error("Failed to load /api/admin/url-patterns", err);
-        // fall back to static demo rows
         setUrlPatterns(fallbackUrlPatterns);
       }
     }
@@ -260,16 +270,10 @@ const Settings = () => {
   // DISCARD / SAVE (still local only)
   // --------------------------------
   const handleDiscard = () => {
-    // For now, just hard reload to reset to last loaded values.
     window.location.reload();
   };
 
   const handleSave = () => {
-    // Placeholder – this is where we’ll POST to:
-    // - /api/admin/settings
-    // - /api/admin/url-patterns
-    // - /api/admin/billing/tiers
-    // For now, just clear dirty flags.
     setUrlPatternsDirty(false);
     setTiersDirty(false);
     setStripeDirty(false);
@@ -927,126 +931,136 @@ const Settings = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {tiers.map((t, idx) => (
-                      <tr key={idx} className="border-b last:border-0">
-                        <td className="py-2 text-muted-foreground">
-                          {t.id ?? "—"}
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            type="number"
-                            className="h-8 text-xs"
-                            value={t.minEvents ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, {
-                                minEvents:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            type="number"
-                            className="h-8 text-xs"
-                            value={t.maxEvents ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, {
-                                maxEvents:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            type="number"
-                            className="h-8 text-xs"
-                            value={t.monthlyPrice ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, {
-                                monthlyPrice:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled
-                            className="h-8 text-xs"
-                            value={t.yearlyPerMonth ?? ""}
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            type="number"
-                            className="h-8 text-xs"
-                            value={t.yearlyDiscountPercent ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, {
-                                yearlyDiscountPercent:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            className="h-8 text-xs"
-                            value={t.featureLabel ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, { featureLabel: e.target.value })
-                            }
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled
-                            type="number"
-                            className="h-8 text-xs"
-                            value={t.planId ?? ""}
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            className="h-8 text-xs font-mono"
-                            value={t.stripePriceIdMonth ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, {
-                                stripePriceIdMonth: e.target.value || null,
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="py-2">
-                          <Input
-                            disabled={tiersLocked}
-                            className="h-8 text-xs font-mono"
-                            value={t.stripePriceIdYear ?? ""}
-                            onChange={(e) =>
-                              updateTier(idx, {
-                                stripePriceIdYear: e.target.value || null,
-                              })
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                    {tiers.map((t, idx) => {
+                      const yearlyDisplay =
+                        t.monthlyPrice != null
+                          ? computeYearlyPerMonth(
+                              t.monthlyPrice,
+                              t.yearlyDiscountPercent
+                            )
+                          : "";
+
+                      return (
+                        <tr key={idx} className="border-b last:border-0">
+                          <td className="py-2 text-muted-foreground">
+                            {t.id ?? "—"}
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              type="number"
+                              className="h-8 text-xs"
+                              value={t.minEvents ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, {
+                                  minEvents:
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              type="number"
+                              className="h-8 text-xs"
+                              value={t.maxEvents ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, {
+                                  maxEvents:
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              type="number"
+                              className="h-8 text-xs"
+                              value={t.monthlyPrice ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, {
+                                  monthlyPrice:
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled
+                              className="h-8 text-xs"
+                              value={yearlyDisplay}
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              type="number"
+                              className="h-8 text-xs"
+                              value={t.yearlyDiscountPercent ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, {
+                                  yearlyDiscountPercent:
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              className="h-8 text-xs"
+                              value={t.featureLabel ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, { featureLabel: e.target.value })
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled
+                              type="number"
+                              className="h-8 text-xs"
+                              value={t.planId ?? ""}
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              className="h-8 text-xs font-mono"
+                              value={t.stripePriceIdMonth ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, {
+                                  stripePriceIdMonth: e.target.value || null,
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="py-2">
+                            <Input
+                              disabled={tiersLocked}
+                              className="h-8 text-xs font-mono"
+                              value={t.stripePriceIdYear ?? ""}
+                              onChange={(e) =>
+                                updateTier(idx, {
+                                  stripePriceIdYear: e.target.value || null,
+                                })
+                              }
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
