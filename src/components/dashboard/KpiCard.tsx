@@ -17,7 +17,7 @@ export interface KpiCardProps {
   info?: string;
   icon: IconType;
   value: number | string;
-  change: number | null;
+  change: number | null;      // backend may still send strings, we’ll coerce
   reverseColor?: boolean;
   loading?: boolean;
 }
@@ -33,8 +33,12 @@ export function KpiCard({
 }: KpiCardProps) {
   const displayValue = typeof value === "number" ? nf.format(value) : value;
 
-  const hasChange = typeof change === "number" && !Number.isNaN(change);
-  const numericChange = hasChange ? Number(change) : 0;
+  // Mirror original dashboard behaviour:
+  // - any non-null/undefined change shows a line
+  // - coerce via Number(), fallback to 0 if NaN
+  const hasChange = change != null;
+  const rawNumeric = hasChange ? Number(change) : 0;
+  const numericChange = Number.isFinite(rawNumeric) ? rawNumeric : 0;
 
   // normal KPIs: up = good. reverseColor KPIs: down = good.
   const goodIsUp = !reverseColor;
@@ -77,10 +81,10 @@ export function KpiCard({
           <div className="space-y-2">
             {/* main value skeleton */}
             <Skeleton className="h-8 w-28" />
-            {/* change stat skeletons */}
+            {/* change stat skeletons (match original sizes if you want) */}
             <div className="flex gap-2 justify-start">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-10" />
             </div>
           </div>
         ) : (
