@@ -22,8 +22,7 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
-import { InfoTip } from "@/components/dashboard/ChartKit";
-
+import { InfoTip, SectionHeader } from "@/components/dashboard/ChartKit";
 
 import {
   useDashboard,
@@ -321,10 +320,10 @@ export default function Dashboard() {
               <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="flex items-center gap-1.5 p-4">
-                      <CardTitle className="text-2xl font-semibold leading-none tracking-tight">Top Pages</CardTitle>
-                      <InfoTip text="List of most visited pages. Helps you identify your most engaging content." />
-                    </div>
+                    <SectionHeader
+                      title="Top Pages"
+                      info="List of most visited pages. Helps you identify your most engaging content."
+                    />
                   </CardHeader>
                   <CardContent className="pt-0">
                     <TopPagesTable
@@ -338,10 +337,10 @@ export default function Dashboard() {
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="flex items-center gap-1.5 p-4">
-                      <CardTitle className="text-2xl font-semibold leading-none tracking-tight">Referrers</CardTitle>
-                      <InfoTip text="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution." />
-                    </div>
+                    <SectionHeader
+                      title="Referrers"
+                      info="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution."
+                    />
                   </CardHeader>
                   <CardContent className="pt-0">
                     <ReferrersTable
@@ -354,22 +353,16 @@ export default function Dashboard() {
                 </Card>
               </div>
 
-
               {/* Geographic */}
               <div className="grid gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2">
                   <Card className="h-[660px]">
-                    <CardHeader className="px-6 pt-6 pb-0">
-                      {/* Title + info icon on first row */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 p-4">
-                          <CardTitle>World Visitors</CardTitle>
-                          <InfoTip text="Live map of where your visitors are located. Great for identifying geographic interest and potential target regions." />
-                        </div>
-                      </div>
-
-                      {/* Existing range label on second row */}
-                      <p className="text-sm text-muted-foreground">
+                    <CardHeader className="px-6 pt-6 pb-0 space-y-1">
+                      <SectionHeader
+                        title="World Visitors"
+                        info="Live map of where your visitors are located. Great for identifying geographic interest and potential target regions."
+                      />
+                      <p className="text-sm text-muted-foreground px-4">
                         {range === "24h"
                           ? "Past 24 hours"
                           : range === "7d"
@@ -394,10 +387,10 @@ export default function Dashboard() {
                 <div>
                   <Card className="h-[660px]">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <div className="flex items-center gap-1.5 p-4">
-                        <CardTitle>Visits by Country</CardTitle>
-                        <InfoTip text="Table view of visitor counts by country. Helps you prioritize markets and tailor content to regions." />
-                      </div>
+                      <SectionHeader
+                        title="Visits by Country"
+                        info="Table view of visitor counts by country. Helps you prioritize markets and tailor content to regions."
+                      />
                     </CardHeader>
                     <CardContent className="h-[540px] overflow-auto">
                       <CountryVisits countries={data.countries ?? []} />
@@ -406,14 +399,13 @@ export default function Dashboard() {
                 </div>
               </div>
 
-
               {/* Heatmap */}
               <Card>
-                <CardHeader className="flex items-left justify-between">
-                  <div className="flex items-center gap-1.5 p-4">
-                    <CardTitle>Visitor Density Calendar</CardTitle>
-                    <InfoTip text="Shows how many visitors came to your site on each day of the year. Helps track long-term trends." />
-                  </div>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <SectionHeader
+                    title="Visitor Density Calendar"
+                    info="Shows how many visitors came to your site on each day of the year. Helps track long-term trends."
+                  />
                 </CardHeader>
                 <CardContent>
                   <VisitorsHeatmap
@@ -518,11 +510,11 @@ export default function Dashboard() {
               {/* UTMs */}
               <div className="grid gap-6 md:grid-cols-3">
                 <Card className="md:col-span-2">
-                  <CardHeader className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 p-4">
-                      <CardTitle>UTM Campaign URLs</CardTitle>
-                      <InfoTip text="List of pages with UTM campaign parameters and how many visitors they attracted. Helps evaluate campaign performance." />
-                    </div>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <SectionHeader
+                      title="UTM Campaign URLs"
+                      info="List of pages with UTM campaign parameters and how many visitors they attracted. Helps evaluate campaign performance."
+                    />
                   </CardHeader>
                   <CardContent>
                     <UTMCampaignsTable rows={data.utm_campaigns ?? []} />
@@ -530,11 +522,11 @@ export default function Dashboard() {
                 </Card>
 
                 <Card>
-                  <CardHeader className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 p-4">
-                      <CardTitle>UTM Sources</CardTitle>
-                      <InfoTip text="Breakdown of traffic by utm_source tag. Useful for measuring campaign channel effectiveness." />
-                    </div>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <SectionHeader
+                      title="UTM Sources"
+                      info="Breakdown of traffic by utm_source tag. Useful for measuring campaign channel effectiveness."
+                    />
                   </CardHeader>
                   <CardContent>
                     <UTMSourcesTable rows={data.utm_sources ?? []} />

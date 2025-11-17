@@ -122,6 +122,27 @@ export function InfoTip({ text }: { text: string }) {
   );
 }
 
+/**
+ * Shared dashboard section header: Title + InfoTip
+ * Use this for ALL non-KPI cards in Dashboard, and internally in ChartCard.
+ */
+export function SectionHeader({
+  title,
+  info,
+}: {
+  title: string;
+  info?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 p-4">
+      <CardTitle className="text-2xl font-semibold leading-none tracking-tight">
+        {title}
+      </CardTitle>
+      {info ? <InfoTip text={info} /> : null}
+    </div>
+  );
+}
+
 export function ChartCard({
   title,
   info,
@@ -146,12 +167,7 @@ export function ChartCard({
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div className="flex items-center gap-1.5 p-4">
-          <CardTitle className="text-2xl font-semibold leading-none tracking-tight">
-            {title}
-          </CardTitle>
-          {info ? <InfoTip text={info} /> : null}
-        </div>
+        <SectionHeader title={title} info={info} />
       </CardHeader>
       <CardContent>
         <div style={{ height }} className="relative">
