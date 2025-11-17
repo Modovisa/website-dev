@@ -321,8 +321,8 @@ export default function Dashboard() {
               <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="flex items-center gap-1.5">
-                      <CardTitle className="text-base font-semibold">Top Pages</CardTitle>
+                    <div className="flex items-center gap-1.5 p-6">
+                      <CardTitle className="text-2xl font-semibold leading-none tracking-tight">Top Pages</CardTitle>
                       <InfoTip text="List of most visited pages. Helps you identify your most engaging content." />
                     </div>
                   </CardHeader>
@@ -338,8 +338,8 @@ export default function Dashboard() {
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="flex items-center gap-1.5">
-                      <CardTitle className="text-base font-semibold">Referrers</CardTitle>
+                    <div className="flex items-center gap-1.5 p-6">
+                      <CardTitle className="text-2xl font-semibold leading-none tracking-tight">Referrers</CardTitle>
                       <InfoTip text="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution." />
                     </div>
                   </CardHeader>

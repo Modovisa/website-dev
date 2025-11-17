@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 // ⬇️ use the same secureFetch as the rest of the app / Billing & Plans
 import { secureFetch } from "@/lib/auth/auth";
+import { adminSecureFetch } from "@/lib/auth/adminAuth";
 
 const AdminBillingAndPlansLazy = lazy(
   () => import("@/components/profile/BillingAndPlans")

@@ -155,3 +155,5 @@ export async function initAdminAuth(): Promise<boolean> {
     return false;
   }
 }
+
+export { secureAdminFetch as adminSecureFetch };
