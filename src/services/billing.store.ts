@@ -11,6 +11,7 @@
 
 import { apiBase } from "@/lib/api";
 import { secureFetch } from "@/lib/auth/auth";
+import { adminSecureFetch } from "@/lib/auth/adminAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 /* ============================================
@@ -93,6 +94,22 @@ export type EmbeddedCheckoutResult =
   | null;
 
 /* ============================================
+   🔐 MODES (user vs admin)
+   ============================================ */
+
+export type BillingMode = "user" | "admin";
+
+export type UseBillingOptions = {
+  mode?: BillingMode;
+  adminUserId?: number;
+};
+
+type BillingContext = {
+  mode: BillingMode;
+  adminUserId?: number;
+};
+
+/* ============================================
    🌍 BILLING STORE CLASS
    ============================================ */
 
@@ -116,12 +133,14 @@ class BillingStore {
   public isFreePlanBeforeUpgrade: boolean = false;
 
   /* ============================================
-     📦 LOAD PRICING TIERS
+     📦 LOAD PRICING TIERS (public)
      ============================================ */
   async loadPricingTiers(): Promise<PricingTier[]> {
+    const API = apiBase();
     try {
-      const res = await secureFetch(`${apiBase()}/api/billing-pricing-tiers`);
-      if (res.status === 401) throw new Error("Unauthorized");
+      const res = await fetch(`${API}/api/billing-pricing-tiers`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Failed to load pricing tiers");
       this.pricingTiers = await res.json();
       return this.pricingTiers;
@@ -132,11 +151,28 @@ class BillingStore {
   }
 
   /* ============================================
-     🔄 LOAD BILLING INFO
+     🔄 LOAD BILLING INFO (user vs admin)
      ============================================ */
-  async loadUserBillingInfo(): Promise<BillingInfo> {
+  async loadUserBillingInfo(ctx: BillingContext): Promise<BillingInfo> {
+    const API = apiBase();
     try {
-      const res = await secureFetch(`${apiBase()}/api/user-billing-info`);
+      let res: Response;
+
+      if (ctx.mode === "admin") {
+        if (!ctx.adminUserId) {
+          throw new Error("adminUserId is required in admin mode");
+        }
+
+        res = await adminSecureFetch(
+          `${API}/api/admin/user-billing-info?user_id=${ctx.adminUserId}`,
+          { method: "GET" }
+        );
+      } else {
+        res = await secureFetch(`${API}/api/user-billing-info`, {
+          method: "GET",
+        });
+      }
+
       if (res.status === 401) throw new Error("Unauthorized");
       if (!res.ok) throw new Error("Failed to fetch billing info");
 
@@ -157,11 +193,28 @@ class BillingStore {
   }
 
   /* ============================================
-     💳 LOAD INVOICES
+     💳 LOAD INVOICES (user vs admin)
      ============================================ */
-  async loadInvoices(): Promise<Invoice[]> {
+  async loadInvoices(ctx: BillingContext): Promise<Invoice[]> {
+    const API = apiBase();
     try {
-      const res = await secureFetch(`${apiBase()}/api/user/invoices`);
+      let res: Response;
+
+      if (ctx.mode === "admin") {
+        if (!ctx.adminUserId) {
+          throw new Error("adminUserId is required in admin mode");
+        }
+
+        res = await adminSecureFetch(
+          `${API}/api/admin/user/invoices?user_id=${ctx.adminUserId}`,
+          { method: "GET" }
+        );
+      } else {
+        res = await secureFetch(`${API}/api/user/invoices`, {
+          method: "GET",
+        });
+      }
+
       if (res.status === 401) throw new Error("Unauthorized");
       const json = await res.json();
       this.invoices = Array.isArray(json.data) ? json.data : [];
@@ -199,7 +252,10 @@ class BillingStore {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const tick = () => {
-        if (typeof window !== "undefined" && typeof (window as any).Stripe === "function") {
+        if (
+          typeof window !== "undefined" &&
+          typeof (window as any).Stripe === "function"
+        ) {
           return resolve();
         }
         if (Date.now() - start >= maxMs) {
@@ -250,7 +306,10 @@ class BillingStore {
       plan_id: tier.plan_id,
       price,
       interval,
-      stripe_price_id: interval === "year" ? tier.stripe_price_id_year : tier.stripe_price_id_month,
+      stripe_price_id:
+        interval === "year"
+          ? tier.stripe_price_id_year
+          : tier.stripe_price_id_month,
       label: `${tier.max_events.toLocaleString()} events/${interval}`,
     };
   }
@@ -259,7 +318,7 @@ class BillingStore {
     if (!this.billingInfo) return false;
 
     const currentPlanId = this.billingInfo.plan_id || 0;
-       const currentInterval = this.billingInfo.interval || "month";
+    const currentInterval = this.billingInfo.interval || "month";
     const currentPrice = this.billingInfo.price || 0;
 
     const tier = this.pricingTiers.find((t) => t.id === tierId);
@@ -324,7 +383,7 @@ class BillingStore {
       // Card-on-file upgrade handled fully server-side
       if (data.success || data.embedded_handled === true) {
         if (overlay) overlay.classList.add("hidden");
-        await this.loadUserBillingInfo();
+        await this.loadUserBillingInfo({ mode: "user" }); // default; admin flow still WIP
         onComplete?.();
         return { mode: "server_handled", context };
       }
@@ -347,7 +406,7 @@ class BillingStore {
         clientSecret: data.clientSecret,
         onComplete: async () => {
           if (overlay) overlay.classList.add("hidden");
-          await this.loadUserBillingInfo();
+          await this.loadUserBillingInfo({ mode: "user" });
           onComplete?.();
         },
       });
@@ -425,7 +484,7 @@ class BillingStore {
         clientSecret: data.clientSecret,
         onComplete: async () => {
           if (overlay) overlay.classList.add("hidden");
-          await this.loadUserBillingInfo();
+          await this.loadUserBillingInfo({ mode: "user" });
           onComplete?.();
         },
       });
@@ -442,6 +501,7 @@ class BillingStore {
 
   /* ============================================
      💳 CANCEL / REACTIVATE / DOWNGRADE
+     (still user endpoints; admin flows can be added later)
      ============================================ */
 
   async cancelSubscription(): Promise<{ success: boolean }> {
@@ -451,7 +511,7 @@ class BillingStore {
       });
       const data = await res.json();
       if (data.success) {
-        await this.loadUserBillingInfo();
+        await this.loadUserBillingInfo({ mode: "user" });
       }
       return data;
     } catch (err) {
@@ -468,7 +528,7 @@ class BillingStore {
       const data = await res.json();
       if (data.success) {
         setTimeout(async () => {
-          await this.loadUserBillingInfo();
+          await this.loadUserBillingInfo({ mode: "user" });
         }, 500);
       }
       return data;
@@ -489,7 +549,7 @@ class BillingStore {
       const data = await res.json();
 
       if (res.ok && (data.success || data.message?.includes("successful"))) {
-        await this.loadUserBillingInfo();
+        await this.loadUserBillingInfo({ mode: "user" });
         return;
       } else {
         throw new Error(data.error || "Downgrade failed");
@@ -508,7 +568,7 @@ class BillingStore {
 
       const data = await res.json();
       if (data.success) {
-        await this.loadUserBillingInfo();
+        await this.loadUserBillingInfo({ mode: "user" });
       }
       return data;
     } catch (err) {
@@ -544,7 +604,8 @@ class BillingStore {
   isFreePlan(): boolean {
     if (!this.billingInfo) return true;
     const isFreeForever =
-      String(this.billingInfo.is_free_forever) === "1" || this.billingInfo.is_free_forever === true;
+      String(this.billingInfo.is_free_forever) === "1" ||
+      this.billingInfo.is_free_forever === true;
     return (
       isFreeForever ||
       this.billingInfo.price === 0 ||
@@ -556,7 +617,8 @@ class BillingStore {
   isFreeForever(): boolean {
     if (!this.billingInfo) return false;
     return (
-      String(this.billingInfo.is_free_forever) === "1" || this.billingInfo.is_free_forever === true
+      String(this.billingInfo.is_free_forever) === "1" ||
+      this.billingInfo.is_free_forever === true
     );
   }
 
@@ -582,13 +644,20 @@ export const billingStore = new BillingStore();
 
 /**
  * React hook wrapper around the billing store.
+ *
+ * - mode: "user" (default) or "admin"
+ * - adminUserId: required when mode === "admin"
  */
-export function useBilling() {
+export function useBilling(options: UseBillingOptions = {}) {
   const qc = useQueryClient();
 
+  const mode: BillingMode = options.mode ?? "user";
+  const adminUserId = options.adminUserId;
+  const ctx: BillingContext = { mode, adminUserId };
+
   const infoQ = useQuery({
-    queryKey: ["billing:info"],
-    queryFn: () => billingStore.loadUserBillingInfo(),
+    queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+    queryFn: () => billingStore.loadUserBillingInfo(ctx),
     staleTime: 30_000,
   });
 
@@ -599,8 +668,8 @@ export function useBilling() {
   });
 
   const invoicesQ = useQuery({
-    queryKey: ["billing:invoices"],
-    queryFn: () => billingStore.loadInvoices(),
+    queryKey: ["billing:invoices", ctx.mode, ctx.adminUserId ?? "self"],
+    queryFn: () => billingStore.loadInvoices(ctx),
     staleTime: 30_000,
   });
 
@@ -609,6 +678,8 @@ export function useBilling() {
     interval: "month" | "year",
     onSuccess?: () => void
   ): Promise<EmbeddedCheckoutResult> => {
+    // NOTE: Stripe flows are still wired to user endpoints.
+    // Admin-side upgrade/cancel equivalents can be added once the BE is ready.
     const currentPlanId = infoQ.data?.plan_id || 0;
     const currentInterval = infoQ.data?.interval || "month";
 
@@ -619,8 +690,12 @@ export function useBilling() {
       currentInterval,
       async () => {
         await Promise.all([
-          qc.invalidateQueries({ queryKey: ["billing:info"] }),
-          qc.invalidateQueries({ queryKey: ["billing:invoices"] }),
+          qc.invalidateQueries({
+            queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+          }),
+          qc.invalidateQueries({
+            queryKey: ["billing:invoices", ctx.mode, ctx.adminUserId ?? "self"],
+          }),
         ]);
         onSuccess?.();
       }
@@ -629,32 +704,42 @@ export function useBilling() {
 
   const startUpdateCard = async (onSuccess?: () => void) => {
     return billingStore.openStripeUpdateCardSession(async () => {
-      await qc.invalidateQueries({ queryKey: ["billing:info"] });
+      await qc.invalidateQueries({
+        queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+      });
       onSuccess?.();
     });
   };
 
   const cancelSubscription = async () => {
     const result = await billingStore.cancelSubscription();
-    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    await qc.invalidateQueries({
+      queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+    });
     return result;
   };
 
   const reactivateSubscription = async () => {
     const result = await billingStore.reactivateSubscription();
-    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    await qc.invalidateQueries({
+      queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+    });
     return result;
   };
 
   const cancelDowngrade = async () => {
     const result = await billingStore.cancelDowngrade();
-    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    await qc.invalidateQueries({
+      queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+    });
     return result;
   };
 
   const confirmDowngrade = async (tierId: number, interval: "month" | "year") => {
     await billingStore.confirmDowngrade(tierId, interval);
-    await qc.invalidateQueries({ queryKey: ["billing:info"] });
+    await qc.invalidateQueries({
+      queryKey: ["billing:info", ctx.mode, ctx.adminUserId ?? "self"],
+    });
   };
 
   const isDowngrade = (tierId: number, interval: "month" | "year") => {

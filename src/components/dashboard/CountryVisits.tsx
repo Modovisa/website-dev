@@ -29,9 +29,9 @@ export default function CountryVisits({ countries = [], limit = 10 }: Props) {
   return (
     <div className="h-full flex flex-col text-sm">
       {/* Header: only Country + Visitors */}
-      <div className="grid grid-cols-[1fr,170px] px-4 pb-2 text-muted-foreground text-lg font-semibold">
-        <div>Country</div>
-        <div className="text-right">Visitors</div>
+      <div className="grid grid-cols-[1fr,170px] px-4 pb-2 text-muted-foreground text-md font-semibold">
+        <div>COUNTRY</div>
+        <div className="text-right">VISITORS</div>
       </div>
 
       {/* Body: rows spread to fill available height */}

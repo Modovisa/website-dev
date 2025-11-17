@@ -11,14 +11,14 @@ export type BillingMode = "user" | "admin";
 
 type BillingAndPlansProps = {
   /**
-   * "self"  → normal user sees their own billing
+   * "user"  → normal user sees their own billing
    * "admin" → admin viewing another user's billing
    */
   mode?: BillingMode;
 
   /**
    * Required when mode === "admin".
-   * Ignored in "self" mode.
+   * Ignored in "user" mode.
    */
   adminUserId?: number;
 };
@@ -26,13 +26,8 @@ type BillingAndPlansProps = {
 /**
  * Shared Billing & Plans component.
  *
- * - In "self" mode it behaves exactly like before (uses /api/user-* under the hood).
+ * - In "user" mode it behaves exactly like before (uses /api/user-* under the hood).
  * - In "admin" mode it is intended to call admin-scoped APIs for a specific user.
- *
- * NOTE: Currently we still call `useBilling()` without arguments so the runtime
- * behaviour is identical to your existing user-facing version.
- * The mode/adminUserId props are here so we can later swap in an admin-aware
- * billing hook without touching the UI again.
  */
 export default function BillingAndPlans({
   mode = "user",
@@ -40,9 +35,6 @@ export default function BillingAndPlans({
 }: BillingAndPlansProps) {
   const isAdmin = mode === "admin";
 
-  // TODAY: still uses the existing store hook.
-  // NEXT STEP: you can evolve `useBilling` to accept { mode, adminUserId }
-  // or branch to a `useAdminBilling(adminUserId)` internally.
   const {
     loading,
     info,
@@ -55,7 +47,7 @@ export default function BillingAndPlans({
     cancelSubscription,
     reactivateSubscription,
     cancelDowngrade,
-  } = useBilling();
+  } = useBilling({ mode, adminUserId });
 
   const [showUpgrade, setShowUpgrade] = useState(false);
 
