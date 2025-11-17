@@ -135,7 +135,7 @@ export function SectionHeader({
 }) {
   return (
     <div className="flex items-center gap-1.5 p-4">
-      <CardTitle className="text-1xl font-semibold leading-none tracking-tight">
+      <CardTitle className="text-xl font-semibold leading-none tracking-tight">
         {title}
       </CardTitle>
       {info ? <InfoTip text={info} /> : null}
