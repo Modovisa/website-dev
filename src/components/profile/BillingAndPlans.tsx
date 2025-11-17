@@ -7,7 +7,7 @@ import { useBilling } from "@/services/billing.store";
 import UpgradePlanModal from "./UpgradePlanModal";
 import InvoicesTable from "./InvoicesTable";
 
-export type BillingMode = "self" | "admin";
+export type BillingMode = "user" | "admin";
 
 type BillingAndPlansProps = {
   /**
@@ -35,7 +35,7 @@ type BillingAndPlansProps = {
  * billing hook without touching the UI again.
  */
 export default function BillingAndPlans({
-  mode = "self",
+  mode = "user",
   adminUserId,
 }: BillingAndPlansProps) {
   const isAdmin = mode === "admin";
