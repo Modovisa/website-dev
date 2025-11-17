@@ -106,9 +106,9 @@ const AdminUserProfilePage = () => {
   const [searchParams] = useSearchParams();
   const userId = searchParams.get("user_id");
 
-  const [activeTab, setActiveTab] = useState<"tracked-sites" | "security" | "billing" | "account">(
-    "tracked-sites"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "tracked-sites" | "security" | "billing" | "account"
+  >("tracked-sites");
 
   // Edit/delete sites
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -146,7 +146,6 @@ const AdminUserProfilePage = () => {
         throw new Error("Failed to load user profile");
       }
       const json = await res.json();
-      // Support { user: {...} } or { profile: {...} } or flat shape
       const user = json?.user || json?.profile || json;
       return user ?? null;
     },
@@ -181,7 +180,6 @@ const AdminUserProfilePage = () => {
         throw new Error("Failed to load billing info");
       }
       const json = await res.json();
-      // Support { billing: {...} } or { data: {...} } or flat
       const info = json?.billing || json?.data || json;
       return info ?? null;
     },
@@ -191,11 +189,13 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-tracking-websites", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`/api/admin/tracking-websites?user_id=${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
+      // IMPORTANT: this must be GET, not POST, to avoid 405 and match backend route
+      const res = await secureFetch(
+        `/api/admin/tracking-websites?user_id=${userId}`,
+        {
+          method: "GET",
+        }
+      );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.error("admin tracking-websites failed", res.status, body);
@@ -215,9 +215,12 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-user-invoices", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`/api/admin/user/invoices?user_id=${userId}`, {
-        method: "GET",
-      });
+      const res = await secureFetch(
+        `/api/admin/user/invoices?user_id=${userId}`,
+        {
+          method: "GET",
+        }
+      );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.error("admin user invoices failed", res.status, body);
@@ -235,7 +238,8 @@ const AdminUserProfilePage = () => {
 
   const isFreeForever =
     billingInfo &&
-    (String(billingInfo.is_free_forever) === "1" || billingInfo.is_free_forever === true);
+    (String(billingInfo.is_free_forever) === "1" ||
+      billingInfo.is_free_forever === true);
 
   const effectivePlanName =
     (isFreeForever && "Free Forever") ||
@@ -260,7 +264,10 @@ const AdminUserProfilePage = () => {
       const res = await secureFetch(`/api/admin/set-free-forever`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: Number(userId), is_free_forever: !!nextValue }),
+        body: JSON.stringify({
+          user_id: Number(userId),
+          is_free_forever: !!nextValue,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
@@ -279,7 +286,8 @@ const AdminUserProfilePage = () => {
     onError: (err: any) => {
       toast({
         title: "Error",
-        description: err?.message || "Failed to update Free Forever status.",
+        description:
+          err?.message || "Failed to update Free Forever status.",
         variant: "destructive",
       });
     },
@@ -307,8 +315,13 @@ const AdminUserProfilePage = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-tracking-websites", userId] });
-      toast({ title: "Saved", description: "Website updated successfully." });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-tracking-websites", userId],
+      });
+      toast({
+        title: "Saved",
+        description: "Website updated successfully.",
+      });
     },
     onError: (err: any) => {
       toast({
@@ -333,8 +346,13 @@ const AdminUserProfilePage = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-tracking-websites", userId] });
-      toast({ title: "Deleted", description: "Website deleted successfully." });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-tracking-websites", userId],
+      });
+      toast({
+        title: "Deleted",
+        description: "Website deleted successfully.",
+      });
     },
     onError: (err: any) => {
       toast({
@@ -366,7 +384,10 @@ const AdminUserProfilePage = () => {
       return data;
     },
     onSuccess: () => {
-      toast({ title: "Password updated", description: "Password updated successfully." });
+      toast({
+        title: "Password updated",
+        description: "Password updated successfully.",
+      });
     },
     onError: (err: any) => {
       toast({
@@ -391,7 +412,10 @@ const AdminUserProfilePage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-billing-info", userId] });
-      toast({ title: "Subscription cancelled", description: "Plan will end at period end." });
+      toast({
+        title: "Subscription cancelled",
+        description: "Plan will end at period end.",
+      });
     },
     onError: (err: any) => {
       toast({
@@ -432,11 +456,14 @@ const AdminUserProfilePage = () => {
 
   const cancelDowngradeMutation = useMutation({
     mutationFn: async () => {
-      // Same endpoint as Bootstrap version
-      const res = await secureFetch(`/api/cancel-downgrade`, { method: "POST" });
+      const res = await secureFetch(`/api/cancel-downgrade`, {
+        method: "POST",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to cancel scheduled downgrade.");
+        throw new Error(
+          data?.error || "Failed to cancel scheduled downgrade."
+        );
       }
       return data;
     },
@@ -450,7 +477,8 @@ const AdminUserProfilePage = () => {
     onError: (err: any) => {
       toast({
         title: "Error",
-        description: err?.message || "Failed to cancel scheduled downgrade.",
+        description:
+          err?.message || "Failed to cancel scheduled downgrade.",
         variant: "destructive",
       });
     },
@@ -486,14 +514,23 @@ const AdminUserProfilePage = () => {
 
   const handlePasswordChange = async () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
-      toast({ title: "Error", description: "All fields are required", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "All fields are required",
+        variant: "destructive",
+      });
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
       return;
     }
-    const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    const strong =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
     if (!strong.test(newPassword)) {
       toast({
         title: "Error",
@@ -516,7 +553,9 @@ const AdminUserProfilePage = () => {
     return (
       <DashboardLayout>
         <div className="p-8">
-          <p className="text-sm text-destructive">No user_id provided in URL.</p>
+          <p className="text-sm text-destructive">
+            No user_id provided in URL.
+          </p>
         </div>
       </DashboardLayout>
     );
@@ -551,21 +590,28 @@ const AdminUserProfilePage = () => {
   const totalDays =
     billingInfo?.total_days ??
     (isFreePlan
-      ? new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+      ? new Date(
+          new Date().getFullYear(),
+          new Date().getMonth() + 1,
+          0
+        ).getDate()
       : billingInfo?.interval === "year"
       ? 365
       : 30);
   const percent =
-    totalDays > 0 ? Math.min(100, Math.round((daysUsed / totalDays) * 100)) : 0;
+    totalDays > 0
+      ? Math.min(100, Math.round((daysUsed / totalDays) * 100))
+      : 0;
 
   const daysLeft = billingInfo?.days_left ?? 0;
   const hasScheduledDowngrade =
-    !!billingInfo?.scheduled_downgrade && !billingInfo.cancel_at_period_end;
+    !!billingInfo?.scheduled_downgrade &&
+    !billingInfo.cancel_at_period_end;
 
   return (
     <DashboardLayout>
       <div className="flex flex-col lg:flex-row h-full">
-        {/* Left sidebar - Profile card (admin view) */}
+        {/* Left sidebar - match Profile.tsx layout */}
         <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
           <Card className="border-primary/20">
             <CardContent className="pt-6 space-y-6">
@@ -588,20 +634,28 @@ const AdminUserProfilePage = () => {
                   <p className="text-3xl font-bold">
                     {Number(eventsThisMonth || 0).toLocaleString()}
                   </p>
-                  <p className="text-sm text-muted-foreground">Events this month</p>
+                  <p className="text-sm text-muted-foreground">
+                    Events this month
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-3 pt-6 border-t">
-                <h3 className="font-semibold">User Details</h3>
+                <h3 className="font-semibold">Details</h3>
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Username:</span>
-                    <span className="ml-2 font-medium">{username}</span>
+                    <span className="text-muted-foreground">
+                      Username:
+                    </span>
+                    <span className="ml-2 font-medium">
+                      {username}
+                    </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Email:</span>
-                    <span className="ml-2 font-medium">{profile?.email ?? "—"}</span>
+                    <span className="ml-2 font-medium">
+                      {profile?.email ?? "—"}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Plan:</span>
@@ -616,9 +670,11 @@ const AdminUserProfilePage = () => {
                     )}
                   </div>
 
-                  {/* Free Forever toggle (admin control) */}
+                  {/* Admin-only Free Forever toggle */}
                   <div className="flex items-center justify-between mt-3">
-                    <span className="text-muted-foreground text-sm">Free Forever:</span>
+                    <span className="text-muted-foreground text-sm">
+                      Free Forever:
+                    </span>
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={!!isFreeForever}
@@ -631,13 +687,17 @@ const AdminUserProfilePage = () => {
                   </div>
 
                   <div className="flex items-center gap-2 pt-2">
-                    <span className="text-muted-foreground">Created:</span>
+                    <span className="text-muted-foreground">
+                      Created:
+                    </span>
                     <span className="ml-2 font-medium">
                       {formatDate(profile?.created_at)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Last Login:</span>
+                    <span className="text-muted-foreground">
+                      Last Login:
+                    </span>
                     <span className="ml-2 font-medium">
                       {formatDate(profile?.last_login_at)}
                     </span>
@@ -648,7 +708,7 @@ const AdminUserProfilePage = () => {
           </Card>
         </div>
 
-        {/* Main content - Tabs */}
+        {/* Main content - Tabs (same structure as Profile.tsx) */}
         <div className="flex-1 p-4 md:p-8">
           <Tabs
             value={activeTab}
@@ -656,16 +716,22 @@ const AdminUserProfilePage = () => {
             className="space-y-6"
           >
             <TabsList className="grid w-full max-w-2xl grid-cols-2 md:grid-cols-4">
-              <TabsTrigger value="tracked-sites">Tracked Sites</TabsTrigger>
+              <TabsTrigger value="tracked-sites">
+                Tracked Sites
+              </TabsTrigger>
               <TabsTrigger value="security">Security</TabsTrigger>
-              <TabsTrigger value="billing">Billing & Plans</TabsTrigger>
+              <TabsTrigger value="billing">
+                Billing & Plans
+              </TabsTrigger>
               <TabsTrigger value="account">Account</TabsTrigger>
             </TabsList>
 
-            {/* TRACKED SITES */}
+            {/* TRACKED SITES – same table layout as Profile.tsx */}
             <TabsContent value="tracked-sites" className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">Website Tracking List</h2>
+                <h2 className="text-2xl font-bold">
+                  Website Tracking List
+                </h2>
                 <input
                   type="search"
                   placeholder="Search Websites"
@@ -715,17 +781,23 @@ const AdminUserProfilePage = () => {
                                       {siteInitials}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="font-medium">{site.website_name}</span>
+                                  <span className="font-medium">
+                                    {site.website_name}
+                                  </span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 text-sm">{site.domain}</td>
+                              <td className="px-6 py-4 text-sm">
+                                {site.domain}
+                              </td>
                               <td className="px-6 py-4">
                                 <code className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">
                                   {site.tracking_token}
                                 </code>
                               </td>
                               <td className="px-6 py-4">
-                                <Badge variant="secondary">{site.timezone}</Badge>
+                                <Badge variant="secondary">
+                                  {site.timezone}
+                                </Badge>
                               </td>
                               <td className="px-6 py-4">
                                 <DropdownMenu>
@@ -738,16 +810,23 @@ const AdminUserProfilePage = () => {
                                       <MoreVertical className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-40">
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-40"
+                                  >
                                     <DropdownMenuItem
-                                      onClick={() => handleEditClick(site)}
+                                      onClick={() =>
+                                        handleEditClick(site)
+                                      }
                                       className="cursor-pointer"
                                     >
                                       <Pencil className="mr-2 h-4 w-4" />
                                       Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onClick={() => handleDeleteClick(site)}
+                                      onClick={() =>
+                                        handleDeleteClick(site)
+                                      }
                                       className="cursor-pointer text-destructive focus:text-destructive"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" />
@@ -765,7 +844,8 @@ const AdminUserProfilePage = () => {
                               colSpan={5}
                               className="px-6 py-8 text-center text-sm text-muted-foreground"
                             >
-                              No tracking websites configured for this user.
+                              No tracking websites configured for this
+                              user.
                             </td>
                           </tr>
                         )}
@@ -777,7 +857,8 @@ const AdminUserProfilePage = () => {
 
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Showing 1 to {websites.length} of {websites.length} entries
+                  Showing 1 to {websites.length} of {websites.length}{" "}
+                  entries
                 </span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" disabled>
@@ -793,27 +874,14 @@ const AdminUserProfilePage = () => {
               </div>
             </TabsContent>
 
-            {/* SECURITY (read-only 2FA status for this user) */}
+            {/* SECURITY – matches Profile structure but admin-focused */}
             <TabsContent value="security" className="space-y-6">
+              {/* Change Password (admin) */}
               <Card>
                 <CardContent className="pt-6 space-y-6">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-semibold">Two-factor Authentication</h2>
-                    <Badge className={profile?.twofa_enabled ? "bg-success" : "bg-secondary"}>
-                      {profile?.twofa_enabled ? "Enabled" : "Disabled"}
-                    </Badge>
-                  </div>
-
-                  <p className="text-muted-foreground">
-                    This is a read-only view of the user&apos;s 2FA status. Admins cannot
-                    directly modify TOTP setup from here.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6 space-y-6">
-                  <h2 className="text-2xl font-semibold">Change Password (Admin)</h2>
+                  <h2 className="text-2xl font-semibold">
+                    Change Password (Admin)
+                  </h2>
 
                   {showPasswordAlert && (
                     <Alert className="bg-warning/10 border-warning/20">
@@ -823,15 +891,17 @@ const AdminUserProfilePage = () => {
                             Ensure that these requirements are met
                           </p>
                           <p className="text-sm text-warning/90">
-                            Minimum 8 characters long, with uppercase, lowercase, digit, and
-                            symbol.
+                            Minimum 8 characters long, with uppercase,
+                            lowercase, digit, and symbol.
                           </p>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-auto p-0 hover:bg-transparent"
-                          onClick={() => setShowPasswordAlert(false)}
+                          onClick={() =>
+                            setShowPasswordAlert(false)
+                          }
                         >
                           <EyeOff className="h-4 w-4 text-warning" />
                         </Button>
@@ -841,18 +911,23 @@ const AdminUserProfilePage = () => {
 
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      This will change the password for this user account using the admin
-                      endpoint. Use carefully.
+                      This will change the password for this user account
+                      via admin endpoint. Use carefully.
                     </p>
+
                     <div className="space-y-2">
-                      <Label htmlFor="old-password">Old Password</Label>
+                      <Label htmlFor="old-password">
+                        Old Password
+                      </Label>
                       <div className="relative">
                         <Input
                           id="old-password"
                           type={showOldPassword ? "text" : "password"}
                           placeholder="Old Password"
                           value={oldPassword}
-                          onChange={(e) => setOldPassword(e.target.value)}
+                          onChange={(e) =>
+                            setOldPassword(e.target.value)
+                          }
                           className="pr-10"
                         />
                         <Button
@@ -860,7 +935,9 @@ const AdminUserProfilePage = () => {
                           variant="ghost"
                           size="sm"
                           className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                          onClick={() => setShowOldPassword(!showOldPassword)}
+                          onClick={() =>
+                            setShowOldPassword(!showOldPassword)
+                          }
                         >
                           {showOldPassword ? (
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -873,14 +950,18 @@ const AdminUserProfilePage = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="new-password">New Password</Label>
+                        <Label htmlFor="new-password">
+                          New Password
+                        </Label>
                         <div className="relative">
                           <Input
                             id="new-password"
                             type={showNewPassword ? "text" : "password"}
                             placeholder="New Password"
                             value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
+                            onChange={(e) =>
+                              setNewPassword(e.target.value)
+                            }
                             className="pr-10"
                           />
                           <Button
@@ -888,7 +969,9 @@ const AdminUserProfilePage = () => {
                             variant="ghost"
                             size="sm"
                             className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            onClick={() =>
+                              setShowNewPassword(!showNewPassword)
+                            }
                           >
                             {showNewPassword ? (
                               <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -900,14 +983,20 @@ const AdminUserProfilePage = () => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Confirm New Password</Label>
+                        <Label htmlFor="confirm-password">
+                          Confirm New Password
+                        </Label>
                         <div className="relative">
                           <Input
                             id="confirm-password"
-                            type={showConfirmPassword ? "text" : "password"}
+                            type={
+                              showConfirmPassword ? "text" : "password"
+                            }
                             placeholder="Confirm Password"
                             value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            onChange={(e) =>
+                              setConfirmPassword(e.target.value)
+                            }
                             className="pr-10"
                           />
                           <Button
@@ -915,7 +1004,11 @@ const AdminUserProfilePage = () => {
                             variant="ghost"
                             size="sm"
                             className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            onClick={() =>
+                              setShowConfirmPassword(
+                                !showConfirmPassword
+                              )
+                            }
                           >
                             {showConfirmPassword ? (
                               <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -932,22 +1025,54 @@ const AdminUserProfilePage = () => {
                       onClick={handlePasswordChange}
                       disabled={changePasswordMutation.isPending}
                     >
-                      {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
+                      {changePasswordMutation.isPending
+                        ? "Changing..."
+                        : "Change Password"}
                     </Button>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* 2FA status (read-only) */}
+              <Card>
+                <CardContent className="pt-6 space-y-6">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-semibold">
+                      Two-factor Authentication
+                    </h2>
+                    <Badge
+                      className={
+                        profile?.twofa_enabled
+                          ? "bg-success"
+                          : "bg-secondary"
+                      }
+                    >
+                      {profile?.twofa_enabled
+                        ? "Enabled"
+                        : "Disabled"}
+                    </Badge>
+                  </div>
+
+                  <p className="text-muted-foreground">
+                    Read-only view of this user&apos;s 2FA status. Admins
+                    cannot directly modify their TOTP secret here.
+                  </p>
+                </CardContent>
+              </Card>
             </TabsContent>
 
-            {/* BILLING & PLANS (admin) */}
+            {/* BILLING & PLANS (admin view for this user) */}
             <TabsContent value="billing" className="space-y-6">
               <Card>
                 <CardContent className="pt-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 className="text-2xl font-semibold">Current Plan</h2>
+                      <h2 className="text-2xl font-semibold">
+                        Current Plan
+                      </h2>
                       <p className="text-sm text-muted-foreground">
-                        Admin view of this user&apos;s subscription and usage.
+                        Admin view of this user&apos;s subscription and
+                        usage.
                       </p>
                     </div>
                     <Badge variant="outline" className="text-xs">
@@ -957,20 +1082,31 @@ const AdminUserProfilePage = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Plan</p>
-                      <p className="font-medium">{effectivePlanName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Plan
+                      </p>
+                      <p className="font-medium">
+                        {effectivePlanName}
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        {isFreePlan ? "Month Progress" : "Billing Period Progress"}
+                        {isFreePlan
+                          ? "Month Progress"
+                          : "Billing Period Progress"}
                       </p>
                       <p className="font-medium">
-                        {daysUsed} of {totalDays} days ({percent}%)
+                        {daysUsed} of {totalDays} days ({percent}
+                        %)
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Active Until</p>
-                      <p className="font-medium">{activeUntilLabel}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Active Until
+                      </p>
+                      <p className="font-medium">
+                        {activeUntilLabel}
+                      </p>
                     </div>
                   </div>
 
@@ -986,7 +1122,9 @@ const AdminUserProfilePage = () => {
                       <span className="font-semibold">
                         {Number(eventsThisMonth || 0).toLocaleString()}
                       </span>{" "}
-                      <span className="text-muted-foreground">events used so far.</span>
+                      <span className="text-muted-foreground">
+                        events used so far.
+                      </span>
                     </p>
 
                     {billingInfo?.plan_features && (
@@ -995,34 +1133,45 @@ const AdminUserProfilePage = () => {
                       </p>
                     )}
 
-                    {/* Alerts similar to Bootstrap logic */}
                     {!isFreePlan && (
                       <div className="space-y-2">
                         {billingInfo?.cancel_at_period_end && (
                           <Alert className="bg-amber-50 border-amber-200">
                             <AlertDescription>
-                              <span className="font-semibold">Needs attention!</span>{" "}
-                              This subscription is set to cancel at period end.
+                              <span className="font-semibold">
+                                Needs attention!
+                              </span>{" "}
+                              This subscription is set to cancel at
+                              period end.
                             </AlertDescription>
                           </Alert>
                         )}
 
-                        {hasScheduledDowngrade && billingInfo?.scheduled_downgrade && (
-                          <Alert className="bg-blue-50 border-blue-200">
-                            <AlertDescription>
-                              <span className="font-semibold">Downgrade scheduled:</span>{" "}
-                              will downgrade to{" "}
-                              <span className="font-medium">
-                                {billingInfo.scheduled_downgrade.plan_name}
-                              </span>{" "}
-                              on{" "}
-                              <span className="font-medium">
-                                {formatDate(billingInfo.scheduled_downgrade.start_date)}
-                              </span>
-                              .
-                            </AlertDescription>
-                          </Alert>
-                        )}
+                        {hasScheduledDowngrade &&
+                          billingInfo?.scheduled_downgrade && (
+                            <Alert className="bg-blue-50 border-blue-200">
+                              <AlertDescription>
+                                <span className="font-semibold">
+                                  Downgrade scheduled:
+                                </span>{" "}
+                                will downgrade to{" "}
+                                <span className="font-medium">
+                                  {
+                                    billingInfo
+                                      .scheduled_downgrade.plan_name
+                                  }
+                                </span>{" "}
+                                on{" "}
+                                <span className="font-medium">
+                                  {formatDate(
+                                    billingInfo.scheduled_downgrade
+                                      .start_date
+                                  )}
+                                </span>
+                                .
+                              </AlertDescription>
+                            </Alert>
+                          )}
 
                         {!billingInfo?.cancel_at_period_end &&
                           !hasScheduledDowngrade &&
@@ -1030,8 +1179,11 @@ const AdminUserProfilePage = () => {
                           daysLeft <= 7 && (
                             <Alert className="bg-amber-50 border-amber-200">
                               <AlertDescription>
-                                <span className="font-semibold">Heads up!</span> Plan
-                                ends in {daysLeft} day{daysLeft === 1 ? "" : "s"}.
+                                <span className="font-semibold">
+                                  Heads up!
+                                </span>{" "}
+                                Plan ends in {daysLeft} day
+                                {daysLeft === 1 ? "" : "s"}.
                               </AlertDescription>
                             </Alert>
                           )}
@@ -1039,23 +1191,32 @@ const AdminUserProfilePage = () => {
                     )}
 
                     <div className="flex flex-wrap gap-3 pt-2">
-                      {!isFreePlan && !billingInfo?.cancel_at_period_end && (
-                        <Button
-                          variant="outline"
-                          className="border-destructive text-destructive hover:bg-destructive/10"
-                          onClick={() => cancelSubscriptionMutation.mutate()}
-                          disabled={cancelSubscriptionMutation.isPending}
-                        >
-                          Cancel Subscription
-                        </Button>
-                      )}
+                      {!isFreePlan &&
+                        !billingInfo?.cancel_at_period_end && (
+                          <Button
+                            variant="outline"
+                            className="border-destructive text-destructive hover:bg-destructive/10"
+                            onClick={() =>
+                              cancelSubscriptionMutation.mutate()
+                            }
+                            disabled={
+                              cancelSubscriptionMutation.isPending
+                            }
+                          >
+                            Cancel Subscription
+                          </Button>
+                        )}
 
                       {billingInfo?.cancel_at_period_end && (
                         <Button
                           variant="outline"
                           className="border-green-500 text-green-600 hover:bg-green-50"
-                          onClick={() => reactivateSubscriptionMutation.mutate()}
-                          disabled={reactivateSubscriptionMutation.isPending}
+                          onClick={() =>
+                            reactivateSubscriptionMutation.mutate()
+                          }
+                          disabled={
+                            reactivateSubscriptionMutation.isPending
+                          }
                         >
                           Reactivate Subscription
                         </Button>
@@ -1064,8 +1225,12 @@ const AdminUserProfilePage = () => {
                       {hasScheduledDowngrade && (
                         <Button
                           variant="outline"
-                          onClick={() => cancelDowngradeMutation.mutate()}
-                          disabled={cancelDowngradeMutation.isPending}
+                          onClick={() =>
+                            cancelDowngradeMutation.mutate()
+                          }
+                          disabled={
+                            cancelDowngradeMutation.isPending
+                          }
                         >
                           Cancel Downgrade
                         </Button>
@@ -1078,18 +1243,28 @@ const AdminUserProfilePage = () => {
               {/* Invoices table */}
               <Card>
                 <CardContent className="pt-6">
-                  <h3 className="text-xl font-semibold mb-4">Invoices</h3>
+                  <h3 className="text-xl font-semibold mb-4">
+                    Invoices
+                  </h3>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="border-b bg-muted/50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">
+                            Date
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">
+                            Amount
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">
+                            Status
+                          </th>
                           <th className="px-4 py-3 text-left text-sm font-semibold">
                             Invoice #
                           </th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">
+                            Actions
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1104,15 +1279,22 @@ const AdminUserProfilePage = () => {
                           </tr>
                         )}
                         {invoices.map((inv, idx) => (
-                          <tr key={idx} className="border-b last:border-0">
-                            <td className="px-4 py-3 text-sm">{inv.issued_date}</td>
+                          <tr
+                            key={idx}
+                            className="border-b last:border-0"
+                          >
                             <td className="px-4 py-3 text-sm">
-                              ${Number(inv.total).toFixed(2)}
+                              {inv.issued_date}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              $
+                              {Number(inv.total).toFixed(2)}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               <Badge
                                 className={
-                                  inv.invoice_status.toLowerCase() === "refunded"
+                                  inv.invoice_status
+                                    .toLowerCase() === "refunded"
                                     ? "bg-destructive"
                                     : "bg-primary"
                                 }
@@ -1159,26 +1341,36 @@ const AdminUserProfilePage = () => {
               <Card>
                 <CardContent className="pt-6 space-y-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">User ID</span>
-                    <span className="font-medium">{profile?.id ?? "–"}</span>
+                    <span className="text-muted-foreground">
+                      User ID
+                    </span>
+                    <span className="font-medium">
+                      {profile?.id ?? "–"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Status</span>
+                    <span className="text-muted-foreground">
+                      Status
+                    </span>
                     <Badge className={statusBadgeClass}>
                       {status === "unknown"
                         ? "Unknown"
-                        : status.charAt(0).toUpperCase() + status.slice(1)}
+                        : status.charAt(0).toUpperCase() +
+                          status.slice(1)}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Two-factor Auth</span>
+                    <span className="text-muted-foreground">
+                      Two-factor Auth
+                    </span>
                     <span className="font-medium">
                       {profile?.twofa_enabled ? "Enabled" : "Disabled"}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground pt-3">
-                    This is a read-only admin view. Suspension / blocking controls (if any)
-                    can be wired here later to dedicated admin endpoints.
+                    This is a read-only admin view. Suspension / blocking
+                    controls (if any) can be wired here later to dedicated
+                    admin endpoints.
                   </p>
                 </CardContent>
               </Card>
@@ -1191,7 +1383,9 @@ const AdminUserProfilePage = () => {
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle className="text-2xl">Edit Website</DialogTitle>
+            <DialogTitle className="text-2xl">
+              Edit Website
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
@@ -1244,8 +1438,8 @@ const AdminUserProfilePage = () => {
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground pt-2">
-                Date ranges, time ranges, and visitor activity times will follow this
-                timezone.
+                Date ranges, time ranges, and visitor activity times will
+                follow this timezone.
               </p>
             </div>
           </div>
@@ -1263,7 +1457,9 @@ const AdminUserProfilePage = () => {
               className="bg-primary hover:bg-primary/90"
               disabled={updateWebsiteMutation.isPending}
             >
-              {updateWebsiteMutation.isPending ? "Saving..." : "Save changes"}
+              {updateWebsiteMutation.isPending
+                ? "Saving..."
+                : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1273,19 +1469,25 @@ const AdminUserProfilePage = () => {
       <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-2xl">Confirm Deletion</DialogTitle>
+            <DialogTitle className="text-2xl">
+              Confirm Deletion
+            </DialogTitle>
           </DialogHeader>
 
           <div className="py-4">
             <p>
               Are you sure you want to delete{" "}
               <strong>{deletingWebsite?.name}</strong>?<br />
-              This will also permanently delete all associated visitor data.
+              This will also permanently delete all associated visitor
+              data.
             </p>
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteModalOpen(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -1293,7 +1495,9 @@ const AdminUserProfilePage = () => {
               onClick={confirmDelete}
               disabled={deleteWebsiteMutation.isPending}
             >
-              {deleteWebsiteMutation.isPending ? "Deleting..." : "Yes, Delete"}
+              {deleteWebsiteMutation.isPending
+                ? "Deleting..."
+                : "Yes, Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
