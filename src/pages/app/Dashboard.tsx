@@ -420,10 +420,32 @@ export default function Dashboard() {
 
               {/* Donuts + UTMs */}
               <div className="grid gap-6 md:grid-cols-3">
-                <Donut key={`br-${frameKey}-${seriesSig}`} title="Browsers" data={data.browsers ?? []} nameKey="name" valueKey="count" />
-                <Donut key={`dev-${frameKey}-${seriesSig}`} title="Devices"  data={data.devices ?? []}  nameKey="type" valueKey="count" />
-                <Donut key={`os-${frameKey}-${seriesSig}`}  title="OS"       data={data.os ?? []}       nameKey="name" valueKey="count" />
+                <Donut
+                  key={`br-${frameKey}-${seriesSig}`}
+                  title="Browsers"
+                  info="Breakdown of which web browsers your visitors are using (e.g. Chrome, Safari). Helps with compatibility decisions."
+                  data={data.browsers ?? []}
+                  nameKey="name"
+                  valueKey="count"
+                />
+                <Donut
+                  key={`dev-${frameKey}-${seriesSig}`}
+                  title="Devices"
+                  info="Shows whether visitors are browsing from phones, tablets, or desktops. Useful for responsive design and mobile prioritization."
+                  data={data.devices ?? []}
+                  nameKey="type"
+                  valueKey="count"
+                />
+                <Donut
+                  key={`os-${frameKey}-${seriesSig}`}
+                  title="OS"
+                  info="Distribution of operating systems like Windows, macOS, Android, etc. Good for optimizing user experience."
+                  data={data.os ?? []}
+                  nameKey="name"
+                  valueKey="count"
+                />
               </div>
+
 
               <div className="grid gap-6 md:grid-cols-3">
                 <Card className="md:col-span-2">
