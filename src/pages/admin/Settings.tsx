@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Link as LinkIcon } from "lucide-react";
-import { secureFetch } from "@/lib/auth/auth";
+import { adminSecureFetch } from "@/lib/auth/adminAuth";
 
 type UrlPatternRow = {
   id: string | null;
@@ -145,11 +145,13 @@ const Settings = () => {
 
     async function loadAdminSettings() {
       try {
-        const res = await secureFetch("/api/admin/settings");
+        const res = await adminSecureFetch("/api/admin/settings");
         if (res.status === 404) {
           console.info("[admin/settings] 404 – leaving defaults.");
           return;
         }
+
+        // If the response is HTML (e.g. auth redirect), this will throw.
         const j = await res.json();
         if (!res.ok) {
           throw new Error(j.error || `HTTP ${res.status}`);
@@ -184,7 +186,7 @@ const Settings = () => {
 
     async function loadUrlPatterns() {
       try {
-        const res = await secureFetch("/api/admin/url-patterns");
+        const res = await adminSecureFetch("/api/admin/url-patterns");
         const j = await res.json();
         if (!res.ok) {
           throw new Error(j.error || `HTTP ${res.status}`);
@@ -209,7 +211,7 @@ const Settings = () => {
 
     async function loadTiers() {
       try {
-        const res = await secureFetch("/api/admin/billing/tiers");
+        const res = await adminSecureFetch("/api/admin/billing/tiers");
         const j = await res.json();
         if (!res.ok) {
           throw new Error(j.error || `HTTP ${res.status}`);
@@ -258,8 +260,7 @@ const Settings = () => {
   // DISCARD / SAVE (still local only)
   // --------------------------------
   const handleDiscard = () => {
-    // Right now this just resets local state to last loaded values.
-    // Once we wire real PATCH/POST endpoints, we’ll re-fetch here.
+    // For now, just hard reload to reset to last loaded values.
     window.location.reload();
   };
 
@@ -360,13 +361,13 @@ const Settings = () => {
 
         {/* Page title */}
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
+          <h1 className="text-2xl font-bold text-left">Settings</h1>
         </div>
 
         <form className="space-y-6">
           {/* General */}
           <Card>
-            <CardHeader>
+            <CardHeader className="text-left">
               <h2 className="font-semibold text-lg">General</h2>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
@@ -408,7 +409,7 @@ const Settings = () => {
 
           {/* Maintenance */}
           <Card>
-            <CardHeader>
+            <CardHeader className="text-left">
               <h2 className="font-semibold text-lg">Maintenance</h2>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
@@ -433,7 +434,7 @@ const Settings = () => {
 
           {/* User lifecycle */}
           <Card>
-            <CardHeader>
+            <CardHeader className="text-left">
               <h2 className="font-semibold text-lg">
                 User: Deactivation | Scheduled delete | Username reuse (days)
               </h2>
@@ -511,7 +512,7 @@ const Settings = () => {
 
           {/* Privacy & Retention */}
           <Card>
-            <CardHeader>
+            <CardHeader className="text-left">
               <h2 className="font-semibold text-lg">Privacy &amp; Retention</h2>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
@@ -556,7 +557,7 @@ const Settings = () => {
 
           {/* URL Patterns (lockable) */}
           <Card>
-            <CardHeader className="flex items-center justify-between">
+            <CardHeader className="flex items-center justify-between text-left">
               <div className="flex items-center gap-2">
                 <LinkIcon className="h-5 w-5 text-muted-foreground" />
                 <h2 className="font-semibold text-lg">URL Patterns</h2>
@@ -589,7 +590,7 @@ const Settings = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground text-left">
                 {urlPatternsLocked ? (
                   <>
                     Editing is <strong>locked</strong>. Click “Unlock” to make
@@ -724,7 +725,7 @@ const Settings = () => {
                 </table>
               </div>
 
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground text-left">
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
                     <strong>Groups:</strong> <code>cart</code>,{" "}
@@ -747,7 +748,7 @@ const Settings = () => {
 
           {/* Stripe Keys (publishable only) */}
           <Card>
-            <CardHeader className="flex items-center justify-between">
+            <CardHeader className="flex items-center justify-between text-left">
               <div className="flex items-center gap-2">
                 <img src="/stripe.svg" alt="Stripe" className="h-7 w-auto" />
                 <h2 className="font-semibold text-lg">
@@ -774,7 +775,7 @@ const Settings = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground text-left">
                 {stripeLocked ? (
                   <>
                     Editing is <strong>locked</strong>. Click “Unlock” to make
@@ -855,7 +856,7 @@ const Settings = () => {
 
           {/* Billing → Pricing Tiers (lockable) */}
           <Card>
-            <CardHeader className="flex items-center justify-between">
+            <CardHeader className="flex items-center justify-between text-left">
               <div className="flex items-center gap-2">
                 <img src="/stripe.svg" alt="Stripe" className="h-7 w-auto" />
                 <h2 className="font-semibold text-lg">
@@ -890,7 +891,7 @@ const Settings = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground text-left">
                 {tiersLocked ? (
                   <>
                     Editing is <strong>locked</strong>. Click “Unlock” to make
@@ -1050,7 +1051,7 @@ const Settings = () => {
                 </table>
               </div>
 
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground text-left">
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
                     Ordering is by <strong>min_events</strong>. Tiers cannot
@@ -1071,7 +1072,7 @@ const Settings = () => {
 
           {/* Security */}
           <Card>
-            <CardHeader>
+            <CardHeader className="text-left">
               <h2 className="font-semibold text-lg">Security</h2>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
