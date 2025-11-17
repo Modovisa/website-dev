@@ -1,15 +1,19 @@
 // src/pages/admin/Permissions.tsx
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AdminLayout } from "@/components/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -17,31 +21,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import {
-  Search,
-  ChevronDown,
-  ChevronUp,
-  RefreshCw,
-  Plus,
-  X,
-  Edit2,
-  Trash2,
-} from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ChevronDown, ChevronUp, MoreVertical, UserMinus } from "lucide-react";
 
 import { apiBase } from "@/lib/api";
 import { adminSecureFetch } from "@/lib/auth/adminAuth";
 
-/* -------------------------------------------------------------------------- */
-/*                                   Types                                    */
-/* -------------------------------------------------------------------------- */
+/* ----------------------------- Types & helpers ----------------------------- */
 
-type AdminMe = {
-  admin_id: number;
-  name: string;
-  email: string;
-  role: string;
-};
+const API = apiBase();
 
 type AdminRole = {
   id: number;
@@ -54,20 +50,20 @@ type RolesResponse = {
   data?: AdminRole[];
 };
 
-type PermItem = {
+type PermissionItem = {
   key: string;
-  label: string;
+  label?: string;
   desc?: string;
 };
 
-type PermGroup = {
+type PermissionGroup = {
   key: string;
   title?: string;
-  perms?: PermItem[];
+  perms?: PermissionItem[];
 };
 
-type PermSchema = {
-  groups?: PermGroup[];
+type PermissionSchema = {
+  groups?: PermissionGroup[];
 };
 
 type RolePermsResponse = {
@@ -85,22 +81,16 @@ type RoleMembersResponse = {
 };
 
 type AuditRow = {
-  when?: string;
-  admin?: string;
-  action?: string;
-  target?: string;
-  details?: string;
+  when: string;
+  admin: string;
+  action: string;
+  target: string;
+  details: string;
 };
 
 type AuditResponse = {
   rows?: AuditRow[];
 };
-
-/* -------------------------------------------------------------------------- */
-/*                             Fetch helpers (admin)                          */
-/* -------------------------------------------------------------------------- */
-
-const API = apiBase();
 
 function handleUnauthorized() {
   try {
@@ -111,251 +101,192 @@ function handleUnauthorized() {
   window.location.href = "/mv-admin/login.html";
 }
 
-async function adminJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function adminJson<T = any>(
+  url: string,
+  init?: RequestInit
+): Promise<T> {
   const res = await adminSecureFetch(url, {
     method: init?.method ?? "GET",
     ...init,
   });
+
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("unauthorized");
   }
+
   const json = (await res.json().catch(() => ({}))) as any;
+
   if (!res.ok) {
     throw new Error(json?.error || `HTTP ${res.status}`);
   }
+
   return json as T;
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              Utility helpers                               */
-/* -------------------------------------------------------------------------- */
-
-function initialsFor(name?: string | null, email?: string | null): string {
+function initialsFrom(name?: string | null, email?: string | null): string {
   const src = (name || email || "").trim();
   if (!src) return "MV";
-  const letters = (src.match(/\b\w/g) || []).join("").substring(0, 2);
-  return letters.toUpperCase() || "MV";
+  const parts = src.match(/\b\w/g) || [];
+  return parts.join("").substring(0, 2).toUpperCase();
 }
 
-function idSafe(s: string): string {
-  return String(s).replace(/[^a-z0-9_.-]+/gi, "-");
-}
-
-function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) return false;
-  for (const v of a) {
-    if (!b.has(v)) return false;
-  }
-  return true;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                               Main component                               */
-/* -------------------------------------------------------------------------- */
+/* -------------------------------- Component -------------------------------- */
 
 const Permissions = () => {
   const qc = useQueryClient();
 
+  // Roles state
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [roleSearch, setRoleSearch] = useState("");
-  const [permFilter, setPermFilter] = useState("");
-  const [auditWindow, setAuditWindow] = useState<"24h" | "7d" | "30d">("24h");
-  const [addMemberEmail, setAddMemberEmail] = useState("");
-  const [pendingRemoveAdminId, setPendingRemoveAdminId] = useState<number | null>(null);
 
+  // Permission matrix state
   const [savedPerms, setSavedPerms] = useState<Set<string>>(new Set());
   const [workingPerms, setWorkingPerms] = useState<Set<string>>(new Set());
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [isDirty, setIsDirty] = useState(false);
+  const [permFilter, setPermFilter] = useState("");
 
-  const dirty = useMemo(
-    () => !setsEqual(savedPerms, workingPerms),
-    [savedPerms, workingPerms]
-  );
+  // Members state
+  const [newMemberEmail, setNewMemberEmail] = useState("");
 
-  /* ------------------------------ Data queries ----------------------------- */
+  // Audit state
+  const [auditWindow, setAuditWindow] = useState<"24h" | "7d" | "30d">("24h");
 
-  const { data: me } = useQuery<AdminMe>({
-    queryKey: ["admin:me"],
-    queryFn: () => adminJson<AdminMe>(`${API}/api/admin-me`),
-  });
+  // "New Role" dialog state
+  const [isNewRoleOpen, setIsNewRoleOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleError, setNewRoleError] = useState<string | null>(null);
 
-  const { data: rolesData, isLoading: rolesLoading } = useQuery<RolesResponse>({
-    queryKey: ["admin:roles"],
+  /* ------------------------------- Data queries ------------------------------ */
+
+  const {
+    data: rolesData,
+    isLoading: rolesLoading,
+  } = useQuery<RolesResponse>({
+    queryKey: ["adminPerms:roles"],
     queryFn: () => adminJson<RolesResponse>(`${API}/api/admin/roles`),
   });
 
-  const roles: AdminRole[] = useMemo(() => {
+  const allRoles: AdminRole[] = useMemo(() => {
     const raw = (rolesData?.roles ?? rolesData?.data ?? []) as AdminRole[];
-    const q = roleSearch.toLowerCase().trim();
-    if (!q) return raw;
+    if (!roleSearch.trim()) return raw;
+    const q = roleSearch.toLowerCase();
     return raw.filter((r) => (r.name || "").toLowerCase().includes(q));
   }, [rolesData, roleSearch]);
 
-  // Select first role by default
+  // Auto-select first role when list changes
   useEffect(() => {
-    if (!roles.length) {
+    const raw = (rolesData?.roles ?? rolesData?.data ?? []) as AdminRole[];
+    if (!raw.length) {
       setSelectedRoleId(null);
       return;
     }
-    if (selectedRoleId == null || !roles.some((r) => r.id === selectedRoleId)) {
-      setSelectedRoleId(roles[0].id);
+    if (selectedRoleId == null || !raw.some((r) => r.id === selectedRoleId)) {
+      setSelectedRoleId(raw[0].id);
     }
-  }, [roles, selectedRoleId]);
+  }, [rolesData]);
 
-  const { data: schemaData } = useQuery<PermSchema>({
-    queryKey: ["admin:permissions:schema"],
-    queryFn: () =>
-      adminJson<PermSchema>(`${API}/api/admin/permissions/schema`),
-  });
+  const selectedRole = useMemo(
+    () => allRoles.find((r) => r.id === selectedRoleId) ?? null,
+    [allRoles, selectedRoleId]
+  );
 
-  // Expand all groups by default once schema is loaded
-  useEffect(() => {
-    if (!schemaData?.groups?.length) return;
-    setExpandedGroups((prev) => {
-      const next = { ...prev };
-      for (const g of schemaData.groups!) {
-        if (next[g.key] === undefined) next[g.key] = true;
-      }
-      return next;
-    });
-  }, [schemaData]);
-
-  const { data: rolePermsData } = useQuery<RolePermsResponse>({
-    queryKey: ["admin:role:permissions", selectedRoleId],
-    queryFn: () =>
-      adminJson<RolePermsResponse>(
-        `${API}/api/admin/roles/${selectedRoleId}/permissions`
-      ),
-    enabled: selectedRoleId != null,
-  });
-
-  useEffect(() => {
-    const perms = rolePermsData?.permissions ?? [];
-    const next = new Set(perms);
-    setSavedPerms(next);
-    setWorkingPerms(new Set(next));
-  }, [rolePermsData]);
-
-  const { data: membersData, isLoading: membersLoading } =
-    useQuery<RoleMembersResponse>({
-      queryKey: ["admin:role:members", selectedRoleId],
+  const { data: schemaData, isLoading: schemaLoading } =
+    useQuery<PermissionSchema>({
+      queryKey: ["adminPerms:schema"],
       queryFn: () =>
-        adminJson<RoleMembersResponse>(
-          `${API}/api/admin/roles/${selectedRoleId}/members`
+        adminJson<PermissionSchema>(`${API}/api/admin/permissions/schema`),
+    });
+
+  const { data: rolePermsData, isLoading: permsLoading } =
+    useQuery<RolePermsResponse>({
+      queryKey: ["adminPerms:rolePerms", selectedRoleId],
+      queryFn: () =>
+        adminJson<RolePermsResponse>(
+          `${API}/api/admin/roles/${selectedRoleId}/permissions`
         ),
       enabled: selectedRoleId != null,
     });
 
-  const members: RoleMember[] =
-    (membersData?.members ?? []) as RoleMember[];
+  // Sync set state when backend perms change
+  useEffect(() => {
+    const perms = (rolePermsData?.permissions ?? []) as string[];
+    const next = new Set<string>(perms);
+    setSavedPerms(next);
+    setWorkingPerms(new Set<string>(next));
+    setIsDirty(false);
+  }, [rolePermsData]);
 
-  const { data: auditData, isLoading: auditLoading, refetch: refetchAudit } =
-    useQuery<AuditResponse>({
-      queryKey: ["admin:permissions:audit", auditWindow],
-      queryFn: () =>
-        adminJson<AuditResponse>(
-          `${API}/api/admin/permissions/audit?window=${encodeURIComponent(
-            auditWindow
-          )}`
-        ),
-    });
+  const {
+    data: membersData,
+    isLoading: membersLoading,
+    refetch: refetchMembers,
+  } = useQuery<RoleMembersResponse>({
+    queryKey: ["adminPerms:members", selectedRoleId],
+    queryFn: () =>
+      adminJson<RoleMembersResponse>(
+        `${API}/api/admin/roles/${selectedRoleId}/members`
+      ),
+    enabled: selectedRoleId != null,
+  });
+
+  const members: RoleMember[] = membersData?.members ?? [];
+
+  const {
+    data: auditData,
+    isLoading: auditLoading,
+    refetch: refetchAudit,
+  } = useQuery<AuditResponse>({
+    queryKey: ["adminPerms:audit", auditWindow],
+    queryFn: () =>
+      adminJson<AuditResponse>(
+        `${API}/api/admin/permissions/audit?window=${encodeURIComponent(
+          auditWindow
+        )}`
+      ),
+  });
 
   const auditRows: AuditRow[] = auditData?.rows ?? [];
 
-  const currentRole = roles.find((r) => r.id === selectedRoleId) || null;
-  const isCurrentRoleBuiltIn = !!currentRole?.built_in;
-  const isSuperadmin =
-    (me?.role || "").toLowerCase() === "superadmin";
+  /* ------------------------------- Mutations -------------------------------- */
 
-  /* ------------------------------- Mutations ------------------------------- */
-
-  const createRoleMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const res = await adminJson<{ id?: number }>(
-        `${API}/api/admin/roles`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        }
-      );
-      return res;
+  const seedDefaultsMutation = useMutation({
+    mutationFn: async () => {
+      return adminJson(`${API}/api/admin/permissions/seed-defaults`, {
+        method: "POST",
+      });
     },
-    onSuccess: async (data) => {
-      await qc.invalidateQueries({ queryKey: ["admin:roles"] });
-      if (data?.id) {
-        setSelectedRoleId(data.id);
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["adminPerms:roles"] });
+      if (selectedRoleId) {
         await qc.invalidateQueries({
-          queryKey: ["admin:role:permissions", data.id],
+          queryKey: ["adminPerms:rolePerms", selectedRoleId],
         });
         await qc.invalidateQueries({
-          queryKey: ["admin:role:members", data.id],
+          queryKey: ["adminPerms:members", selectedRoleId],
         });
       }
+      alert("✅ Defaults synced.");
     },
     onError: (err: any) => {
       if (String(err?.message || "").includes("unauthorized")) return;
-      alert("❌ " + (err?.message || "Failed to create role"));
-    },
-  });
-
-  const renameRoleMutation = useMutation({
-    mutationFn: async (name: string) => {
-      if (!selectedRoleId) throw new Error("No role selected");
-      return adminJson(
-        `${API}/api/admin/roles/${selectedRoleId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        }
-      );
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["admin:roles"] });
-    },
-    onError: (err: any) => {
-      if (String(err?.message || "").includes("unauthorized")) return;
-      alert("❌ " + (err?.message || "Failed to rename role"));
-    },
-  });
-
-  const deleteRoleMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedRoleId) throw new Error("No role selected");
-      return adminJson(
-        `${API}/api/admin/roles/${selectedRoleId}`,
-        {
-          method: "DELETE",
-        }
-      );
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["admin:roles"] });
-      // selectedRoleId will be re-set by roles useEffect
-    },
-    onError: (err: any) => {
-      if (String(err?.message || "").includes("unauthorized")) return;
-      alert("❌ " + (err?.message || "Failed to delete role"));
+      alert("❌ " + (err?.message || "Failed to sync defaults"));
     },
   });
 
   const savePermsMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedRoleId) throw new Error("No role selected");
+      if (!selectedRoleId) return;
       const arr = Array.from(workingPerms);
-      return adminJson(
-        `${API}/api/admin/roles/${selectedRoleId}/permissions`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ permissions: arr }),
-        }
-      );
+      return adminJson(`${API}/api/admin/roles/${selectedRoleId}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: arr }),
+      });
     },
     onSuccess: () => {
-      setSavedPerms(new Set(workingPerms));
+      setSavedPerms(new Set<string>(workingPerms));
+      setIsDirty(false);
       alert("✅ Permissions saved.");
     },
     onError: (err: any) => {
@@ -364,52 +295,45 @@ const Permissions = () => {
     },
   });
 
-  const seedDefaultsMutation = useMutation({
-    mutationFn: async () => {
-      return adminJson(
-        `${API}/api/admin/permissions/seed-defaults`,
-        {
-          method: "POST",
-        }
-      );
+  const createRoleMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        throw new Error("Please enter a role name.");
+      }
+      return adminJson<{ id?: number }>(`${API}/api/admin/roles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
     },
-    onSuccess: async () => {
-      alert("✅ Default roles & permissions synced.");
-      await qc.invalidateQueries({ queryKey: ["admin:roles"] });
-      if (selectedRoleId) {
-        await qc.invalidateQueries({
-          queryKey: ["admin:role:permissions", selectedRoleId],
-        });
-        await qc.invalidateQueries({
-          queryKey: ["admin:role:members", selectedRoleId],
-        });
+    onSuccess: async (res) => {
+      setNewRoleName("");
+      setNewRoleError(null);
+      setIsNewRoleOpen(false);
+      await qc.invalidateQueries({ queryKey: ["adminPerms:roles"] });
+      if (res?.id) {
+        setSelectedRoleId(res.id);
       }
     },
     onError: (err: any) => {
       if (String(err?.message || "").includes("unauthorized")) return;
-      alert("❌ " + (err?.message || "Failed to sync defaults"));
+      setNewRoleError(err?.message || "Failed to create role");
     },
   });
 
   const addMemberMutation = useMutation({
     mutationFn: async (email: string) => {
-      if (!selectedRoleId) throw new Error("No role selected");
-      return adminJson(
-        `${API}/api/admin/roles/${selectedRoleId}/members`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        }
-      );
+      if (!selectedRoleId) return;
+      return adminJson(`${API}/api/admin/roles/${selectedRoleId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
     },
     onSuccess: async () => {
-      setAddMemberEmail("");
-      if (selectedRoleId) {
-        await qc.invalidateQueries({
-          queryKey: ["admin:role:members", selectedRoleId],
-        });
-      }
+      setNewMemberEmail("");
+      await refetchMembers();
     },
     onError: (err: any) => {
       if (String(err?.message || "").includes("unauthorized")) return;
@@ -418,23 +342,15 @@ const Permissions = () => {
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedRoleId || !pendingRemoveAdminId)
-        throw new Error("Nothing to remove");
+    mutationFn: async (adminId: number) => {
+      if (!selectedRoleId) return;
       return adminJson(
-        `${API}/api/admin/roles/${selectedRoleId}/members/${pendingRemoveAdminId}`,
-        {
-          method: "DELETE",
-        }
+        `${API}/api/admin/roles/${selectedRoleId}/members/${adminId}`,
+        { method: "DELETE" }
       );
     },
     onSuccess: async () => {
-      setPendingRemoveAdminId(null);
-      if (selectedRoleId) {
-        await qc.invalidateQueries({
-          queryKey: ["admin:role:members", selectedRoleId],
-        });
-      }
+      await refetchMembers();
     },
     onError: (err: any) => {
       if (String(err?.message || "").includes("unauthorized")) return;
@@ -442,385 +358,517 @@ const Permissions = () => {
     },
   });
 
-  /* ----------------------------- Event handlers ---------------------------- */
+  const deleteRoleMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRoleId) return;
+      return adminJson(`${API}/api/admin/roles/${selectedRoleId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["adminPerms:roles"] });
+      setSelectedRoleId(null);
+      alert("✅ Role deleted.");
+    },
+    onError: (err: any) => {
+      if (String(err?.message || "").includes("unauthorized")) return;
+      alert("❌ " + (err?.message || "Failed to delete role"));
+    },
+  });
 
-  const toggleGroup = (key: string) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+  /* ----------------------------- Local handlers ----------------------------- */
+
+  const markDirty = (next: Set<string>) => {
+    const a = Array.from(next).sort();
+    const b = Array.from(savedPerms).sort();
+    setIsDirty(JSON.stringify(a) !== JSON.stringify(b));
   };
 
   const handleTogglePerm = (permKey: string, checked: boolean) => {
     setWorkingPerms((prev) => {
-      const next = new Set(prev);
+      const next = new Set<string>(prev);
       if (checked) next.add(permKey);
       else next.delete(permKey);
+      markDirty(next);
       return next;
     });
   };
 
   const handleRevertPerms = () => {
-    setWorkingPerms(new Set(savedPerms));
+    const next = new Set<string>(savedPerms);
+    setWorkingPerms(next);
+    setIsDirty(false);
   };
 
-  const handleCreateRole = () => {
-    if (!isSuperadmin) return;
-    const name = window.prompt("Role name (e.g. Ops Admin):", "");
-    if (!name) return;
-    createRoleMutation.mutate(name.trim());
-  };
-
-  const handleRenameRole = () => {
-    if (!isSuperadmin || !currentRole || isCurrentRoleBuiltIn) return;
-    const name = window.prompt("New name for role:", currentRole.name || "");
-    if (!name || name.trim() === currentRole.name) return;
-    renameRoleMutation.mutate(name.trim());
+  const handleCreateRoleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (createRoleMutation.isPending) return;
+    createRoleMutation.mutate(newRoleName);
   };
 
   const handleDeleteRole = () => {
-    if (!isSuperadmin || !currentRole || isCurrentRoleBuiltIn) return;
-    const ok = window.confirm(
-      "Delete this role and unassign all members? This cannot be undone."
+    if (!selectedRole) return;
+    const confirmText = window.prompt(
+      `Type DELETE to remove role "${selectedRole.name}" and unassign all members.`
     );
-    if (!ok) return;
+    if (confirmText !== "DELETE") return;
     deleteRoleMutation.mutate();
   };
 
-  const handleSeedDefaults = () => {
-    if (!isSuperadmin) return;
-    const ok = window.confirm(
-      "Sync default roles and permissions? This may overwrite some existing configuration."
-    );
-    if (!ok) return;
-    seedDefaultsMutation.mutate();
-  };
-
   const handleAddMember = () => {
-    const email = addMemberEmail.trim();
+    const email = newMemberEmail.trim();
     if (!email) return;
     addMemberMutation.mutate(email);
   };
 
-  const handleConfirmRemoveMember = (memberId: number) => {
-    setPendingRemoveAdminId(memberId);
-    const ok = window.confirm("Remove this admin from the role?");
-    if (!ok) {
-      setPendingRemoveAdminId(null);
-      return;
-    }
-    removeMemberMutation.mutate();
+  const handleRemoveMember = (id: number) => {
+    if (!window.confirm("Remove this admin from the role?")) return;
+    removeMemberMutation.mutate(id);
   };
 
-  const handleChangeAuditWindow = (val: string) => {
-    const cast = val as "24h" | "7d" | "30d";
-    setAuditWindow(cast);
-  };
+  /* --------------------------- Derived permission UI ------------------------ */
 
-  /* --------------------------------- Render -------------------------------- */
+  const filteredGroups: PermissionGroup[] = useMemo(() => {
+    const filter = permFilter.toLowerCase().trim();
+    const groups = schemaData?.groups ?? [];
+    if (!filter) return groups;
+
+    return groups
+      .map((g) => {
+        const perms = (g.perms ?? []).filter((p) => {
+          return (
+            (p.key || "").toLowerCase().includes(filter) ||
+            (p.label || "").toLowerCase().includes(filter) ||
+            (g.title || g.key || "").toLowerCase().includes(filter)
+          );
+        });
+        if (!perms.length) return null;
+        return { ...g, perms };
+      })
+      .filter(Boolean) as PermissionGroup[];
+  }, [schemaData, permFilter]);
+
+  const canEditSelectedRole = selectedRole && !selectedRole.built_in;
+
+  /* --------------------------------- Render --------------------------------- */
 
   return (
     <AdminLayout>
       <div className="p-4 lg:p-8 space-y-6">
         {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl sm:text-2xl font-semibold">
-              Roles &amp; Permissions
-            </h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="text-2xl font-bold">Roles &amp; Permissions</h1>
+            <p className="text-muted-foreground">
               Control who can manage users, billing, tracking, and more.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={handleSeedDefaults}
-              disabled={!isSuperadmin || seedDefaultsMutation.isPending}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    "Sync default roles and permissions? This may overwrite some existing settings."
+                  )
+                )
+                  return;
+                seedDefaultsMutation.mutate();
+              }}
+              disabled={seedDefaultsMutation.isPending}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <svg
+                className="h-4 w-4 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
               Sync Default Permissions
             </Button>
-            <Button
-              type="button"
-              onClick={handleCreateRole}
-              disabled={!isSuperadmin || createRoleMutation.isPending}
+
+            {/* New Role dialog */}
+            <Dialog
+              open={isNewRoleOpen}
+              onOpenChange={(open) => {
+                setIsNewRoleOpen(open);
+                if (!open) {
+                  setNewRoleName("");
+                  setNewRoleError(null);
+                }
+              }}
             >
-              <Plus className="h-4 w-4 mr-2" />
-              New Role
-            </Button>
+              <Button
+                type="button"
+                onClick={() => setIsNewRoleOpen(true)}
+              >
+                + New Role
+              </Button>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Role</DialogTitle>
+                  <DialogDescription>
+                    Give this role a clear name, like &quot;Ops Admin&quot; or
+                    &quot;Billing-only&quot;.
+                  </DialogDescription>
+                </DialogHeader>
+                <form
+                  onSubmit={handleCreateRoleSubmit}
+                  className="space-y-4 pt-2"
+                >
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="new-role-name"
+                      className="text-sm font-medium"
+                    >
+                      Role name
+                    </label>
+                    <Input
+                      id="new-role-name"
+                      placeholder="Ops Admin"
+                      autoFocus
+                      value={newRoleName}
+                      onChange={(e) => setNewRoleName(e.target.value)}
+                    />
+                    {newRoleError && (
+                      <p className="text-xs text-destructive">
+                        {newRoleError}
+                      </p>
+                    )}
+                  </div>
+                  <DialogFooter className="pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsNewRoleOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={
+                        createRoleMutation.isPending ||
+                        !newRoleName.trim()
+                      }
+                    >
+                      {createRoleMutation.isPending
+                        ? "Creating…"
+                        : "Create"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
+        {/* Main 3-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT: Roles list */}
-          <Card className="lg:col-span-3 h-full">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <h3 className="font-semibold text-base">Roles</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleRenameRole}
-                disabled={
-                  !isSuperadmin ||
-                  !currentRole ||
-                  isCurrentRoleBuiltIn ||
-                  renameRoleMutation.isPending
-                }
-              >
-                <Edit2 className="h-3.5 w-3.5" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Search */}
+          {/* Left: Roles list */}
+          <Card className="lg:col-span-3">
+            <CardContent className="p-6 space-y-4 h-full flex flex-col">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Roles</h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={!selectedRole || !!selectedRole?.built_in}
+                  onClick={() => {
+                    if (!selectedRole) return;
+                    const next = window.prompt(
+                      "New role name:",
+                      selectedRole.name
+                    );
+                    if (!next || !next.trim() || next === selectedRole.name)
+                      return;
+                    adminJson(
+                      `${API}/api/admin/roles/${selectedRole.id}`,
+                      {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name: next.trim() }),
+                      }
+                    )
+                      .then(() =>
+                        qc.invalidateQueries({
+                          queryKey: ["adminPerms:roles"],
+                        })
+                      )
+                      .catch((err) => {
+                        if (
+                          String(err?.message || "").includes(
+                            "unauthorized"
+                          )
+                        )
+                          return;
+                        alert(
+                          "❌ " +
+                            (err?.message || "Failed to rename role")
+                        );
+                      });
+                  }}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </div>
+
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
                 <Input
                   placeholder="Search roles…"
-                  className="pl-8"
+                  className="pl-9"
                   value={roleSearch}
                   onChange={(e) => setRoleSearch(e.target.value)}
                 />
               </div>
 
-              {/* Empty state */}
-              {rolesLoading ? (
-                <p className="text-sm text-muted-foreground">Loading roles…</p>
-              ) : roles.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No roles yet. Create one to begin.
-                </p>
-              ) : null}
+              <ScrollArea className="flex-1 rounded border">
+                {rolesLoading && (
+                  <div className="p-4 text-sm text-muted-foreground">
+                    Loading roles…
+                  </div>
+                )}
+                {!rolesLoading && allRoles.length === 0 && (
+                  <div className="p-4 text-sm text-muted-foreground">
+                    No roles yet. Create one to begin.
+                  </div>
+                )}
+                <div className="flex flex-col">
+                  {allRoles.map((role) => {
+                    const isActive = role.id === selectedRoleId;
+                    const builtIn = !!role.built_in;
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => setSelectedRoleId(role.id)}
+                        className={`flex items-center justify-between px-3 py-2 text-left text-sm border-b last:border-b-0 transition-colors ${
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        <span className="truncate">{role.name}</span>
+                        {builtIn && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] uppercase tracking-wide"
+                          >
+                            built-in
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
 
-              {/* Roles list */}
-              <div className="border rounded-md max-h-[520px] overflow-auto divide-y">
-                {roles.map((role) => {
-                  const isActive = role.id === selectedRoleId;
-                  const isBuiltIn = !!role.built_in;
-                  return (
-                    <button
-                      key={role.id}
-                      type="button"
-                      onClick={() => setSelectedRoleId(role.id)}
-                      className={[
-                        "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors text-left",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "hover:bg-muted",
-                      ].join(" ")}
-                    >
-                      <span className="truncate">{role.name}</span>
-                      {isBuiltIn && (
-                        <Badge
-                          variant="outline"
-                          className="text-[11px] font-normal"
-                        >
-                          built-in
-                        </Badge>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between pt-2 border-t mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive border-destructive hover:bg-destructive/10"
+                  disabled={!selectedRole || !!selectedRole?.built_in}
+                  onClick={handleDeleteRole}
+                >
+                  Delete Role
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setIsNewRoleOpen(true)}
+                >
+                  + Add Role
+                </Button>
               </div>
             </CardContent>
-            <div className="flex items-center justify-between px-6 py-3 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-destructive border-destructive hover:bg-destructive/10"
-                onClick={handleDeleteRole}
-                disabled={
-                  !isSuperadmin ||
-                  !currentRole ||
-                  isCurrentRoleBuiltIn ||
-                  deleteRoleMutation.isPending
-                }
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Delete Role
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleCreateRole}
-                disabled={!isSuperadmin || createRoleMutation.isPending}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Add Role
-              </Button>
-            </div>
           </Card>
 
-          {/* MIDDLE: Permissions matrix */}
-          <Card className="lg:col-span-6 h-full flex flex-col">
-            <CardHeader className="pb-3">
-              <h3 className="font-semibold text-base">Permissions</h3>
-              <p className="text-xs text-muted-foreground">
-                {currentRole
-                  ? `Editing: ${currentRole.name}`
-                  : "Select a role to edit its permissions."}
-              </p>
-            </CardHeader>
-            <CardContent className="flex flex-col flex-1 pt-0">
+          {/* Middle: Permissions matrix */}
+          <Card className="lg:col-span-6">
+            <CardContent className="p-6 space-y-4 h-full flex flex-col">
+              <div className="space-y-1">
+                <h3 className="font-semibold">Permissions</h3>
+                <p className="text-xs text-muted-foreground">
+                  {selectedRole
+                    ? `Editing: ${selectedRole.name}${
+                        selectedRole.built_in ? " (built-in)" : ""
+                      }`
+                    : "Select a role to edit its permissions."}
+                </p>
+              </div>
+
               {/* Filter row */}
-              <div className="px-1 pt-2 pb-4 flex flex-col md:flex-row md:items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[220px]">
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
                   <Input
                     placeholder="Filter permissions… (e.g. user, billing)"
-                    className="pl-8"
+                    className="pl-9"
                     value={permFilter}
                     onChange={(e) => setPermFilter(e.target.value)}
+                    disabled={!selectedRole}
                   />
                 </div>
                 <Button
                   type="button"
-                  variant="outline"
-                  className="whitespace-nowrap"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setPermFilter("")}
+                  disabled={!permFilter}
                 >
-                  <X className="h-4 w-4 mr-1.5" />
                   Clear
                 </Button>
               </div>
 
               {/* Matrix */}
-              <div className="flex-1 overflow-auto space-y-3">
-                {!schemaData?.groups?.length ? (
-                  <div className="text-sm text-muted-foreground px-1">
-                    No permissions available.
-                  </div>
-                ) : (
-                  schemaData.groups.map((group) => {
-                    const groupKey = group.key;
-                    const groupTitle = group.title || group.key;
-                    const allPerms = group.perms || [];
-                    const filter = permFilter.toLowerCase().trim();
+              <ScrollArea className="flex-1 rounded border">
+                <div className="p-4 space-y-3">
+                  {(schemaLoading || permsLoading) && (
+                    <p className="text-sm text-muted-foreground">
+                      Loading permissions…
+                    </p>
+                  )}
+                  {!schemaLoading &&
+                    !permsLoading &&
+                    selectedRole &&
+                    filteredGroups.length === 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        No permissions available.
+                      </p>
+                    )}
 
-                    const visiblePerms = allPerms.filter((p) => {
-                      if (!filter) return true;
-                      const label = (p.label || p.key || "").toLowerCase();
-                      const desc = (p.desc || "").toLowerCase();
-                      const gTitle = groupTitle.toLowerCase();
+                  {!schemaLoading &&
+                    !permsLoading &&
+                    selectedRole &&
+                    filteredGroups.map((group) => {
+                      const key = group.key || "group";
+                      const groupId = `group-${key}`;
+                      const isOpen = true; // keep all expanded (like bootstrap)
                       return (
-                        label.includes(filter) ||
-                        desc.includes(filter) ||
-                        gTitle.includes(filter)
-                      );
-                    });
-
-                    if (visiblePerms.length === 0) return null;
-
-                    const expanded = expandedGroups[groupKey] ?? true;
-
-                    return (
-                      <div
-                        key={groupKey}
-                        className="border rounded-md overflow-hidden"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleGroup(groupKey)}
-                          className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/60 hover:bg-muted transition-colors"
+                        <div
+                          key={groupId}
+                          className="border rounded-lg overflow-hidden"
                         >
-                          <span className="font-medium text-sm">
-                            {groupTitle}
-                          </span>
-                          {expanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </button>
-                        {expanded && (
-                          <div className="px-4 py-3 space-y-2">
-                            {visiblePerms.map((perm) => {
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between px-4 py-3 bg-muted/40"
+                          >
+                            <span className="font-medium text-sm">
+                              {group.title || group.key}
+                            </span>
+                            {isOpen ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+                          <div className="px-4 pb-3 pt-2 space-y-2">
+                            {(group.perms ?? []).map((perm) => {
                               const checked = workingPerms.has(perm.key);
                               return (
                                 <div
                                   key={perm.key}
-                                  className="flex flex-col gap-1"
+                                  className="flex items-start gap-2"
                                 >
-                                  <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={idSafe(`perm-${perm.key}`)}
-                                      checked={checked}
-                                      onCheckedChange={(val) =>
-                                        handleTogglePerm(
-                                          perm.key,
-                                          Boolean(val)
-                                        )
-                                      }
-                                      disabled={!currentRole}
-                                    />
+                                  <Checkbox
+                                    id={perm.key}
+                                    checked={checked}
+                                    disabled={!canEditSelectedRole}
+                                    onCheckedChange={(val) =>
+                                      handleTogglePerm(
+                                        perm.key,
+                                        Boolean(val)
+                                      )
+                                    }
+                                  />
+                                  <div className="space-y-0.5">
                                     <label
-                                      htmlFor={idSafe(`perm-${perm.key}`)}
+                                      htmlFor={perm.key}
                                       className="text-sm cursor-pointer"
                                     >
                                       {perm.label || perm.key}
                                     </label>
+                                    {perm.desc && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {perm.desc}
+                                      </p>
+                                    )}
                                   </div>
-                                  {perm.desc && (
-                                    <p className="text-xs text-muted-foreground ml-6">
-                                      {perm.desc}
-                                    </p>
-                                  )}
                                 </div>
                               );
                             })}
-                            {visiblePerms.length === 0 && (
-                              <p className="text-xs text-muted-foreground">
-                                No permissions in this group.
-                              </p>
-                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </ScrollArea>
 
-              {/* Footer: status + actions */}
-              <div className="pt-4 mt-4 border-t flex flex-col md:flex-row items-start md:items-center justify-between gap-2 text-sm">
-                <span className="text-muted-foreground">
-                  {dirty ? "Unsaved changes." : "No changes."}
-                </span>
-                <div className="flex gap-2">
+              {/* Footer actions */}
+              <div className="flex items-center justify-between pt-3 border-t mt-3">
+                <p className="text-xs text-muted-foreground">
+                  {selectedRole
+                    ? isDirty
+                      ? "Unsaved changes."
+                      : "No changes."
+                    : "Select a role to begin."}
+                </p>
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
                     onClick={handleRevertPerms}
-                    disabled={!dirty || !currentRole}
+                    disabled={!selectedRole || !isDirty}
                   >
                     Revert
                   </Button>
                   <Button
                     type="button"
+                    size="sm"
                     onClick={() => savePermsMutation.mutate()}
                     disabled={
-                      !dirty ||
-                      !currentRole ||
-                      savePermsMutation.isPending
+                      !selectedRole ||
+                      !isDirty ||
+                      savePermsMutation.isPending ||
+                      !canEditSelectedRole
                     }
                   >
-                    <svg
-                      className="h-4 w-4 mr-1.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
                     Save Changes
                   </Button>
                 </div>
@@ -828,109 +876,102 @@ const Permissions = () => {
             </CardContent>
           </Card>
 
-          {/* RIGHT: Members */}
-          <Card className="lg:col-span-3 h-full flex flex-col">
-            <CardHeader className="pb-3">
-              <h3 className="font-semibold text-base">Members</h3>
-              <p className="text-xs text-muted-foreground">
-                Admins assigned to this role.
-              </p>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4 pt-0">
-              {/* Add member */}
+          {/* Right: Members */}
+          <Card className="lg:col-span-3">
+            <CardContent className="p-6 space-y-4 h-full flex flex-col">
+              <div>
+                <h3 className="font-semibold">Members</h3>
+                <p className="text-xs text-muted-foreground">
+                  Admins assigned to this role.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">Add by email</label>
                 <div className="flex gap-2">
                   <Input
                     type="email"
                     placeholder="admin@example.com"
-                    value={addMemberEmail}
-                    onChange={(e) => setAddMemberEmail(e.target.value)}
-                    disabled={!currentRole}
+                    value={newMemberEmail}
+                    onChange={(e) => setNewMemberEmail(e.target.value)}
+                    disabled={!selectedRole}
                   />
                   <Button
                     type="button"
                     onClick={handleAddMember}
                     disabled={
-                      !currentRole ||
-                      !addMemberEmail.trim() ||
+                      !selectedRole ||
+                      !newMemberEmail.trim() ||
                       addMemberMutation.isPending
                     }
                   >
                     Add
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   User must exist in <code>admin_users</code>.
                 </p>
               </div>
 
-              {/* Members list */}
-              <div className="border rounded-md max-h-[420px] overflow-auto">
-                {membersLoading ? (
-                  <p className="text-sm text-muted-foreground p-3">
+              <ScrollArea className="flex-1 rounded border">
+                {membersLoading && (
+                  <div className="p-4 text-sm text-muted-foreground">
                     Loading members…
-                  </p>
-                ) : members.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-3">
-                    No admins assigned to this role.
-                  </p>
-                ) : (
-                  <ul>
-                    {members.map((m) => (
-                      <li
-                        key={m.id}
-                        className="flex items-center justify-between px-3 py-2 border-b last:border-b-0"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                              {initialsFor(m.name, m.email)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium truncate">
-                              {m.name || "(No name)"}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {m.email || "—"}
-                            </div>
+                  </div>
+                )}
+                {!membersLoading && members.length === 0 && (
+                  <div className="p-4 text-sm text-muted-foreground">
+                    No members assigned to this role.
+                  </div>
+                )}
+                <ul className="divide-y">
+                  {members.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between px-3 py-2 text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                          {initialsFrom(m.name, m.email)}
+                        </div>
+                        <div>
+                          <div className="font-medium">
+                            {m.name || "(No name)"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {m.email || ""}
                           </div>
                         </div>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7 text-destructive border-destructive hover:bg-destructive/10"
-                          onClick={() =>
-                            handleConfirmRemoveMember(m.id)
-                          }
-                          disabled={
-                            removeMemberMutation.isPending ||
-                            !currentRole
-                          }
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleRemoveMember(m.id)}
+                      >
+                        <UserMinus className="h-3 w-3" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
             </CardContent>
           </Card>
         </div>
 
-        {/* Recent Changes / Audit */}
+        {/* Recent changes / audit */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Changes</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Recent Changes</CardTitle>
             <div className="flex items-center gap-2">
               <Select
                 value={auditWindow}
-                onValueChange={handleChangeAuditWindow}
+                onValueChange={(val) =>
+                  setAuditWindow(val as "24h" | "7d" | "30d")
+                }
               >
-                <SelectTrigger className="w-32 h-8 text-xs">
+                <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -941,13 +982,23 @@ const Permissions = () => {
               </Select>
               <Button
                 type="button"
-                size="icon"
                 variant="outline"
-                className="h-8 w-8"
+                size="icon"
                 onClick={() => refetchAudit()}
-                disabled={auditLoading}
               >
-                <RefreshCw className="h-4 w-4" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
               </Button>
             </div>
           </CardHeader>
@@ -956,25 +1007,25 @@ const Permissions = () => {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr className="text-left">
-                    <th className="pb-2 pt-1 text-xs font-semibold text-muted-foreground">
-                      WHEN
+                    <th className="py-2 font-semibold text-muted-foreground">
+                      When
                     </th>
-                    <th className="pb-2 pt-1 text-xs font-semibold text-muted-foreground">
-                      ADMIN
+                    <th className="py-2 font-semibold text-muted-foreground">
+                      Admin
                     </th>
-                    <th className="pb-2 pt-1 text-xs font-semibold text-muted-foreground">
-                      ACTION
+                    <th className="py-2 font-semibold text-muted-foreground">
+                      Action
                     </th>
-                    <th className="pb-2 pt-1 text-xs font-semibold text-muted-foreground">
-                      TARGET
+                    <th className="py-2 font-semibold text-muted-foreground">
+                      Target
                     </th>
-                    <th className="pb-2 pt-1 text-xs font-semibold text-muted-foreground">
-                      DETAILS
+                    <th className="py-2 font-semibold text-muted-foreground">
+                      Details
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {auditLoading ? (
+                  {auditLoading && (
                     <tr>
                       <td
                         colSpan={5}
@@ -983,7 +1034,8 @@ const Permissions = () => {
                         Loading…
                       </td>
                     </tr>
-                  ) : auditRows.length === 0 ? (
+                  )}
+                  {!auditLoading && auditRows.length === 0 && (
                     <tr>
                       <td
                         colSpan={5}
@@ -992,29 +1044,23 @@ const Permissions = () => {
                         No recent changes in the selected timeframe.
                       </td>
                     </tr>
-                  ) : (
+                  )}
+                  {!auditLoading &&
                     auditRows.map((row, idx) => (
-                      <tr key={idx} className="border-b last:border-b-0">
+                      <tr key={idx} className="border-b last:border-0">
+                        <td className="py-2 align-top">{row.when}</td>
+                        <td className="py-2 align-top">{row.admin}</td>
                         <td className="py-2 align-top">
-                          {row.when || "—"}
-                        </td>
-                        <td className="py-2 align-top">
-                          {row.admin || "—"}
-                        </td>
-                        <td className="py-2 align-top">
-                          <code className="text-xs">
-                            {row.action || "—"}
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            {row.action}
                           </code>
                         </td>
-                        <td className="py-2 align-top">
-                          {row.target || "—"}
-                        </td>
+                        <td className="py-2 align-top">{row.target}</td>
                         <td className="py-2 align-top text-muted-foreground">
-                          {row.details || "—"}
+                          {row.details}
                         </td>
                       </tr>
-                    ))
-                  )}
+                    ))}
                 </tbody>
               </table>
             </div>
