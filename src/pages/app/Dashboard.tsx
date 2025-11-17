@@ -409,7 +409,7 @@ export default function Dashboard() {
 
               {/* Heatmap */}
               <Card>
-                <CardHeader className="flex items-center justify-between">
+                <CardHeader className="flex items-left justify-between">
                   <div className="flex items-center gap-1.5 p-4">
                     <CardTitle>Visitor Density Calendar</CardTitle>
                     <InfoTip text="Shows how many visitors came to your site on each day of the year. Helps track long-term trends." />
@@ -487,7 +487,7 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Donuts + UTMs */}
+              {/* Donuts */}
               <div className="grid gap-6 md:grid-cols-3">
                 <Donut
                   key={`br-${frameKey}-${seriesSig}`}
@@ -515,17 +515,33 @@ export default function Dashboard() {
                 />
               </div>
 
-
+              {/* UTMs */}
               <div className="grid gap-6 md:grid-cols-3">
                 <Card className="md:col-span-2">
-                  <CardHeader><CardTitle>UTM Campaign URLs</CardTitle></CardHeader>
-                  <CardContent><UTMCampaignsTable rows={data.utm_campaigns ?? []} /></CardContent>
+                  <CardHeader className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 p-4">
+                      <CardTitle>UTM Campaign URLs</CardTitle>
+                      <InfoTip text="List of pages with UTM campaign parameters and how many visitors they attracted. Helps evaluate campaign performance." />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <UTMCampaignsTable rows={data.utm_campaigns ?? []} />
+                  </CardContent>
                 </Card>
+
                 <Card>
-                  <CardHeader><CardTitle>UTM Sources</CardTitle></CardHeader>
-                  <CardContent><UTMSourcesTable rows={data.utm_sources ?? []} /></CardContent>
+                  <CardHeader className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 p-4">
+                      <CardTitle>UTM Sources</CardTitle>
+                      <InfoTip text="Breakdown of traffic by utm_source tag. Useful for measuring campaign channel effectiveness." />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <UTMSourcesTable rows={data.utm_sources ?? []} />
+                  </CardContent>
                 </Card>
               </div>
+
             </>
           )
         )}
