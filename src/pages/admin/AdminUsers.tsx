@@ -1,13 +1,21 @@
 // src/pages/admin/AdminUsers.tsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -18,17 +26,21 @@ import {
 } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Shield, UserCheck, Lock, Activity, MoreVertical } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 import { apiBase } from "@/lib/api";
 import { adminSecureFetch } from "@/lib/auth/adminAuth";
+
+const API = apiBase();
+
+/* ----------------------------- Helpers & Types ----------------------------- */
 
 type AdminMetrics = {
   total_admins: number;
@@ -37,28 +49,33 @@ type AdminMetrics = {
   admin_actions_24h: number;
 };
 
-type AdminUserRow = {
+type AdminUsersResponse = {
+  users?: AdminUser[];
+  data?: AdminUser[];
+};
+
+type AdminUser = {
   id: number;
   name: string | null;
   email: string | null;
-  roles: string | null; // comma-separated
-  created_at: string | null;
-  last_login_at: string | null;
-  status: string | null;
+  roles?: string | null;
+  created_at?: string | null;
+  last_login_at?: string | null;
+  status?: string | null;
 };
 
-type AdminProfile = {
-  id?: number;
-  name?: string;
-  email?: string;
-  role?: string;
-};
-
-type AdminRoleOption = {
+type AdminMe = {
+  admin_id: number;
   name: string;
+  email: string;
+  role: string;
 };
 
-const API = apiBase();
+type AdminRole = { name: string };
+
+type AdminRolesResponse = {
+  roles?: AdminRole[];
+};
 
 function handleUnauthorized() {
   try {
@@ -69,16 +86,20 @@ function handleUnauthorized() {
   window.location.href = "/mv-admin/login.html";
 }
 
-async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const res = await adminSecureFetch(`${API}${path}`, init);
+async function adminJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await adminSecureFetch(url, { method: init?.method ?? "GET", ...init });
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("unauthorized");
   }
-  return res;
+  const json = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok) {
+    throw new Error(json?.error || `HTTP ${res.status}`);
+  }
+  return json as T;
 }
 
-function formatDate(iso: string | null | undefined): string {
+function formatDate(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
@@ -89,348 +110,255 @@ function formatDate(iso: string | null | undefined): string {
   });
 }
 
-function formatLastLogin(iso: string | null | undefined): { label: string; stale: boolean } {
-  if (!iso) return { label: "—", stale: false };
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return { label: "—", stale: false };
-
-  const label = formatDate(iso);
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (Number.isNaN(days)) return { label, stale: false };
-  return { label, stale: days > 30 };
-}
-
-function initialsFromName(name: string | null | undefined): string {
-  if (!name) return "AD";
-  const parts = name.trim().split(/\s+/);
-  const initials = parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
-  return initials.slice(0, 2) || "AD";
-}
-
-function humanRoleLabel(role: string): string {
-  return role
-    .replace(/_/g, " ")
-    .split(" ")
-    .map((x) => x.charAt(0).toUpperCase() + x.slice(1))
-    .join(" ");
-}
+/* -------------------------------- Component -------------------------------- */
 
 const AdminUsers = () => {
-  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentAdmin, setCurrentAdmin] = useState<AdminProfile | null>(null);
-
-  const [search, setSearch] = useState("");
-  const [pageSize, setPageSize] = useState<number>(10);
-  const [page, setPage] = useState(0);
+  const qc = useQueryClient();
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [contact, setContact] = useState("");
-  const [role, setRole] = useState<string>("");
-  const [roles, setRoles] = useState<AdminRoleOption[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [page, setPage] = useState<number>(1);
+  const [search, setSearch] = useState("");
+
+  // Add user form state
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newContact, setNewContact] = useState("");
+  const [newRole, setNewRole] = useState("");
+
+  /* ------------------------------- Data Queries ------------------------------ */
+
+  const { data: me } = useQuery<AdminMe>({
+    queryKey: ["admin:me"],
+    queryFn: () => adminJson<AdminMe>(`${API}/api/admin-me`),
+  });
+
+  const { data: metricsData } = useQuery<{ metrics: AdminMetrics }>({
+    queryKey: ["adminUsers:metrics"],
+    queryFn: () => adminJson<{ metrics: AdminMetrics }>(`${API}/api/admin/admin-users/metrics`),
+  });
+
+  const { data: usersData, isLoading: usersLoading } = useQuery<AdminUsersResponse>({
+    queryKey: ["adminUsers:list"],
+    queryFn: () => adminJson<AdminUsersResponse>(`${API}/api/admin/admin-users`),
+  });
+
+  const { data: rolesData } = useQuery<AdminRolesResponse>({
+    queryKey: ["adminUsers:roles"],
+    queryFn: () =>
+      adminJson<AdminRolesResponse>(`${API}/api/dropdown/admin-user-roles`),
+  });
 
   const isSuperadmin =
-    currentAdmin?.role && currentAdmin.role.toLowerCase() === "superadmin";
+    (me?.role || "").toLowerCase() === "superadmin";
 
-  // -------- Load admin profile, metrics, users, roles ----------
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAll() {
-      setLoading(true);
-      try {
-        // 1) Current admin profile (/api/admin-me)
-        const meRes = await adminFetch("/api/admin-me", { method: "GET" });
-        const meJson = (await meRes.json().catch(() => ({}))) as AdminProfile;
-        if (cancelled) return;
-        setCurrentAdmin(meJson);
-
-        // 2) Metrics
-        const metricsRes = await adminFetch("/api/admin/admin-users/metrics", {
-          method: "GET",
-        });
-        const metricsJson = await metricsRes.json().catch(() => ({}));
-        if (!cancelled) {
-          setMetrics(metricsJson?.metrics ?? null);
-        }
-
-        // 3) Users
-        await refreshUsers(cancelled);
-
-        // 4) Admin roles dropdown
-        const rolesRes = await adminFetch("/api/dropdown/admin-user-roles", {
-          method: "GET",
-        });
-        const rolesJson = await rolesRes.json().catch(() => ({}));
-        if (!cancelled) {
-          setRoles(Array.isArray(rolesJson.roles) ? rolesJson.roles : []);
-        }
-      } catch (err) {
-        if ((err as Error)?.message === "unauthorized") return;
-        // Log but don't flip to error UI for now
-        console.error("[AdminUsers] init failed:", err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    async function refreshUsers(cancel: boolean) {
-      const usersRes = await adminFetch("/api/admin/admin-users", {
-        method: "GET",
-      });
-      const usersJson = await usersRes.json().catch(() => ({}));
-      if (cancel) return;
-
-      let rows: AdminUserRow[] = [];
-      if (Array.isArray(usersJson.users)) rows = usersJson.users;
-      else if (Array.isArray(usersJson.data)) rows = usersJson.data;
-      setUsers(rows);
-    }
-
-    loadAll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // separate function for reuse after actions
-  const reloadMetrics = async () => {
-    try {
-      const res = await adminFetch("/api/admin/admin-users/metrics", {
-        method: "GET",
-      });
-      const json = await res.json().catch(() => ({}));
-      setMetrics(json?.metrics ?? null);
-    } catch (err) {
-      if ((err as Error)?.message === "unauthorized") return;
-      console.error("[AdminUsers] reloadMetrics failed:", err);
-    }
-  };
-
-  const reloadUsers = async () => {
-    try {
-      const res = await adminFetch("/api/admin/admin-users", { method: "GET" });
-      const json = await res.json().catch(() => ({}));
-      let rows: AdminUserRow[] = [];
-      if (Array.isArray(json.users)) rows = json.users;
-      else if (Array.isArray(json.data)) rows = json.data;
-      setUsers(rows);
-    } catch (err) {
-      if ((err as Error)?.message === "unauthorized") return;
-      console.error("[AdminUsers] reloadUsers failed:", err);
-    }
-  };
-
-  // -------- Filtering + pagination ----------
-  const filteredUsers = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter((u) => {
-      const name = (u.name || "").toLowerCase();
-      const email = (u.email || "").toLowerCase();
-      const roles = (u.roles || "").toLowerCase();
+  const users: AdminUser[] = useMemo(() => {
+    const raw = (usersData?.users ?? usersData?.data ?? []) as AdminUser[];
+    if (!search.trim()) return raw;
+    const s = search.toLowerCase();
+    return raw.filter((u) => {
       return (
-        name.includes(term) || email.includes(term) || roles.includes(term)
+        (u.name || "").toLowerCase().includes(s) ||
+        (u.email || "").toLowerCase().includes(s) ||
+        (u.roles || "").toLowerCase().includes(s)
       );
     });
-  }, [search, users]);
+  }, [usersData, search]);
 
-  const totalEntries = filteredUsers.length;
+  const totalEntries = users.length;
   const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
-  const currentPage = Math.min(page, totalPages - 1);
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalEntries);
+  const pageUsers = users.slice(startIndex, endIndex);
 
-  const pageUsers = useMemo(() => {
-    const start = currentPage * pageSize;
-    return filteredUsers.slice(start, start + pageSize);
-  }, [filteredUsers, currentPage, pageSize]);
+  /* ----------------------------- Metrics Display ----------------------------- */
 
-  const fromEntry = totalEntries === 0 ? 0 : currentPage * pageSize + 1;
-  const toEntry = Math.min(totalEntries, (currentPage + 1) * pageSize);
-
-  // -------- Metrics cards ----------
-  const totalAdmins = metrics?.total_admins ?? 0;
-  const activeAdmins = metrics?.active_admins ?? 0;
+  const metrics = metricsData?.metrics;
+  const twofaTotal = metrics?.total_admins ?? 0;
   const twofaEnabled = metrics?.twofa_enabled ?? 0;
-  const actions24h = metrics?.admin_actions_24h ?? 0;
   const twofaPercent =
-    totalAdmins > 0 ? Math.round((twofaEnabled / totalAdmins) * 100) : 0;
-
-  const showTwofaBanner =
-    totalAdmins > 0 && twofaEnabled < totalAdmins && !loading;
+    twofaTotal > 0 ? Math.round((twofaEnabled / twofaTotal) * 100) : 0;
 
   const stats = [
     {
       title: "Total Admins",
-      value: loading ? "—" : String(totalAdmins),
+      value: metrics ? String(metrics.total_admins ?? "--") : "--",
       subtitle: "All roles",
       icon: Shield,
-      color: "text-primary",
-      tooltip: "Total accounts in admin_users.",
+      color: "text-primary" as const,
     },
     {
       title: "Active Admins",
-      value: loading ? "—" : String(activeAdmins),
+      value: metrics ? String(metrics.active_admins ?? "--") : "--",
       subtitle: "Can sign in now",
       icon: UserCheck,
-      color: "text-emerald-500",
-      tooltip: "Status = active.",
+      color: "text-success" as const,
     },
     {
       title: "2FA Coverage",
-      value: loading ? "—/—" : `${twofaEnabled}/${totalAdmins || "—"}`,
+      value: metrics ? `${twofaEnabled}/${twofaTotal}` : "--/--",
+      percentage: metrics ? `(${twofaPercent || 0}%)` : undefined,
       subtitle: "We recommend ≥ 100%",
       icon: Lock,
-      color: "text-amber-500",
-      tooltip: "Admins with two-factor authentication enabled.",
-      percentage: loading ? "" : `(${twofaPercent || 0}%)`,
+      color: "text-warning" as const,
     },
     {
       title: "Admin Actions (24h)",
-      value: loading ? "—" : String(actions24h),
+      value: metrics ? String(metrics.admin_actions_24h ?? "0") : "0",
       subtitle: "From audit trail",
       icon: Activity,
-      color: "text-cyan-500",
-      tooltip: "Count of rows in audit_log in the last 24 hours.",
+      color: "text-cyan-500" as const,
     },
   ];
 
-  // -------- Row actions: suspend / block / activate / delete ----------
-  async function handleStatusChange(
-    userId: number,
-    status: "active" | "blocked" | "suspended",
-    label: string
-  ) {
-    if (!isSuperadmin) return;
+  /* ------------------------------- Mutations -------------------------------- */
 
-    const reason =
-      window.prompt(`Optional comment for ${label}:`) || "";
+  const createUserMutation = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        name: newName.trim(),
+        email: newEmail.trim(),
+        role: newRole,
+        status: 2, // "active" – mirrors Bootstrap payload
+      };
 
-    try {
-      const res = await adminFetch(
-        `/api/admin/admin-users/${userId}/status`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, reason }),
-        }
-      );
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json.error || `HTTP ${res.status}`);
+      // keep contact in case BE expects it later; no harm if unused
+      if (newContact.trim()) {
+        payload.contact = newContact.trim();
       }
-      await Promise.all([reloadUsers(), reloadMetrics()]);
-      window.alert("✅ Done.");
-    } catch (err: any) {
-      if (err?.message === "unauthorized") return;
-      console.error("[AdminUsers] status change failed:", err);
-      window.alert("❌ " + (err?.message || "Operation failed"));
-    }
-  }
 
-  async function handleDelete(userId: number) {
-    if (!isSuperadmin) return;
-    const confirmText = window.prompt(
-      "Type DELETE to permanently remove this admin (cannot delete the last superadmin)."
-    );
-    if (confirmText !== "DELETE") return;
-
-    try {
-      const res = await adminFetch(`/api/admin/admin-users/${userId}`, {
-        method: "DELETE",
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json.error || `HTTP ${res.status}`);
-      }
-      await Promise.all([reloadUsers(), reloadMetrics()]);
-      window.alert("✅ User deleted.");
-    } catch (err: any) {
-      if (err?.message === "unauthorized") return;
-      console.error("[AdminUsers] delete failed:", err);
-      window.alert("❌ " + (err?.message || "Delete failed"));
-    }
-  }
-
-  // -------- Add New User ----------
-  async function handleCreateUser() {
-    if (!fullName.trim() || !email.trim()) {
-      window.alert("Full name and email are required.");
-      return;
-    }
-    if (!role) {
-      window.alert("Please select a role.");
-      return;
-    }
-
-    const payload = {
-      name: fullName.trim(),
-      email: email.trim(),
-      role,
-      status: 2, // active (kept same as Bootstrap)
-      contact, // optional; backend can ignore if unused
-    };
-
-    setIsCreating(true);
-    try {
-      const res = await adminFetch("/api/admin-create-user", {
+      return adminJson(`${API}/api/admin-create-user`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json.error || `HTTP ${res.status}`);
-      }
-
-      window.alert("✅ User created.");
+    },
+    onSuccess: async () => {
+      alert("✅ User created.");
       setIsAddUserOpen(false);
-      setFullName("");
-      setEmail("");
-      setContact("");
-      setRole("");
-      await Promise.all([reloadUsers(), reloadMetrics()]);
-    } catch (err: any) {
-      if (err?.message === "unauthorized") return;
-      console.error("[AdminUsers] create user failed:", err);
-      window.alert("❌ " + (err?.message || "Failed to create user"));
-    } finally {
-      setIsCreating(false);
+      setNewName("");
+      setNewEmail("");
+      setNewContact("");
+      setNewRole("");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
+        qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
+      ]);
+    },
+    onError: (err: any) => {
+      if (String(err?.message || "").includes("unauthorized")) return;
+      alert("❌ " + (err?.message || "Failed to create user"));
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async (params: { id: number; status: string; reason?: string }) => {
+      const res = await adminJson(
+        `${API}/api/admin/admin-users/${params.id}/status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: params.status,
+            reason: params.reason || "",
+          }),
+        }
+      );
+      return res;
+    },
+    onSuccess: async () => {
+      alert("✅ Done.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
+        qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
+      ]);
+    },
+    onError: (err: any) => {
+      if (String(err?.message || "").includes("unauthorized")) return;
+      alert("❌ " + (err?.message || "Operation failed"));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return adminJson(`${API}/api/admin/admin-users/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: async () => {
+      alert("✅ User deleted.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
+        qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
+      ]);
+    },
+    onError: (err: any) => {
+      if (String(err?.message || "").includes("unauthorized")) return;
+      alert("❌ " + (err?.message || "Failed to delete user"));
+    },
+  });
+
+  /* --------------------------------- Actions -------------------------------- */
+
+  const handleAction = (user: AdminUser, action: "suspend" | "block" | "activate" | "delete") => {
+    if (!isSuperadmin) return;
+
+    if (action === "delete") {
+      const confirmText = window.prompt(
+        "Type DELETE to permanently remove this admin (cannot delete the last superadmin)."
+      );
+      if (confirmText !== "DELETE") return;
+      deleteMutation.mutate(user.id);
+      return;
     }
-  }
+
+    const actionToStatus: Record<string, string> = {
+      suspend: "suspended",
+      block: "blocked",
+      activate: "active",
+    };
+    const status = actionToStatus[action];
+    const reason = window.prompt(`Optional comment for ${action}:`) || "";
+    statusMutation.mutate({ id: user.id, status, reason });
+  };
+
+  const roleOptions = rolesData?.roles ?? [];
+
+  const statusBadgeClasses = (status: string | null | undefined) => {
+    const s = (status || "").toLowerCase();
+    if (s === "active") return "bg-emerald-100 text-emerald-700 border border-emerald-200";
+    if (s === "pending") return "bg-sky-100 text-sky-700 border border-sky-200";
+    if (s === "suspended") return "bg-amber-100 text-amber-700 border border-amber-200";
+    if (s === "blocked") return "bg-red-100 text-red-700 border border-red-200";
+    return "bg-slate-100 text-slate-700 border border-slate-200";
+  };
 
   return (
     <AdminLayout>
       <div className="p-4 lg:p-8 space-y-6">
-        {/* KPIs */}
+        {/* Stats Grid – layout identical to old code */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat, idx) => (
-            <Card key={idx} className="h-full">
-              <CardContent className="pt-6 h-full flex flex-col">
+            <Card key={idx}>
+              <CardContent className="pt-6">
                 <div className="flex items-start justify-between mb-4">
                   <div
                     className={`p-2.5 rounded-lg ${
                       stat.color === "text-primary"
                         ? "bg-primary/10"
-                        : stat.color === "text-emerald-500"
-                        ? "bg-emerald-500/10"
-                        : stat.color === "text-amber-500"
-                        ? "bg-amber-500/10"
+                        : stat.color === "text-success"
+                        ? "bg-success/10"
+                        : stat.color === "text-warning"
+                        ? "bg-warning/10"
                         : "bg-cyan-500/10"
                     }`}
                   >
                     <stat.icon className={`h-5 w-5 ${stat.color}`} />
                   </div>
-                  {/* Info icon - simple, no tooltip for now */}
                   <button
                     type="button"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={stat.tooltip}
-                    title={stat.tooltip}
                   >
                     <svg
                       className="h-4 w-4"
@@ -451,48 +379,34 @@ const AdminUsers = () => {
                   <p className="text-sm text-muted-foreground">{stat.title}</p>
                   <div className="flex items-baseline gap-1">
                     <p className="text-3xl font-bold">{stat.value}</p>
-                    {"percentage" in stat && stat.percentage ? (
+                    {"percentage" in stat && stat.percentage && (
                       <span className="text-sm text-muted-foreground">
                         {stat.percentage}
                       </span>
-                    ) : null}
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {stat.subtitle}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* 2FA banner (mirror of Bootstrap alert) */}
-        {showTwofaBanner && (
-          <Alert className="border-amber-300 bg-amber-50/80">
-            <AlertTitle>2FA recommended</AlertTitle>
-            <AlertDescription>
-              Not all admins have two-factor authentication enabled.{" "}
-              <span className="text-muted-foreground">
-                Enforce 2FA in security settings.
-              </span>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Admin Users Table */}
+        {/* Admin Users Table – layout mirrors old code */}
         <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <CardContent className="p-6">
+            <div className="space-y-4">
               <h2 className="text-lg font-semibold">Admin Users</h2>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                {/* Page size */}
+              {/* Controls row – same structure as old version */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                {/* Page size select */}
                 <Select
-                  value={String(pageSize)}
-                  onValueChange={(v) => {
-                    const num = parseInt(v, 10);
-                    setPageSize(num || 10);
-                    setPage(0);
+                  defaultValue={String(pageSize)}
+                  onValueChange={(val) => {
+                    const num = Number(val || 10);
+                    setPageSize(num);
+                    setPage(1);
                   }}
                 >
                   <SelectTrigger className="w-20">
@@ -506,7 +420,7 @@ const AdminUsers = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Search + Export + Add user */}
+                {/* Search + Export + Add New User */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                   <Input
                     placeholder="Search User"
@@ -514,19 +428,44 @@ const AdminUsers = () => {
                     value={search}
                     onChange={(e) => {
                       setSearch(e.target.value);
-                      setPage(0);
+                      setPage(1);
                     }}
                   />
                   <div className="flex gap-2">
+                    {/* Export (stubbed client-side) */}
                     <Button
+                      type="button"
                       variant="outline"
                       className="flex-1 sm:flex-none"
-                      type="button"
                       onClick={() => {
-                        // Stub: you can wire real export later.
-                        window.alert(
-                          "Export in React version is not wired yet. Use Bootstrap admin for now."
+                        // Simple CSV export of current filtered users
+                        const rows = [
+                          ["Name", "Email", "Roles", "Created", "Last Login", "Status"],
+                          ...users.map((u) => [
+                            u.name || "",
+                            u.email || "",
+                            u.roles || "",
+                            formatDate(u.created_at),
+                            formatDate(u.last_login_at),
+                            u.status || "",
+                          ]),
+                        ];
+                        const csv = rows.map((r) =>
+                          r
+                            .map((cell) =>
+                              `"${String(cell).replace(/"/g, '""')}"`
+                            )
+                            .join(",")
                         );
+                        const blob = new Blob([csv.join("\n")], {
+                          type: "text/csv;charset=utf-8;",
+                        });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "admin-users.csv";
+                        a.click();
+                        URL.revokeObjectURL(url);
                       }}
                     >
                       <svg
@@ -545,287 +484,229 @@ const AdminUsers = () => {
                       Export
                     </Button>
 
-                    {isSuperadmin ? (
-                      <Sheet
-                        open={isAddUserOpen}
-                        onOpenChange={setIsAddUserOpen}
-                      >
-                        <SheetTrigger asChild>
-                          <Button type="button" className="flex-1 sm:flex-none">
-                            + Add New User
-                          </Button>
-                        </SheetTrigger>
-                        <SheetContent>
-                          <SheetHeader>
-                            <SheetTitle>Add User</SheetTitle>
-                            <SheetDescription>
-                              Add a new admin user. This mirrors the Bootstrap
-                              offcanvas flow.
-                            </SheetDescription>
-                          </SheetHeader>
-                          <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="add-user-fullname">
-                                Full Name
-                              </Label>
-                              <Input
-                                id="add-user-fullname"
-                                placeholder="John Doe"
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="add-user-email">Email</Label>
-                              <Input
-                                id="add-user-email"
-                                type="email"
-                                placeholder="john.doe@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="add-user-contact">
-                                Contact (optional)
-                              </Label>
-                              <Input
-                                id="add-user-contact"
-                                placeholder="+1 (609) 988-44-11"
-                                value={contact}
-                                onChange={(e) => setContact(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="admin-role">Admin Role</Label>
-                              <Select
-                                value={role}
-                                onValueChange={(v) => setRole(v)}
-                              >
-                                <SelectTrigger id="admin-role">
-                                  <SelectValue placeholder="Select role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="">
-                                    Select Role
-                                  </SelectItem>
-                                  {roles.map((r) => (
-                                    <SelectItem key={r.name} value={r.name}>
-                                      {humanRoleLabel(r.name)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="flex gap-2 pt-2">
-                              <Button
-                                className="flex-1"
-                                type="button"
-                                disabled={isCreating}
-                                onClick={handleCreateUser}
-                              >
-                                {isCreating ? "Saving…" : "Submit"}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setIsAddUserOpen(false)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
+                    {/* Add New User sheet – offcanvas equivalent */}
+                    <Sheet open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+                      <SheetTrigger asChild>
+                        <Button
+                          type="button"
+                          className="flex-1 sm:flex-none"
+                        >
+                          + Add New User
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="right" className="w-full sm:max-w-md">
+                        <SheetHeader>
+                          <SheetTitle>Add New User</SheetTitle>
+                          <SheetDescription>
+                            Enter user details to add them to the platform.
+                          </SheetDescription>
+                        </SheetHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="add-name">Full Name</Label>
+                            <Input
+                              id="add-name"
+                              placeholder="John Doe"
+                              value={newName}
+                              onChange={(e) => setNewName(e.target.value)}
+                            />
                           </div>
-                        </SheetContent>
-                      </Sheet>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        className="flex-1 sm:flex-none"
-                        disabled
-                        type="button"
-                      >
-                        + Add New User
-                      </Button>
-                    )}
+                          <div className="space-y-2">
+                            <Label htmlFor="add-email">Email</Label>
+                            <Input
+                              id="add-email"
+                              type="email"
+                              placeholder="john.doe@example.com"
+                              value={newEmail}
+                              onChange={(e) => setNewEmail(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="add-contact">Contact</Label>
+                            <Input
+                              id="add-contact"
+                              placeholder="+1 (609) 988-44-11"
+                              value={newContact}
+                              onChange={(e) => setNewContact(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="add-role">Admin Role</Label>
+                            <Select
+                              value={newRole}
+                              onValueChange={(val) => setNewRole(val)}
+                            >
+                              <SelectTrigger id="add-role">
+                                <SelectValue placeholder="Select role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Select Role</SelectItem>
+                                {roleOptions.map((r) => (
+                                  <SelectItem key={r.name} value={r.name}>
+                                    {r.name
+                                      .replace(/_/g, " ")
+                                      .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <Button
+                            className="w-full"
+                            type="button"
+                            disabled={
+                              createUserMutation.isPending ||
+                              !newName.trim() ||
+                              !newEmail.trim() ||
+                              !newRole
+                            }
+                            onClick={() => {
+                              createUserMutation.mutate();
+                            }}
+                          >
+                            {createUserMutation.isPending
+                              ? "Saving..."
+                              : "Submit"}
+                          </Button>
+                        </div>
+                      </SheetContent>
+                    </Sheet>
                   </div>
                 </div>
               </div>
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead className="border-b">
                     <tr className="text-left">
-                      <th className="pb-3 pl-2 w-10">
+                      <th className="pb-3 pl-2">
                         <input
                           type="checkbox"
                           className="rounded border-input"
                           disabled
                         />
                       </th>
-                      <th className="pb-3 text-xs font-semibold text-muted-foreground">
+                      <th className="pb-3 text-sm font-semibold text-muted-foreground">
                         USER
                       </th>
-                      <th className="pb-3 text-xs font-semibold text-muted-foreground">
+                      <th className="pb-3 text-sm font-semibold text-muted-foreground">
                         ROLE
                       </th>
-                      <th className="pb-3 text-xs font-semibold text-muted-foreground">
+                      <th className="pb-3 text-sm font-semibold text-muted-foreground">
                         CREATED
                       </th>
-                      <th className="pb-3 text-xs font-semibold text-muted-foreground">
+                      <th className="pb-3 text-sm font-semibold text-muted-foreground">
                         LAST LOGIN
                       </th>
-                      <th className="pb-3 text-xs font-semibold text-muted-foreground">
+                      <th className="pb-3 text-sm font-semibold text-muted-foreground">
                         STATUS
                       </th>
-                      <th className="pb-3 text-xs font-semibold text-muted-foreground">
+                      <th className="pb-3 text-sm font-semibold text-muted-foreground">
                         ACTIONS
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {loading && users.length === 0 ? (
+                    {usersLoading && (
                       <tr>
                         <td
                           colSpan={7}
-                          className="py-8 text-center text-muted-foreground"
+                          className="py-6 text-center text-muted-foreground"
                         >
                           Loading…
                         </td>
                       </tr>
-                    ) : pageUsers.length === 0 ? (
+                    )}
+
+                    {!usersLoading && pageUsers.length === 0 && (
                       <tr>
                         <td
                           colSpan={7}
-                          className="py-8 text-center text-muted-foreground"
+                          className="py-6 text-center text-muted-foreground"
                         >
                           No admin users found.
                         </td>
                       </tr>
-                    ) : (
+                    )}
+
+                    {!usersLoading &&
                       pageUsers.map((user) => {
                         const name = user.name || "(No name)";
                         const email = user.email || "—";
-                        const rolesStr = user.roles || "";
-                        const rolesArr = rolesStr
-                          .split(",")
-                          .map((r) => r.trim())
-                          .filter(Boolean);
-                        const isRowSuperadmin = rolesArr
+                        const initials =
+                          (name.match(/\b\w/g) || [])
+                            .join("")
+                            .substring(0, 2)
+                            .toUpperCase() || "MV";
+                        const roles = (user.roles || "").split(",").map((r) => r.trim());
+                        const isRowSuper = roles
                           .map((r) => r.toLowerCase())
                           .includes("superadmin");
 
-                        const statusKey = (user.status || "").toLowerCase();
-                        const statusMeta: {
-                          label: string;
-                          className: string;
-                        } =
-                          statusKey === "active"
-                            ? {
-                                label: "Active",
-                                className:
-                                  "bg-emerald-100 text-emerald-700 border border-emerald-200",
-                              }
-                            : statusKey === "pending"
-                            ? {
-                                label: "Pending",
-                                className:
-                                  "bg-sky-100 text-sky-700 border border-sky-200",
-                              }
-                            : statusKey === "suspended"
-                            ? {
-                                label: "Suspended",
-                                className:
-                                  "bg-amber-100 text-amber-700 border border-amber-200",
-                              }
-                            : statusKey === "blocked"
-                            ? {
-                                label: "Blocked",
-                                className:
-                                  "bg-red-100 text-red-700 border border-red-200",
-                              }
-                            : {
-                                label: "Inactive",
-                                className:
-                                  "bg-slate-100 text-slate-700 border border-slate-200",
-                              };
-
-                        const { label: lastLoginLabel, stale } = formatLastLogin(
-                          user.last_login_at
-                        );
-
                         return (
                           <tr key={user.id} className="border-b last:border-0">
-                            <td className="py-4 pl-2 align-top">
+                            <td className="py-4 pl-2">
                               <input
                                 type="checkbox"
                                 className="rounded border-input"
                                 disabled
                               />
                             </td>
-                            <td className="py-4 align-top">
+                            <td className="py-4">
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-9 w-9">
                                   <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                                    {initialsFromName(name)}
+                                    {initials}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
                                   <p className="font-medium">{name}</p>
-                                  <p className="text-xs text-muted-foreground">
+                                  <p className="text-sm text-muted-foreground">
                                     {email}
                                   </p>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 align-top">
-                              <div className="flex flex-wrap gap-1">
-                                {rolesArr.length === 0 ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    —
-                                  </Badge>
-                                ) : (
-                                  rolesArr.map((r) => (
+                            <td className="py-4">
+                              {roles.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {roles.map((r) => (
                                     <Badge
                                       key={r}
-                                      variant="outline"
-                                      className="text-xs"
+                                      variant="secondary"
+                                      className="capitalize"
                                     >
-                                      {humanRoleLabel(r)}
+                                      {r}
                                     </Badge>
-                                  ))
-                                )}
-                              </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              )}
                             </td>
-                            <td className="py-4 align-top text-xs">
+                            <td className="py-4 text-sm">
                               {formatDate(user.created_at)}
                             </td>
-                            <td className="py-4 align-top text-xs">
-                              <div className="flex items-center gap-2">
-                                <span>{lastLoginLabel}</span>
-                                {stale && (
-                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                                    stale
-                                  </span>
-                                )}
-                              </div>
+                            <td className="py-4 text-sm">
+                              {formatDate(user.last_login_at)}
                             </td>
-                            <td className="py-4 align-top">
+                            <td className="py-4">
                               <Badge
-                                className={`text-xs ${statusMeta.className}`}
+                                className={`${statusBadgeClasses(
+                                  user.status
+                                )} backdrop-blur-sm`}
                               >
-                                {statusMeta.label}
+                                {user.status || "Inactive"}
                               </Badge>
                             </td>
-                            <td className="py-4 align-top">
-                              {!isSuperadmin || isRowSuperadmin ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-muted-foreground"
-                                  disabled
-                                >
+                            <td className="py-4">
+                              {!isSuperadmin || isRowSuper ? (
+                                <Button variant="ghost" size="sm">
                                   —
                                 </Button>
                               ) : (
@@ -835,51 +716,35 @@ const AdminUsers = () => {
                                       variant="outline"
                                       size="icon"
                                       className="h-8 w-8 rounded-full"
+                                      type="button"
                                     >
                                       <MoreVertical className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuItem
+                                      onClick={() => handleAction(user, "suspend")}
                                       className="text-amber-600"
-                                      onClick={() =>
-                                        handleStatusChange(
-                                          user.id,
-                                          "suspended",
-                                          "suspend"
-                                        )
-                                      }
                                     >
                                       Suspend
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
+                                      onClick={() => handleAction(user, "block")}
                                       className="text-red-600"
-                                      onClick={() =>
-                                        handleStatusChange(
-                                          user.id,
-                                          "blocked",
-                                          "block"
-                                        )
-                                      }
                                     >
                                       Block
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
+                                      onClick={() => handleAction(user, "activate")}
                                       className="text-emerald-600"
-                                      onClick={() =>
-                                        handleStatusChange(
-                                          user.id,
-                                          "active",
-                                          "activate"
-                                        )
-                                      }
                                     >
                                       Activate
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
+                                      onClick={() => handleAction(user, "delete")}
                                       className="text-red-700"
-                                      onClick={() => handleDelete(user.id)}
                                     >
                                       Delete…
                                     </DropdownMenuItem>
@@ -889,46 +754,38 @@ const AdminUsers = () => {
                             </td>
                           </tr>
                         );
-                      })
-                    )}
+                      })}
                   </tbody>
                 </table>
               </div>
 
-              {/* Pagination summary */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-4 text-xs gap-2">
+              {/* Pager – same semantics as old footer line */}
+              <div className="flex items-center justify-between pt-4 text-sm">
                 <span className="text-muted-foreground">
                   {totalEntries === 0
-                    ? "Showing 0 to 0 of 0 entries"
-                    : `Showing ${fromEntry} to ${toEntry} of ${totalEntries} entries`}
+                    ? "Showing 0 entries"
+                    : `Showing ${startIndex + 1} to ${endIndex} of ${totalEntries} entries`}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex gap-1">
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={currentPage === 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     &lt;
                   </Button>
-                  {Array.from({ length: totalPages }, (_, idx) => (
-                    <Button
-                      key={idx}
-                      size="sm"
-                      variant={
-                        idx === currentPage ? "default" : "outline"
-                      }
-                      onClick={() => setPage(idx)}
-                    >
-                      {idx + 1}
-                    </Button>
-                  ))}
+                  <Button size="sm" type="button">
+                    {currentPage}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={currentPage >= totalPages - 1}
+                    type="button"
+                    disabled={currentPage >= totalPages}
                     onClick={() =>
-                      setPage((p) => Math.min(totalPages - 1, p + 1))
+                      setPage((p) => Math.min(totalPages, p + 1))
                     }
                   >
                     &gt;
