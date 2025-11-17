@@ -1,496 +1,367 @@
 // src/components/profile/BillingAndPlans.tsx
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useBilling } from "@/services/billing.store";
+import UpgradePlanModal from "./UpgradePlanModal";
+import InvoicesTable from "./InvoicesTable";
 
-import { secureFetch } from "@/lib/auth/auth";
-import { secureAdminFetch } from "@/lib/auth/adminAuth";
+export type BillingMode = "self" | "admin";
 
-type Mode = "user" | "admin";
+type BillingAndPlansProps = {
+  /**
+   * "self"  → normal user sees their own billing
+   * "admin" → admin viewing another user's billing
+   */
+  mode?: BillingMode;
 
-type BillingInfo = {
-  plan_name?: string;
-  plan_id?: string;
-  is_free_forever?: boolean | number | string;
-  price?: number;
-  interval?: "month" | "year" | null;
-  active_until?: string | null;
-  event_count?: number;
-  monthly_event_count?: number;
-  yearly_event_count?: number;
-  days_used?: number;
-  total_days?: number;
-  days_left?: number;
-  cancel_at_period_end?: boolean;
-  scheduled_downgrade?: {
-    plan_name: string;
-    start_date: string;
-  } | null;
+  /**
+   * Required when mode === "admin".
+   * Ignored in "self" mode.
+   */
+  adminUserId?: number;
 };
 
-type PricingTier = {
-  id: number;
-  plan_id: string;
-  name: string;
-  max_events: number | null;
-  price_month: number;
-  price_year: number;
-  is_popular?: boolean;
-};
-
-type Invoice = {
-  id: number;
-  invoice_date: string;
-  amount: number;
-  currency: string;
-  status: string;
-  invoice_number: string;
-  invoice_pdf: string | null;
-};
-
-type Props = {
-  mode?: Mode;          // "user" (default) or "admin"
-  adminUserId?: number; // required when mode="admin"
-};
-
-function normalizeFreeForever(value: any): boolean {
-  if (value === true) return true;
-  if (value === false) return false;
-  const s = String(value).toLowerCase();
-  return s === "1" || s === "true" || s === "yes";
-}
-
-function formatMoney(amount?: number, currency = "USD") {
-  if (amount == null) return "—";
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(amount / 100);
-  } catch {
-    return `${amount / 100} ${currency}`;
-  }
-}
-
-function formatDate(dateString?: string | null) {
-  if (!dateString) return "—";
-  try {
-    return new Date(dateString)
-      .toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-      .replace(",", "");
-  } catch {
-    return dateString;
-  }
-}
-
-// Shared helpers that switch fetch + URL based on mode
-async function fetchBillingInfo(mode: Mode, adminUserId?: number): Promise<BillingInfo | null> {
-  const fetchFn = mode === "admin" ? secureAdminFetch : secureFetch;
-
-  const url =
-    mode === "admin"
-      ? `/api/admin/user-billing-info?user_id=${adminUserId}`
-      : `/api/user-billing-info`;
-
-  const res = await fetchFn(url, { method: "GET" });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error("Failed to load billing info", res.status, body);
-    throw new Error("unauthorized");
-  }
-
-  const json = (await res.json().catch(() => ({}))) as any;
-  const info =
-    json?.billing ??
-    json?.data ??
-    json?.info ??
-    json;
-
-  return (info ?? null) as BillingInfo | null;
-}
-
-async function fetchPricingTiers(mode: Mode): Promise<PricingTier[]> {
-  const fetchFn = mode === "admin" ? secureAdminFetch : secureFetch;
-
-  const url =
-    mode === "admin"
-      ? `/api/admin/pricing-tiers`
-      : `/api/pricing-tiers`;
-
-  const res = await fetchFn(url, { method: "GET" });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error("Failed to load pricing tiers", res.status, body);
-    throw new Error("unauthorized");
-  }
-
-  const json = (await res.json().catch(() => ({}))) as any;
-  const tiers: PricingTier[] =
-    json?.tiers ??
-    json?.data ??
-    json ??
-    [];
-  return tiers;
-}
-
-async function fetchInvoices(mode: Mode, adminUserId?: number): Promise<Invoice[]> {
-  const fetchFn = mode === "admin" ? secureAdminFetch : secureFetch;
-
-  const url =
-    mode === "admin"
-      ? `/api/admin/user-billing-invoices?user_id=${adminUserId}`
-      : `/api/user-billing-invoices`;
-
-  const res = await fetchFn(url, { method: "GET" });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error("Failed to load invoices", res.status, body);
-    throw new Error("unauthorized");
-  }
-
-  const json = (await res.json().catch(() => ({}))) as any;
-  const invoices: Invoice[] =
-    json?.invoices ??
-    json?.data ??
-    json ??
-    [];
-  return invoices;
-}
-
-const BillingAndPlans: React.FC<Props> = ({ mode = "user", adminUserId }) => {
-  const { toast } = useToast();
+/**
+ * Shared Billing & Plans component.
+ *
+ * - In "self" mode it behaves exactly like before (uses /api/user-* under the hood).
+ * - In "admin" mode it is intended to call admin-scoped APIs for a specific user.
+ *
+ * NOTE: Currently we still call `useBilling()` without arguments so the runtime
+ * behaviour is identical to your existing user-facing version.
+ * The mode/adminUserId props are here so we can later swap in an admin-aware
+ * billing hook without touching the UI again.
+ */
+export default function BillingAndPlans({
+  mode = "self",
+  adminUserId,
+}: BillingAndPlansProps) {
   const isAdmin = mode === "admin";
 
-  const billingEnabled = !isAdmin || !!adminUserId;
-  const invoicesEnabled = billingEnabled;
-  const tiersEnabled = true; // pricing tiers are global
-
-  // ─────────────────────────────
-  // Queries
-  // ─────────────────────────────
+  // TODAY: still uses the existing store hook.
+  // NEXT STEP: you can evolve `useBilling` to accept { mode, adminUserId }
+  // or branch to a `useAdminBilling(adminUserId)` internally.
   const {
-    data: billingInfo,
-    isLoading: billingLoading,
-    isError: billingError,
-  } = useQuery({
-    queryKey: ["billing-info", mode, adminUserId],
-    enabled: billingEnabled,
-    queryFn: () => fetchBillingInfo(mode, adminUserId),
-    retry: false,
-    onError: (err: any) => {
-      console.error("❌ Failed to load billing info:", err);
-      if (!isAdmin) {
-        toast({
-          title: "Billing unavailable",
-          description: "Could not load billing details. Please try again.",
-          variant: "destructive",
-        });
-      }
-    },
-  });
+    loading,
+    info,
+    tiers,
+    invoices,
+    isFreePlan,
+    isFreeForever,
+    startEmbeddedCheckout,
+    startUpdateCard,
+    cancelSubscription,
+    reactivateSubscription,
+    cancelDowngrade,
+  } = useBilling();
 
-  const {
-    data: pricingTiers = [],
-    isLoading: tiersLoading,
-    isError: tiersError,
-  } = useQuery({
-    queryKey: ["pricing-tiers", mode],
-    enabled: tiersEnabled,
-    queryFn: () => fetchPricingTiers(mode),
-    retry: false,
-    onError: (err: any) => {
-      console.error("❌ Failed to load pricing tiers:", err);
-      if (!isAdmin) {
-        toast({
-          title: "Pricing unavailable",
-          description: "Could not load pricing tiers.",
-          variant: "destructive",
-        });
-      }
-    },
-  });
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
-  const {
-    data: invoices = [],
-    isLoading: invoicesLoading,
-    isError: invoicesError,
-  } = useQuery({
-    queryKey: ["billing-invoices", mode, adminUserId],
-    enabled: invoicesEnabled,
-    queryFn: () => fetchInvoices(mode, adminUserId),
-    retry: false,
-    onError: (err: any) => {
-      console.error("❌ Failed to load invoices:", err);
-      if (!isAdmin) {
-        toast({
-          title: "Invoices unavailable",
-          description: "Could not load invoices.",
-          variant: "destructive",
-        });
-      }
-    },
-  });
-
-  const isFreeForever = normalizeFreeForever(
-    billingInfo?.is_free_forever ?? false
+  const currentPlanAmount = useMemo(
+    () => (isFreePlan ? 0 : info?.price || 0),
+    [info, isFreePlan]
   );
 
-  const currentPlanLabel = useMemo(() => {
+  const usedDays = info?.days_used ?? 0;
+  const totalDays = info?.total_days ?? (info?.interval === "year" ? 365 : 30);
+  const percent = Math.min(100, Math.round((usedDays / (totalDays || 1)) * 100));
+
+  const hasActiveSubscription = useMemo(
+    () =>
+      !!(
+        info &&
+        !isFreeForever &&
+        !isFreePlan &&
+        (info.price ?? 0) > 0 &&
+        !!info.interval
+      ),
+    [info, isFreeForever, isFreePlan]
+  );
+
+  // Small helpers for wording
+  const formattedDate =
+    info?.active_until && info.active_until !== "Free Forever"
+      ? new Date(info.active_until).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+
+  const dateLine = (() => {
     if (isFreeForever) return "Free Forever";
-    return billingInfo?.plan_name || "Free";
-  }, [billingInfo, isFreeForever]);
+    if (!formattedDate) return "Active until –";
+    if (info?.cancel_at_period_end) return `Active until ${formattedDate}`;
+    return `Renews on ${formattedDate}`;
+  })();
 
-  const eventsThisPeriod =
-    billingInfo?.event_count ??
-    billingInfo?.monthly_event_count ??
-    billingInfo?.yearly_event_count ??
-    0;
+  const helperLine = (() => {
+    if (isFreeForever) {
+      return "Enjoy unlimited events and full access — forever free.";
+    }
+    if (isFreePlan) {
+      return "We'll notify you when you approach your monthly event limit.";
+    }
+    if (info?.cancel_at_period_end) {
+      return "Your plan will automatically revert to the Free plan at the end of this period.";
+    }
+    return "We'll email you before your subscription renews.";
+  })();
 
-  const billingTitle = isAdmin ? "User’s Current Plan" : "Your Current Plan";
-
-  // ─────────────────────────────
-  // Render
-  // ─────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Current plan card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <div>
-            <CardTitle className="text-lg font-semibold">
-              {billingTitle}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">
-              Plan, usage and billing period overview.
-            </p>
-          </div>
-          {billingLoading && <Skeleton className="h-6 w-24" />}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {billingLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-6 w-32" />
-              <Skeleton className="h-4 w-64" />
-              <Skeleton className="h-4 w-40" />
-            </div>
-          ) : billingError || !billingInfo ? (
-            <p className="text-sm text-muted-foreground">
-              Billing info not available.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-xl font-bold">{currentPlanLabel}</span>
-                {isFreeForever && (
-                  <Badge className="bg-success text-primary-foreground text-xs">
-                    Free Forever
-                  </Badge>
-                )}
-                {billingInfo.cancel_at_period_end && (
-                  <Badge
-                    variant="outline"
-                    className="border-warning text-warning text-xs"
-                  >
-                    Cancels at period end
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <span>
-                  Events this period:{" "}
-                  <span className="font-semibold text-foreground">
-                    {Number(eventsThisPeriod || 0).toLocaleString()}
-                  </span>
-                </span>
-                {billingInfo.active_until && (
-                  <span>
-                    Renews on{" "}
-                    <span className="font-semibold text-foreground">
-                      {formatDate(billingInfo.active_until)}
-                    </span>
-                  </span>
-                )}
-                {billingInfo.scheduled_downgrade && (
-                  <span>
-                    Scheduled downgrade to{" "}
-                    <span className="font-semibold">
-                      {billingInfo.scheduled_downgrade.plan_name}
-                    </span>{" "}
-                    on{" "}
-                    <span className="font-semibold">
-                      {formatDate(billingInfo.scheduled_downgrade.start_date)}
-                    </span>
-                  </span>
-                )}
-              </div>
-
-              {!isAdmin && (
-                <div className="pt-2">
-                  {/* Your existing upgrade / manage buttons can stay here. */}
-                  <Button size="sm" className="mr-2">
-                    Upgrade / Manage Plan
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Pricing tiers (optional for admin – still useful as context) */}
-      {!tiersLoading && !tiersError && pricingTiers.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Available Plans</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
-              {pricingTiers.map((tier) => (
-                <div
-                  key={tier.id}
-                  className="border rounded-xl p-4 flex flex-col gap-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{tier.name}</span>
-                    {tier.is_popular && (
-                      <Badge className="bg-primary/10 text-primary text-xs">
-                        Popular
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    <div>
-                      {formatMoney(tier.price_month * 100)} / month
-                    </div>
-                    <div>
-                      {formatMoney(tier.price_year * 100)} / year
-                    </div>
-                    {tier.max_events && (
-                      <div>
-                        Up to{" "}
-                        <span className="font-semibold">
-                          {tier.max_events.toLocaleString()}
-                        </span>{" "}
-                        events / month
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Invoices */}
-      <Card>
+      <Card id="billing-current-plan">
         <CardHeader>
-          <CardTitle className="text-base">Invoices</CardTitle>
+          <CardTitle>
+            {isAdmin ? "User’s Current Plan" : "Current Plan"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {invoicesLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-2/3" />
+          {!info && (
+            <div className="py-6 text-muted-foreground">
+              {loading ? "Loading…" : "—"}
             </div>
-          ) : invoicesError ? (
-            <p className="text-sm text-muted-foreground">
-              Failed to load invoices.
-            </p>
-          ) : invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No invoices yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-semibold">
-                      Date
-                    </th>
-                    <th className="px-4 py-2 text-left font-semibold">
-                      Amount
-                    </th>
-                    <th className="px-4 py-2 text-left font-semibold">
-                      Status
-                    </th>
-                    <th className="px-4 py-2 text-left font-semibold">
-                      Invoice #
-                    </th>
-                    <th className="px-4 py-2 text-left font-semibold">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv) => (
-                    <tr key={inv.id} className="border-b last:border-0">
-                      <td className="px-4 py-2">
-                        {formatDate(inv.invoice_date)}
-                      </td>
-                      <td className="px-4 py-2">
-                        {formatMoney(inv.amount, inv.currency)}
-                      </td>
-                      <td className="px-4 py-2">
-                        <Badge
-                          variant="outline"
-                          className={
-                            inv.status === "paid"
-                              ? "border-success text-success"
-                              : inv.status === "open"
-                              ? "border-warning text-warning"
-                              : "border-muted-foreground text-muted-foreground"
-                          }
-                        >
-                          {inv.status.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2">{inv.invoice_number}</td>
-                      <td className="px-4 py-2">
-                        {inv.invoice_pdf ? (
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="text-xs"
-                          >
-                            <a
-                              href={inv.invoice_pdf}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              View PDF
-                            </a>
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            —
+          )}
+
+          {info && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* LEFT BLOCK */}
+              <div>
+                {/* Plan + interval + popularity */}
+                <div className="mb-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-primary px-3 py-1 text-sm font-medium text-primary-foreground">
+                      {isFreeForever
+                        ? "Free Forever"
+                        : info.plan_name || "Current Plan"}
+                    </span>
+
+                    {!isFreeForever && info.interval && (
+                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs text-cyan-700">
+                        {info.interval === "year" ? "Yearly" : "Monthly"}
+                      </span>
+                    )}
+
+                    {!isFreeForever && info.is_popular && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                        Popular
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Price row – always show /month, with yearly hint when needed */}
+                  {!isFreeForever && (
+                    <div className="text-lg font-semibold">
+                      {isFreePlan ? (
+                        <span>Free</span>
+                      ) : (
+                        <>
+                          ${info.price}{" "}
+                          <span className="text-sm text-muted-foreground">
+                            / month
                           </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          {info.interval === "year" && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              (billed yearly)
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Date + helper */}
+                  <div>
+                    <h6 className="mb-1">{dateLine}</h6>
+                    <p className="text-sm text-muted-foreground">{helperLine}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT BLOCK */}
+              <div>
+                {!isFreePlan && (
+                  <>
+                    {info.cancel_at_period_end ? (
+                      <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
+                        <div className="font-medium">Needs attention!</div>
+                        <div>
+                          Your plan will revert to{" "}
+                          <span className="rounded bg-gray-200 px-1">Free</span> on{" "}
+                          <span className="font-semibold text-red-600">
+                            {info.active_until
+                              ? new Date(info.active_until).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    timeZone: "UTC",
+                                  }
+                                )
+                              : "—"}
+                          </span>
+                          .
+                        </div>
+                      </div>
+                    ) : info.days_left != null &&
+                      info.days_left <= 7 &&
+                      info.days_left > 0 ? (
+                      <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
+                        <div className="font-medium">Heads up!</div>
+                        <div>
+                          Your subscription ends in {info.days_left} day(s). Please
+                          update or renew.
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+
+                <div className="mb-2 flex items-center justify-between">
+                  <h6 className="mb-1">
+                    {isFreePlan ? "Month Progress" : "Billing Period Progress"}
+                  </h6>
+                  <h6 className="mb-1">
+                    {isFreeForever ? "—" : `${usedDays} of ${totalDays} Days`}
+                  </h6>
+                </div>
+                {!isFreeForever ? (
+                  <div className="mb-1 h-2 w-full overflow-hidden rounded bg-muted">
+                    <div
+                      className="h-full bg-green-500"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                ) : null}
+
+                <div className="mt-2 font-medium">
+                  {isFreeForever ? (
+                    <>
+                      <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-700">
+                        {info.event_count.toLocaleString()}
+                      </span>{" "}
+                      events used so far
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xl font-semibold">
+                        {info.event_count.toLocaleString()}
+                      </span>{" "}
+                      events used so far
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* ACTIONS */}
+              <div className="col-span-full mt-2 flex flex-wrap gap-3">
+                {!isFreeForever && (
+                  <Button onClick={() => setShowUpgrade(true)} className="mr-2">
+                    {isAdmin ? "Upgrade User Plan" : "Upgrade Plan"}
+                  </Button>
+                )}
+
+                {hasActiveSubscription && !info.cancel_at_period_end && (
+                  <Button
+                    variant="outline"
+                    className="text-red-600"
+                    onClick={cancelSubscription}
+                  >
+                    {isAdmin ? "Cancel User Subscription" : "Cancel Subscription"}
+                  </Button>
+                )}
+
+                {hasActiveSubscription && info.cancel_at_period_end && (
+                  <Button
+                    variant="outline"
+                    className="text-green-600"
+                    onClick={reactivateSubscription}
+                  >
+                    {isAdmin ? "Reactivate User Plan" : "Reactivate Plan"}
+                  </Button>
+                )}
+
+                {hasActiveSubscription &&
+                  info.scheduled_downgrade &&
+                  !info.cancel_at_period_end && (
+                    <Button variant="outline" onClick={cancelDowngrade}>
+                      {isAdmin ? "Cancel User Downgrade" : "Cancel Downgrade"}
+                    </Button>
+                  )}
+
+                {/* No standalone "Update Card" button.
+                   Card updates only happen via the rare
+                   `require_payment_update` path from the upgrade flow. */}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <InvoicesTable rows={invoices} />
+
+      <UpgradePlanModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        tiers={tiers}
+        currentPlanAmount={currentPlanAmount}
+        currentInfo={info}
+        onUpgrade={({ tierId, interval }) => {
+          startEmbeddedCheckout(tierId, interval, () => {
+            setShowUpgrade(false);
+          })
+            .then((result) => {
+              if (!result) return;
+
+              if (result.mode === "require_payment_update") {
+                // Same semantics as Bootstrap: card needs to be refreshed.
+                setShowUpgrade(false);
+
+                startUpdateCard().then((updateRes) => {
+                  if (!updateRes) {
+                    alert(
+                      "Your card needs to be updated before upgrading, " +
+                        "but the `/api/stripe/update-payment-method` endpoint is returning 404.\n\n" +
+                        "React is doing the same thing as the Bootstrap page. " +
+                        "To actually fix this you need that backend route to exist or use the classic billing page where it does."
+                    );
+                  }
+                });
+              }
+            })
+            .catch((err: any) => {
+              console.error("[billing] startEmbeddedCheckout error:", err);
+              alert("We couldn't start the upgrade. Please try again.");
+            });
+        }}
+      />
+
+      {/* Embedded Stripe container */}
+      <div
+        id="react-billing-embedded-modal"
+        className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
+      >
+        <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
+          <div id="react-billing-stripe-element" />
+          <div
+            id="react-billing-stripe-debug"
+            className="mt-3 text-xs text-muted-foreground"
+          />
+        </div>
+      </div>
+
+      {/* Update-card container (only used via require_payment_update) */}
+      <div
+        id="react-billing-updatecard-modal"
+        className="hidden fixed inset-0 z-[60] grid place-items-center bg-black/50"
+      >
+        <div className="w-full max-w-md rounded-xl bg-background p-6 shadow">
+          <div id="react-billing-updatecard-element" />
+        </div>
+      </div>
     </div>
   );
-};
-
-export default BillingAndPlans;
+}
