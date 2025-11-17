@@ -1,6 +1,6 @@
 // src/pages/admin/AdminUsers.tsx
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { AdminLayout } from "@/components/AdminLayout";
@@ -126,6 +126,9 @@ const AdminUsers = () => {
   const [newContact, setNewContact] = useState("");
   const [newRole, setNewRole] = useState("");
 
+  // (optional) form errors like Users.tsx – simple, just for email/name sanity
+  const [addErrors, setAddErrors] = useState<Record<string, string>>({});
+
   /* ------------------------------- Data Queries ------------------------------ */
 
   const { data: me } = useQuery<AdminMe>({
@@ -216,14 +219,24 @@ const AdminUsers = () => {
 
   const createUserMutation = useMutation({
     mutationFn: async () => {
+      const errors: Record<string, string> = {};
+      if (!newName.trim()) errors.name = "Please enter full name";
+      if (!newEmail.trim()) errors.email = "Please enter email";
+      else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail.trim())) {
+        errors.email = "Invalid email address";
+      }
+      setAddErrors(errors);
+      if (Object.keys(errors).length) {
+        throw new Error("validation");
+      }
+
       const payload: any = {
         name: newName.trim(),
         email: newEmail.trim(),
         role: newRole,
-        status: 2, // "active" – mirrors Bootstrap payload
+        status: 2, // "active" – mirrors bootstrap
       };
 
-      // keep contact in case BE expects it later; no harm if unused
       if (newContact.trim()) {
         payload.contact = newContact.trim();
       }
@@ -241,6 +254,7 @@ const AdminUsers = () => {
       setNewEmail("");
       setNewContact("");
       setNewRole("");
+      setAddErrors({});
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
         qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
@@ -248,6 +262,7 @@ const AdminUsers = () => {
     },
     onError: (err: any) => {
       if (String(err?.message || "").includes("unauthorized")) return;
+      if (String(err?.message || "") === "validation") return;
       alert("❌ " + (err?.message || "Failed to create user"));
     },
   });
@@ -299,7 +314,14 @@ const AdminUsers = () => {
     },
   });
 
-  /* --------------------------------- Actions -------------------------------- */
+  /* ----------------------------- Effects / helpers -------------------------- */
+
+  // Mirror Users.tsx: clear errors when sheet opens
+  useEffect(() => {
+    if (isAddUserOpen) {
+      setAddErrors({});
+    }
+  }, [isAddUserOpen]);
 
   const handleAction = (user: AdminUser, action: "suspend" | "block" | "activate" | "delete") => {
     if (!isSuperadmin) return;
@@ -438,7 +460,6 @@ const AdminUsers = () => {
                       variant="outline"
                       className="flex-1 sm:flex-none"
                       onClick={() => {
-                        // Simple CSV export of current filtered users
                         const rows = [
                           ["Name", "Email", "Roles", "Created", "Last Login", "Status"],
                           ...users.map((u) => [
@@ -484,60 +505,88 @@ const AdminUsers = () => {
                       Export
                     </Button>
 
-                    {/* Add New User sheet – offcanvas equivalent */}
+                    {/* Add New User sheet – SAME MECHANISM as Users.tsx, plus hard stop of navigation */}
                     <Sheet open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                       <SheetTrigger asChild>
                         <Button
                           type="button"
                           className="flex-1 sm:flex-none"
+                          onClick={(e) => {
+                            // Kill any parent <a>/<form> defaults and manually open
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsAddUserOpen(true);
+                          }}
                         >
                           + Add New User
                         </Button>
                       </SheetTrigger>
-                      <SheetContent side="right" className="w-full sm:max-w-md">
-                        <SheetHeader>
-                          <SheetTitle>Add New User</SheetTitle>
+                      <SheetContent side="right" className="w-full sm:w-[460px]">
+                        <SheetHeader className="border-b pb-3">
+                          <SheetTitle>Add Admin User</SheetTitle>
                           <SheetDescription>
-                            Enter user details to add them to the platform.
+                            Enter details to create a new admin user.
                           </SheetDescription>
                         </SheetHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="add-name">Full Name</Label>
+
+                        {/* Form – mirrors Users.tsx style */}
+                        <form
+                          className="space-y-4 py-4 h-[calc(100%-4rem)] flex flex-col"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            if (!createUserMutation.isPending) {
+                              createUserMutation.mutate();
+                            }
+                          }}
+                        >
+                          <div className="space-y-1.5">
+                            <Label htmlFor="add-admin-fullname">Full Name</Label>
                             <Input
-                              id="add-name"
+                              id="add-admin-fullname"
                               placeholder="John Doe"
                               value={newName}
                               onChange={(e) => setNewName(e.target.value)}
                             />
+                            {addErrors.name && (
+                              <p className="text-xs text-destructive">
+                                {addErrors.name}
+                              </p>
+                            )}
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="add-email">Email</Label>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="add-admin-email">Email</Label>
                             <Input
-                              id="add-email"
+                              id="add-admin-email"
                               type="email"
                               placeholder="john.doe@example.com"
                               value={newEmail}
                               onChange={(e) => setNewEmail(e.target.value)}
                             />
+                            {addErrors.email && (
+                              <p className="text-xs text-destructive">
+                                {addErrors.email}
+                              </p>
+                            )}
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="add-contact">Contact</Label>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="add-admin-contact">Contact</Label>
                             <Input
-                              id="add-contact"
+                              id="add-admin-contact"
                               placeholder="+1 (609) 988-44-11"
                               value={newContact}
                               onChange={(e) => setNewContact(e.target.value)}
                             />
                           </div>
 
-                          <div className="space-y-2">
-                            <Label htmlFor="add-role">Admin Role</Label>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="add-admin-role">Admin Role</Label>
                             <Select
                               value={newRole}
                               onValueChange={(val) => setNewRole(val)}
                             >
-                              <SelectTrigger id="add-role">
+                              <SelectTrigger id="add-admin-role">
                                 <SelectValue placeholder="Select role" />
                               </SelectTrigger>
                               <SelectContent>
@@ -553,24 +602,30 @@ const AdminUsers = () => {
                             </Select>
                           </div>
 
-                          <Button
-                            className="w-full"
-                            type="button"
-                            disabled={
-                              createUserMutation.isPending ||
-                              !newName.trim() ||
-                              !newEmail.trim() ||
-                              !newRole
-                            }
-                            onClick={() => {
-                              createUserMutation.mutate();
-                            }}
-                          >
-                            {createUserMutation.isPending
-                              ? "Saving..."
-                              : "Submit"}
-                          </Button>
-                        </div>
+                          {/* Actions pinned bottom */}
+                          <div className="mt-auto flex gap-2 pt-2">
+                            <Button
+                              className="flex-1"
+                              type="submit"
+                              disabled={
+                                createUserMutation.isPending ||
+                                !newName.trim() ||
+                                !newEmail.trim() ||
+                                !newRole
+                              }
+                            >
+                              {createUserMutation.isPending ? "Saving…" : "Submit"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:text-red-700"
+                              onClick={() => setIsAddUserOpen(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
                       </SheetContent>
                     </Sheet>
                   </div>
