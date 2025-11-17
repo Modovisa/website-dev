@@ -22,6 +22,8 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
+import { InfoTip } from "@/components/dashboard/ChartKit";
+
 
 import {
   useDashboard,
@@ -317,19 +319,41 @@ export default function Dashboard() {
 
               {/* Tables */}
               <div className="grid gap-6 md:grid-cols-2">
-                <TopPagesTable
-                  rows={(data.top_pages ?? []).map((p: any) => ({
-                    url: p.url,
-                    views: p.views,
-                  }))}
-                />
-                <ReferrersTable
-                  rows={(data.referrers ?? []).map((r: any) => ({
-                    domain: r.domain,
-                    visitors: r.visitors,
-                  }))}
-                />
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <CardTitle className="text-base font-semibold">Top Pages</CardTitle>
+                      <InfoTip text="List of most visited pages. Helps you identify your most engaging content." />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <TopPagesTable
+                      rows={(data.top_pages ?? []).map((p: any) => ({
+                        url: p.url,
+                        views: p.views,
+                      }))}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <CardTitle className="text-base font-semibold">Referrers</CardTitle>
+                      <InfoTip text="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution." />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <ReferrersTable
+                      rows={(data.referrers ?? []).map((r: any) => ({
+                        domain: r.domain,
+                        visitors: r.visitors,
+                      }))}
+                    />
+                  </CardContent>
+                </Card>
               </div>
+
 
               {/* Geographic */}
               <div className="grid gap-6 lg:grid-cols-3">
