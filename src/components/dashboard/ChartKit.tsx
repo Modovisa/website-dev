@@ -104,8 +104,9 @@ export function InfoTip({ text }: { text: string }) {
       <UITooltip>
         <TooltipTrigger asChild>
           <button
-            aria-label="info"
+            aria-label={text}
             className="ml-2 text-muted-foreground hover:text-foreground"
+            type="button"
           >
             <Info className="h-4 w-4" />
           </button>
@@ -145,9 +146,10 @@ export function ChartCard({
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        {/* Title + tooltip icon together on the left */}
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-base font-semibold">{title}</CardTitle>
+        <div className="flex items-center gap-1.5 p-4">
+          <CardTitle className="text-2xl font-semibold leading-none tracking-tight">
+            {title}
+          </CardTitle>
           {info ? <InfoTip text={info} /> : null}
         </div>
       </CardHeader>

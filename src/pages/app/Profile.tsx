@@ -486,7 +486,7 @@ const Profile = () => {
             <TabsContent value="billing" className="space-y-6">
               <Suspense fallback={null}>
                 {activeTab === "billing" ? (
-                  <BillingAndPlansLazy mode="user" />
+                  <BillingAndPlansLazy mode="self" />
                 ) : null}
               </Suspense>
             </TabsContent>
