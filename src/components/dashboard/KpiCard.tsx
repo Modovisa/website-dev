@@ -45,7 +45,7 @@ export function KpiCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        {/* Title + info icon (same pattern as ChartCard) */}
+        {/* Title + info icon (KPI-specific, NOT using SectionHeader) */}
         <div className="flex items-center gap-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             {title}
@@ -56,7 +56,7 @@ export function KpiCard({
                 <button
                   type="button"
                   aria-label="info"
-                  className="ml-2 text-muted-foreground hover:text-foreground"
+                  className="ml-1 text-muted-foreground hover:text-foreground"
                 >
                   <Info className="h-4 w-4" />
                 </button>
@@ -75,15 +75,20 @@ export function KpiCard({
       <CardContent>
         {loading ? (
           <div className="space-y-2">
+            {/* main value skeleton */}
             <Skeleton className="h-8 w-28" />
+            {/* change stat skeletons */}
             <div className="flex gap-2 justify-start">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-3 w-10" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-12" />
             </div>
           </div>
         ) : (
           <>
+            {/* Main KPI value */}
             <div className="text-3xl font-bold">{displayValue}</div>
+
+            {/* Stat line underneath */}
             {hasChange && (
               <p className={`text-xs mt-1 ${changeColor}`}>
                 {arrow} {Math.abs(numericChange).toFixed(1)}% from last period
