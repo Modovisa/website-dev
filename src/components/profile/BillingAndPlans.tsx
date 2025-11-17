@@ -7,7 +7,42 @@ import { useBilling } from "@/services/billing.store";
 import UpgradePlanModal from "./UpgradePlanModal";
 import InvoicesTable from "./InvoicesTable";
 
-export default function BillingAndPlans() {
+export type BillingMode = "self" | "admin";
+
+type BillingAndPlansProps = {
+  /**
+   * "self"  → normal user sees their own billing
+   * "admin" → admin viewing another user's billing
+   */
+  mode?: BillingMode;
+
+  /**
+   * Required when mode === "admin".
+   * Ignored in "self" mode.
+   */
+  adminUserId?: number;
+};
+
+/**
+ * Shared Billing & Plans component.
+ *
+ * - In "self" mode it behaves exactly like before (uses /api/user-* under the hood).
+ * - In "admin" mode it is intended to call admin-scoped APIs for a specific user.
+ *
+ * NOTE: Currently we still call `useBilling()` without arguments so the runtime
+ * behaviour is identical to your existing user-facing version.
+ * The mode/adminUserId props are here so we can later swap in an admin-aware
+ * billing hook without touching the UI again.
+ */
+export default function BillingAndPlans({
+  mode = "self",
+  adminUserId,
+}: BillingAndPlansProps) {
+  const isAdmin = mode === "admin";
+
+  // TODAY: still uses the existing store hook.
+  // NEXT STEP: you can evolve `useBilling` to accept { mode, adminUserId }
+  // or branch to a `useAdminBilling(adminUserId)` internally.
   const {
     loading,
     info,
@@ -79,7 +114,9 @@ export default function BillingAndPlans() {
     <div className="space-y-6">
       <Card id="billing-current-plan">
         <CardHeader>
-          <CardTitle>Current Plan</CardTitle>
+          <CardTitle>
+            {isAdmin ? "User’s Current Plan" : "Current Plan"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {!info && (
@@ -223,7 +260,7 @@ export default function BillingAndPlans() {
               <div className="col-span-full mt-2 flex flex-wrap gap-3">
                 {!isFreeForever && (
                   <Button onClick={() => setShowUpgrade(true)} className="mr-2">
-                    Upgrade Plan
+                    {isAdmin ? "Upgrade User Plan" : "Upgrade Plan"}
                   </Button>
                 )}
 
@@ -233,7 +270,7 @@ export default function BillingAndPlans() {
                     className="text-red-600"
                     onClick={cancelSubscription}
                   >
-                    Cancel Subscription
+                    {isAdmin ? "Cancel User Subscription" : "Cancel Subscription"}
                   </Button>
                 )}
 
@@ -243,7 +280,7 @@ export default function BillingAndPlans() {
                     className="text-green-600"
                     onClick={reactivateSubscription}
                   >
-                    Reactivate Plan
+                    {isAdmin ? "Reactivate User Plan" : "Reactivate Plan"}
                   </Button>
                 )}
 
@@ -251,7 +288,7 @@ export default function BillingAndPlans() {
                   info.scheduled_downgrade &&
                   !info.cancel_at_period_end && (
                     <Button variant="outline" onClick={cancelDowngrade}>
-                      Cancel Downgrade
+                      {isAdmin ? "Cancel User Downgrade" : "Cancel Downgrade"}
                     </Button>
                   )}
 
