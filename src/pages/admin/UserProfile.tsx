@@ -1,5 +1,5 @@
 // src/pages/admin/UserProfile.tsx
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -34,14 +34,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { secureFetch } from "@/lib/auth/auth";
 
-// 🧩 Normal user auth helper (for non-admin pages, if ever needed here)
-// import { secureFetch } from "@/lib/auth/auth";
+// ❌ User guard is for normal app pages only – remove from admin pages
+// import { useAuthGuard } from "@/hooks/useAuthGuard";
 
-// 🔐 Admin-only secure fetch for /api/admin/* endpoints
-import { adminSecureFetch } from "@/lib/auth/adminAuth";
+// 🔐 Admin-only auth helpers
+import { adminSecureFetch, initAdminAuth } from "@/lib/auth/adminAuth";
 
 const AdminBillingAndPlansLazy = lazy(
   () => import("@/components/profile/BillingAndPlans")
@@ -101,7 +99,6 @@ const formatDate = (dateString?: string | null) =>
     : "–";
 
 const AdminUserProfilePage = () => {
-  useAuthGuard();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -131,6 +128,30 @@ const AdminUserProfilePage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswordAlert, setShowPasswordAlert] = useState(true);
+
+  // ─────────────────────────────
+  // Admin auth guard (admin audience)
+  // ─────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const ok = await initAdminAuth();
+      if (!ok && !cancelled) {
+        // If admin refresh/init fails, punt to admin login
+        window.location.href = "/mv-admin/login.html";
+      }
+    })().catch((err) => {
+      console.warn("Admin auth init failed", err);
+      if (!cancelled) {
+        window.location.href = "/mv-admin/login.html";
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Queries disabled if no userId
   const enabled = !!userId;

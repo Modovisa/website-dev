@@ -321,7 +321,7 @@ export default function Dashboard() {
               <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="flex items-center gap-1.5 p-6">
+                    <div className="flex items-center gap-1.5 p-4">
                       <CardTitle className="text-2xl font-semibold leading-none tracking-tight">Top Pages</CardTitle>
                       <InfoTip text="List of most visited pages. Helps you identify your most engaging content." />
                     </div>
@@ -338,7 +338,7 @@ export default function Dashboard() {
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="flex items-center gap-1.5 p-6">
+                    <div className="flex items-center gap-1.5 p-4">
                       <CardTitle className="text-2xl font-semibold leading-none tracking-tight">Referrers</CardTitle>
                       <InfoTip text="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution." />
                     </div>
@@ -362,7 +362,7 @@ export default function Dashboard() {
                     <CardHeader className="px-6 pt-6 pb-0">
                       {/* Title + info icon on first row */}
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 p-4">
                           <CardTitle>World Visitors</CardTitle>
                           <InfoTip text="Live map of where your visitors are located. Great for identifying geographic interest and potential target regions." />
                         </div>
@@ -394,7 +394,7 @@ export default function Dashboard() {
                 <div>
                   <Card className="h-[660px]">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 p-4">
                         <CardTitle>Visits by Country</CardTitle>
                         <InfoTip text="Table view of visitor counts by country. Helps you prioritize markets and tailor content to regions." />
                       </div>
@@ -410,7 +410,10 @@ export default function Dashboard() {
               {/* Heatmap */}
               <Card>
                 <CardHeader className="flex items-center justify-between">
-                  <CardTitle>Visitor Density Calendar</CardTitle>
+                  <div className="flex items-center gap-1.5 p-4">
+                    <CardTitle>Visitor Density Calendar</CardTitle>
+                    <InfoTip text="Shows how many visitors came to your site on each day of the year. Helps track long-term trends." />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <VisitorsHeatmap
@@ -420,6 +423,7 @@ export default function Dashboard() {
                   />
                 </CardContent>
               </Card>
+
 
               {/* Lines */}
               <div className="grid gap-6 md:grid-cols-2">
