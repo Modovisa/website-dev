@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { secureFetch } from "@/lib/auth/auth";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { apiBase } from "@/lib/api";
 
 type Category = { value: string; label: string };
 type TimezoneOption = { value: string; label: string };
@@ -88,7 +90,7 @@ function buildTimezoneOptions(): TimezoneOption[] {
       .sort((a, b) => a.localeCompare(b))
       .map((tz) => ({
         value: tz,
-        label: tz, // keeping it simple; backend only needs the ID
+        label: tz,
       }));
   } catch {
     const fallback = [
@@ -104,6 +106,7 @@ function buildTimezoneOptions(): TimezoneOption[] {
 
 const TrackingSetup = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading } = useAuthGuard();
 
   const [websiteName, setWebsiteName] = useState("");
   const [domain, setDomain] = useState("");
@@ -151,7 +154,9 @@ const TrackingSetup = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await secureFetch("/api/tracking-setup", {
+      const url = `${apiBase()}/api/tracking-setup`;
+
+      const res = await secureFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -163,7 +168,6 @@ const TrackingSetup = () => {
       });
 
       if (res.status === 401) {
-        // mirror legacy behaviour if global helper exists
         (window as any).logoutAndRedirect?.("401");
         setIsSubmitting(false);
         return;
@@ -187,6 +191,11 @@ const TrackingSetup = () => {
       setFormError("Network error. Please try again.");
       setIsSubmitting(false);
     }
+  }
+
+  // Don’t render form until auth guard has run
+  if (isLoading || !isAuthenticated) {
+    return null;
   }
 
   return (

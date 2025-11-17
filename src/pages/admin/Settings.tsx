@@ -1,6 +1,6 @@
 // src/pages/admin/Settings.tsx
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Link as LinkIcon } from "lucide-react";
+import { secureFetch } from "@/lib/auth/auth";
 
 type UrlPatternRow = {
   id: string | null;
@@ -34,7 +41,19 @@ type TierRow = {
   stripePriceIdYear: string | null;
 };
 
-const initialUrlPatterns: UrlPatternRow[] = [
+type UserLifecycleState = {
+  deactivateGrace: string;
+  hardDelete: string;
+  usernameCooldown: string;
+};
+
+type StripeSettingsState = {
+  mode: "test" | "live";
+  testPk: string;
+  livePk: string;
+};
+
+const fallbackUrlPatterns: UrlPatternRow[] = [
   {
     id: "checkout",
     siteId: null,
@@ -55,30 +74,18 @@ const initialUrlPatterns: UrlPatternRow[] = [
   },
 ];
 
-const initialTiers: TierRow[] = [
+const fallbackTiers: TierRow[] = [
   {
     id: 1,
     minEvents: 0,
-    maxEvents: 1000,
+    maxEvents: 3000,
     monthlyPrice: 0,
     yearlyPerMonth: 0,
     yearlyDiscountPercent: 0,
-    featureLabel: "Free",
+    featureLabel: "Free plan",
     planId: 1,
     stripePriceIdMonth: null,
     stripePriceIdYear: null,
-  },
-  {
-    id: 2,
-    minEvents: 1001,
-    maxEvents: 10000,
-    monthlyPrice: 19,
-    yearlyPerMonth: 15,
-    yearlyDiscountPercent: 20,
-    featureLabel: "Starter",
-    planId: 2,
-    stripePriceIdMonth: "price_123_month",
-    stripePriceIdYear: "price_123_year",
   },
 ];
 
@@ -86,17 +93,32 @@ const Settings = () => {
   // global dirty + sticky bar
   const [isDirty, setIsDirty] = useState(false);
 
-  // section-level dirty flags / locks
-  const [urlPatterns, setUrlPatterns] = useState<UrlPatternRow[]>(initialUrlPatterns);
+  // ----- General / lifecycle + privacy -----
+  const [userLifecycle, setUserLifecycle] = useState<UserLifecycleState>({
+    deactivateGrace: "",
+    hardDelete: "",
+    usernameCooldown: "",
+  });
+
+  // ----- URL patterns -----
+  const [urlPatterns, setUrlPatterns] =
+    useState<UrlPatternRow[]>(fallbackUrlPatterns);
   const [urlPatternsLocked, setUrlPatternsLocked] = useState(true);
   const [urlPatternsDirty, setUrlPatternsDirty] = useState(false);
 
-  const [tiers, setTiers] = useState<TierRow[]>(initialTiers);
+  // ----- Pricing tiers -----
+  const [tiers, setTiers] = useState<TierRow[]>(fallbackTiers);
   const [tiersLocked, setTiersLocked] = useState(true);
   const [tiersDirty, setTiersDirty] = useState(false);
 
+  // ----- Stripe keys/mode -----
   const [stripeLocked, setStripeLocked] = useState(true);
   const [stripeDirty, setStripeDirty] = useState(false);
+  const [stripeSettings, setStripeSettings] = useState<StripeSettingsState>({
+    mode: "test",
+    testPk: "",
+    livePk: "",
+  });
 
   const touchDirty = () => setIsDirty(true);
 
@@ -115,28 +137,147 @@ const Settings = () => {
     touchDirty();
   };
 
+  // --------------------------------
+  // LOAD DATA FROM ADMIN ENDPOINTS
+  // --------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAdminSettings() {
+      try {
+        const res = await secureFetch("/api/admin/settings");
+        if (res.status === 404) {
+          console.info("[admin/settings] 404 – leaving defaults.");
+          return;
+        }
+        const j = await res.json();
+        if (!res.ok) {
+          throw new Error(j.error || `HTTP ${res.status}`);
+        }
+        if (cancelled) return;
+        const s = j.settings || {};
+
+        setUserLifecycle({
+          deactivateGrace:
+            s.DEACTIVATE_GRACE_DAYS != null
+              ? String(s.DEACTIVATE_GRACE_DAYS)
+              : "",
+          hardDelete:
+            s.HARD_DELETE_GRACE_DAYS != null
+              ? String(s.HARD_DELETE_GRACE_DAYS)
+              : "",
+          usernameCooldown:
+            s.USERNAME_COOLDOWN_DAYS != null
+              ? String(s.USERNAME_COOLDOWN_DAYS)
+              : "",
+        });
+
+        setStripeSettings({
+          mode: (s.STRIPE_PUBLISHABLE_MODE || "test") as "test" | "live",
+          testPk: s.STRIPE_TEST_PUBLISHABLE_KEY || "",
+          livePk: s.STRIPE_LIVE_PUBLISHABLE_KEY || "",
+        });
+      } catch (err) {
+        console.error("Failed to load /api/admin/settings", err);
+      }
+    }
+
+    async function loadUrlPatterns() {
+      try {
+        const res = await secureFetch("/api/admin/url-patterns");
+        const j = await res.json();
+        if (!res.ok) {
+          throw new Error(j.error || `HTTP ${res.status}`);
+        }
+        if (cancelled) return;
+        const patterns = (j.patterns || []).map((p: any): UrlPatternRow => ({
+          id: p.id ?? null,
+          siteId: p.site_id != null ? Number(p.site_id) : null,
+          pattern: p.pattern || "",
+          pageGroup: (p.page_group || "other") as UrlPatternRow["pageGroup"],
+          skip: !!p.skip,
+          mask: !!p.mask,
+          createdAt: p.created_at || null,
+        }));
+        setUrlPatterns(patterns.length ? patterns : fallbackUrlPatterns);
+      } catch (err) {
+        console.error("Failed to load /api/admin/url-patterns", err);
+        // fall back to static demo rows
+        setUrlPatterns(fallbackUrlPatterns);
+      }
+    }
+
+    async function loadTiers() {
+      try {
+        const res = await secureFetch("/api/admin/billing/tiers");
+        const j = await res.json();
+        if (!res.ok) {
+          throw new Error(j.error || `HTTP ${res.status}`);
+        }
+        if (cancelled) return;
+        const mapped: TierRow[] = (j.tiers || []).map((t: any) => ({
+          id: t.id ?? null,
+          minEvents:
+            t.min_events != null ? Number(t.min_events) : (null as number | null),
+          maxEvents:
+            t.max_events != null ? Number(t.max_events) : (null as number | null),
+          monthlyPrice:
+            t.monthly_price != null
+              ? Number(t.monthly_price)
+              : (null as number | null),
+          yearlyPerMonth:
+            t.yearly_per_month != null
+              ? Number(t.yearly_per_month)
+              : (null as number | null),
+          yearlyDiscountPercent:
+            t.yearly_discount_percent != null
+              ? Number(t.yearly_discount_percent)
+              : (null as number | null),
+          featureLabel: t.feature_label ?? null,
+          planId: t.plan_id != null ? Number(t.plan_id) : null,
+          stripePriceIdMonth: t.stripe_price_id_month || null,
+          stripePriceIdYear: t.stripe_price_id_year || null,
+        }));
+        setTiers(mapped.length ? mapped : fallbackTiers);
+      } catch (err) {
+        console.error("Failed to load /api/admin/billing/tiers", err);
+        setTiers(fallbackTiers);
+      }
+    }
+
+    loadAdminSettings();
+    loadUrlPatterns();
+    loadTiers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // --------------------------------
+  // DISCARD / SAVE (still local only)
+  // --------------------------------
   const handleDiscard = () => {
-    // For now: revert to initial local snapshots
-    setUrlPatterns(initialUrlPatterns);
-    setTiers(initialTiers);
-    setUrlPatternsLocked(true);
-    setTiersLocked(true);
-    setStripeLocked(true);
-    setUrlPatternsDirty(false);
-    setTiersDirty(false);
-    setStripeDirty(false);
-    setIsDirty(false);
+    // Right now this just resets local state to last loaded values.
+    // Once we wire real PATCH/POST endpoints, we’ll re-fetch here.
+    window.location.reload();
   };
 
   const handleSave = () => {
-    // Placeholder – hook this to /api/admin/settings, /billing/tiers, /url-patterns later
-    // For now, just clear dirty flags and keep current values.
+    // Placeholder – this is where we’ll POST to:
+    // - /api/admin/settings
+    // - /api/admin/url-patterns
+    // - /api/admin/billing/tiers
+    // For now, just clear dirty flags.
     setUrlPatternsDirty(false);
     setTiersDirty(false);
     setStripeDirty(false);
     setIsDirty(false);
   };
 
+  // --------------------------------
+  // URL pattern helpers
+  // --------------------------------
   const addUrlPatternRow = () => {
     if (urlPatternsLocked) return;
     const next: UrlPatternRow = {
@@ -159,14 +300,19 @@ const Settings = () => {
     markUrlPatternsDirty();
   };
 
+  // --------------------------------
+  // Tiers helpers
+  // --------------------------------
   const addTierRow = () => {
     if (tiersLocked) return;
 
-    // Older TS/lib: don't use .at(-1)
     const sortedByMax = [...tiers].sort(
       (a, b) => (a.maxEvents ?? 0) - (b.maxEvents ?? 0)
     );
-    const last = sortedByMax.length > 0 ? sortedByMax[sortedByMax.length - 1] : undefined;
+    const last =
+      sortedByMax.length > 0
+        ? sortedByMax[sortedByMax.length - 1]
+        : undefined;
 
     const start = last?.maxEvents != null ? last.maxEvents + 1 : 0;
     const end = start + 3000;
@@ -187,7 +333,6 @@ const Settings = () => {
     setTiers((rows) => [...rows, next]);
     markTiersDirty();
   };
-
 
   const updateTier = (index: number, patch: Partial<TierRow>) => {
     setTiers((rows) =>
@@ -269,10 +414,7 @@ const Settings = () => {
             <CardContent className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center">
                 <div className="flex items-center gap-3">
-                  <Switch
-                    id="maintenance_mode"
-                    onCheckedChange={touchDirty}
-                  />
+                  <Switch id="maintenance_mode" onCheckedChange={touchDirty} />
                   <Label htmlFor="maintenance_mode">
                     Enable maintenance mode
                   </Label>
@@ -305,8 +447,15 @@ const Settings = () => {
                   id="deactivate_grace"
                   type="number"
                   min={0}
+                  value={userLifecycle.deactivateGrace}
                   placeholder="30"
-                  onChange={touchDirty}
+                  onChange={(e) => {
+                    setUserLifecycle((s) => ({
+                      ...s,
+                      deactivateGrace: e.target.value,
+                    }));
+                    touchDirty();
+                  }}
                 />
                 <p className="text-xs text-muted-foreground">
                   While deactivated, user can be restored inside this window.
@@ -320,8 +469,15 @@ const Settings = () => {
                   id="hard_delete_grace"
                   type="number"
                   min={0}
+                  value={userLifecycle.hardDelete}
                   placeholder="30"
-                  onChange={touchDirty}
+                  onChange={(e) => {
+                    setUserLifecycle((s) => ({
+                      ...s,
+                      hardDelete: e.target.value,
+                    }));
+                    touchDirty();
+                  }}
                 />
                 <p className="text-xs text-muted-foreground">
                   When you schedule a delete, it will permanently wipe after
@@ -336,8 +492,15 @@ const Settings = () => {
                   id="username_cooldown"
                   type="number"
                   min={0}
+                  value={userLifecycle.usernameCooldown}
                   placeholder="30"
-                  onChange={touchDirty}
+                  onChange={(e) => {
+                    setUserLifecycle((s) => ({
+                      ...s,
+                      usernameCooldown: e.target.value,
+                    }));
+                    touchDirty();
+                  }}
                 />
                 <p className="text-xs text-muted-foreground">
                   Prevents reusing deleted usernames for this period.
@@ -354,19 +517,13 @@ const Settings = () => {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="flex items-center">
                 <div className="flex items-center gap-3">
-                  <Switch
-                    id="ip_anonymization"
-                    onCheckedChange={touchDirty}
-                  />
+                  <Switch id="ip_anonymization" onCheckedChange={touchDirty} />
                   <Label htmlFor="ip_anonymization">IP anonymization</Label>
                 </div>
               </div>
               <div className="flex items-center">
                 <div className="flex items-center gap-3">
-                  <Switch
-                    id="pii_redaction"
-                    onCheckedChange={touchDirty}
-                  />
+                  <Switch id="pii_redaction" onCheckedChange={touchDirty} />
                   <Label htmlFor="pii_redaction">
                     PII redaction (emails/phone)
                   </Label>
@@ -406,7 +563,10 @@ const Settings = () => {
               </div>
               <div className="flex items-center gap-2">
                 {urlPatternsDirty && !urlPatternsLocked && (
-                  <Badge variant="outline" className="bg-amber-100/70 text-amber-800">
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-100/70 text-amber-800"
+                  >
                     Editing (unsaved)
                   </Badge>
                 )}
@@ -414,13 +574,7 @@ const Settings = () => {
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    if (urlPatternsLocked) {
-                      setUrlPatternsLocked(false);
-                    } else {
-                      setUrlPatternsLocked(true);
-                    }
-                  }}
+                  onClick={() => setUrlPatternsLocked((v) => !v)}
                 >
                   {urlPatternsLocked ? "Unlock" : "Lock"}
                 </Button>
@@ -477,7 +631,9 @@ const Settings = () => {
                             disabled={urlPatternsLocked}
                             value={row.id ?? ""}
                             onChange={(e) =>
-                              updateUrlPattern(idx, { id: e.target.value || null })
+                              updateUrlPattern(idx, {
+                                id: e.target.value || null,
+                              })
                             }
                             className="h-8 text-xs"
                             placeholder="(auto if blank)"
@@ -568,7 +724,7 @@ const Settings = () => {
                 </table>
               </div>
 
-              <p className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
                     <strong>Groups:</strong> <code>cart</code>,{" "}
@@ -580,9 +736,12 @@ const Settings = () => {
                     <strong>Mask:</strong> 1 = mask sensitive parts (e.g.,
                     product slugs).
                   </li>
-                  <li>ID is text primary key. Leave it empty to auto-generate on save.</li>
+                  <li>
+                    ID is text primary key. Leave it empty to auto-generate on
+                    save.
+                  </li>
                 </ul>
-              </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -590,18 +749,17 @@ const Settings = () => {
           <Card>
             <CardHeader className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <img
-                  src="/stripe.svg"
-                  alt="Stripe"
-                  className="h-7 w-auto"
-                />
+                <img src="/stripe.svg" alt="Stripe" className="h-7 w-auto" />
                 <h2 className="font-semibold text-lg">
                   Stripe Keys (Publishable only)
                 </h2>
               </div>
               <div className="flex items-center gap-2">
                 {stripeDirty && !stripeLocked && (
-                  <Badge variant="outline" className="bg-amber-100/70 text-amber-800">
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-100/70 text-amber-800"
+                  >
                     Editing (unsaved)
                   </Badge>
                 )}
@@ -635,8 +793,14 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label>Mode</Label>
                   <Select
-                    defaultValue="test"
-                    onValueChange={markStripeDirty}
+                    value={stripeSettings.mode}
+                    onValueChange={(v) => {
+                      setStripeSettings((s) => ({
+                        ...s,
+                        mode: v as "test" | "live",
+                      }));
+                      markStripeDirty();
+                    }}
                     disabled={stripeLocked}
                   >
                     <SelectTrigger className="h-9">
@@ -658,7 +822,14 @@ const Settings = () => {
                     id="stripe_test_pk"
                     placeholder="pk_test_..."
                     disabled={stripeLocked}
-                    onChange={markStripeDirty}
+                    value={stripeSettings.testPk}
+                    onChange={(e) => {
+                      setStripeSettings((s) => ({
+                        ...s,
+                        testPk: e.target.value,
+                      }));
+                      markStripeDirty();
+                    }}
                   />
                 </div>
 
@@ -668,7 +839,14 @@ const Settings = () => {
                     id="stripe_live_pk"
                     placeholder="pk_live_..."
                     disabled={stripeLocked}
-                    onChange={markStripeDirty}
+                    value={stripeSettings.livePk}
+                    onChange={(e) => {
+                      setStripeSettings((s) => ({
+                        ...s,
+                        livePk: e.target.value,
+                      }));
+                      markStripeDirty();
+                    }}
                   />
                 </div>
               </div>
@@ -679,18 +857,17 @@ const Settings = () => {
           <Card>
             <CardHeader className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <img
-                  src="/stripe.svg"
-                  alt="Stripe"
-                  className="h-7 w-auto"
-                />
+                <img src="/stripe.svg" alt="Stripe" className="h-7 w-auto" />
                 <h2 className="font-semibold text-lg">
                   Stripe: Billing → Pricing Tiers
                 </h2>
               </div>
               <div className="flex items-center gap-2">
                 {tiersDirty && !tiersLocked && (
-                  <Badge variant="outline" className="bg-amber-100/70 text-amber-800">
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-100/70 text-amber-800"
+                  >
                     Editing (unsaved)
                   </Badge>
                 )}
@@ -873,7 +1050,7 @@ const Settings = () => {
                 </table>
               </div>
 
-              <p className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
                     Ordering is by <strong>min_events</strong>. Tiers cannot
@@ -888,7 +1065,7 @@ const Settings = () => {
                     IDs must be empty).
                   </li>
                 </ul>
-              </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -900,10 +1077,7 @@ const Settings = () => {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="flex items-center">
                 <div className="flex items-center gap-3">
-                  <Switch
-                    id="force_admin_2fa"
-                    onCheckedChange={touchDirty}
-                  />
+                  <Switch id="force_admin_2fa" onCheckedChange={touchDirty} />
                   <Label htmlFor="force_admin_2fa">
                     Force 2FA for admin accounts
                   </Label>
