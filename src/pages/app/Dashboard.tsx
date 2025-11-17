@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock } from "lucide-react";
 import type { RangeKey } from "@/types/dashboard";
 
+import { KpiCard } from "@/components/dashboard/KpiCard";
 import TimeGroupedVisits from "@/components/dashboard/TimeGroupedVisits";
 import EventVolume from "@/components/dashboard/EventVolume";
 import UniqueReturning from "@/components/dashboard/UniqueReturning";
@@ -178,6 +179,7 @@ export default function Dashboard() {
   ];
 
 
+
   if (!isAuthenticated) return null;
 
   return (
@@ -255,42 +257,19 @@ export default function Dashboard() {
         {/* KPI Cards */}
         <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
           {topCards.map((stat) => (
-            <Card key={stat.key}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.name}</CardTitle>
-                <stat.icon className="h-5 w-5 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                {showKpiSkeleton ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-8 w-28" />
-                    <div className="flex gap-2 justify-start">
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-3 w-10" />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-3xl font-bold">
-                      {typeof stat.value === "number" ? nf(stat.value) : stat.value}
-                    </div>
-                    {stat.change != null && (
-                      <p
-                        className={`text-xs mt-1 ${
-                          (stat as any).reverseColor
-                            ? (Number(stat.change) <= 0 ? "text-green-600" : "text-red-600")
-                            : (Number(stat.change) >= 0 ? "text-green-600" : "text-red-600")
-                        }`}
-                      >
-                        {Number(stat.change) >= 0 ? "↑" : "↓"} {Math.abs(Number(stat.change)).toFixed(1)}% from last period
-                      </p>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
+            <KpiCard
+              key={stat.key}
+              title={stat.name}
+              info={stat.info}
+              icon={stat.icon}
+              value={stat.value}
+              change={stat.change}
+              reverseColor={stat.reverseColor}
+              loading={showKpiSkeleton}
+            />
           ))}
         </div>
+
 
         {/* First paint skeletons */}
         {showPageSkeleton ? (
