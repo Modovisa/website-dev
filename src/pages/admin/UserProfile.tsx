@@ -35,8 +35,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-// ⬇️ use the same secureFetch as the rest of the app / Billing & Plans
-import { secureFetch } from "@/lib/auth/auth";
+
+// 🧩 Normal user auth helper (for non-admin pages, if ever needed here)
+// import { secureFetch } from "@/lib/auth/auth";
+
+// 🔐 Admin-only secure fetch for /api/admin/* endpoints
 import { adminSecureFetch } from "@/lib/auth/adminAuth";
 
 const AdminBillingAndPlansLazy = lazy(
@@ -138,7 +141,7 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-user-profile", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`/api/admin/user-profile?user_id=${userId}`, {
+      const res = await adminSecureFetch(`/api/admin/user-profile?user_id=${userId}`, {
         method: "GET",
       });
 
@@ -148,7 +151,6 @@ const AdminUserProfilePage = () => {
         throw new Error("Failed to load user profile");
       }
 
-      // Backend returns the profile object directly (Bootstrap version)
       const json = await res.json().catch(() => null);
       if (!json) return null;
 
@@ -164,7 +166,7 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-user-status", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`/api/admin/user-status?user_id=${userId}`, {
+      const res = await adminSecureFetch(`/api/admin/user-status?user_id=${userId}`, {
         method: "GET",
       });
       if (!res.ok) {
@@ -183,7 +185,7 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-billing-info", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(`/api/admin/user-billing-info?user_id=${userId}`, {
+      const res = await adminSecureFetch(`/api/admin/user-billing-info?user_id=${userId}`, {
         method: "GET",
       });
       if (!res.ok) {
@@ -208,7 +210,7 @@ const AdminUserProfilePage = () => {
     queryKey: ["admin-tracking-websites", userId],
     enabled,
     queryFn: async () => {
-      const res = await secureFetch(
+      const res = await adminSecureFetch(
         `/api/admin/tracking-websites?user_id=${userId}`,
         {
           method: "POST",
@@ -263,7 +265,7 @@ const AdminUserProfilePage = () => {
   // ─────────────────────────────
   const toggleFreeForeverMutation = useMutation({
     mutationFn: async (nextValue: boolean) => {
-      const res = await secureFetch(`/api/admin/set-free-forever`, {
+      const res = await adminSecureFetch(`/api/admin/set-free-forever`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -304,7 +306,7 @@ const AdminUserProfilePage = () => {
       website_name: string;
       timezone: string;
     }) => {
-      const res = await secureFetch(
+      const res = await adminSecureFetch(
         `/api/admin/update-tracking-config?user_id=${userId}`,
         {
           method: "POST",
@@ -335,7 +337,7 @@ const AdminUserProfilePage = () => {
 
   const deleteWebsiteMutation = useMutation({
     mutationFn: async ({ id }: { id: string | number }) => {
-      const res = await secureFetch(
+      const res = await adminSecureFetch(
         `/api/admin/delete-tracking-config?user_id=${userId}`,
         {
           method: "POST",
@@ -372,7 +374,7 @@ const AdminUserProfilePage = () => {
       old_password: string;
       new_password: string;
     }) => {
-      const res = await secureFetch(
+      const res = await adminSecureFetch(
         `/api/admin/update-password?user_id=${userId}`,
         {
           method: "POST",
