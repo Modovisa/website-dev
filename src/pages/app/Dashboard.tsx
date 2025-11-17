@@ -317,18 +317,18 @@ export default function Dashboard() {
 
               {/* Tables */}
               <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                  <CardHeader><CardTitle>Top Pages</CardTitle></CardHeader>
-                  <CardContent>
-                    <TopPagesTable rows={(data.top_pages ?? []).map((p: any) => ({ url: p.url, views: p.views }))} />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle>Referrers</CardTitle></CardHeader>
-                  <CardContent>
-                    <ReferrersTable rows={(data.referrers ?? []).map((r: any) => ({ domain: r.domain, visitors: r.visitors }))} />
-                  </CardContent>
-                </Card>
+                <TopPagesTable
+                  rows={(data.top_pages ?? []).map((p: any) => ({
+                    url: p.url,
+                    views: p.views,
+                  }))}
+                />
+                <ReferrersTable
+                  rows={(data.referrers ?? []).map((r: any) => ({
+                    domain: r.domain,
+                    visitors: r.visitors,
+                  }))}
+                />
               </div>
 
               {/* Geographic */}
