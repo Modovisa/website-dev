@@ -22,6 +22,8 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
+import { ChartCard } from "@/components/dashboard/ChartKit";
+
 
 import {
   useDashboard,
@@ -431,46 +433,6 @@ export default function Dashboard() {
                   key={`all-${frameKey}-${seriesSig}-${range}-${siteId}`}
                   title="All Visitors"
                   info="Number of unique visitors per time bucket."
-                  current={(data as any)?.unique_visitors_timeline ?? []}
-                  previous={(data as any)?.previous_unique_visitors_timeline ?? []}
-                  color="#0ea5e9"
-                  filled
-                  version={analyticsVersion}
-                />
-              </div>
-
-
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <PerformanceLine
-                  key={`imp-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Impressions"
-                  current={data.impressions_timeline ?? []}
-                  previous={data.impressions_previous_timeline ?? []}
-                  color="#22c55e"
-                  filled
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`clk-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Clicks"
-                  current={data.clicks_timeline ?? []}
-                  previous={data.clicks_previous_timeline ?? []}
-                  color="#3b82f6"
-                  filled
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`srch-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Visitors from Search"
-                  current={data.search_visitors_timeline ?? []}
-                  previous={data.search_visitors_previous_timeline ?? []}
-                  color="#f59e0b"
-                  filled
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`all-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="All Visitors"
                   current={(data as any)?.unique_visitors_timeline ?? []}
                   previous={(data as any)?.previous_unique_visitors_timeline ?? []}
                   color="#0ea5e9"

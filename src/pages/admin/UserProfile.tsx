@@ -1,5 +1,5 @@
 // src/pages/admin/UserProfile.tsx
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -36,6 +36,10 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { secureFetch } from "@/lib/auth/auth";
+
+const AdminBillingAndPlansLazy = lazy(
+  () => import("@/components/profile/BillingAndPlans")
+);
 
 type AdminUserProfile = {
   id: number;
@@ -75,14 +79,6 @@ type AdminWebsite = {
   domain: string;
   tracking_token: string;
   timezone: string;
-};
-
-type AdminInvoice = {
-  issued_date: string;
-  total: number | string;
-  invoice_status: string;
-  invoice_id: string;
-  pdf_link?: string | null;
 };
 
 type UserStatus = "active" | "suspended" | "blocked" | "pending" | "inactive" | "unknown";
@@ -208,25 +204,6 @@ const AdminUserProfilePage = () => {
     },
   });
 
-  const { data: invoicesData } = useQuery<{ data: AdminInvoice[] }>({
-    queryKey: ["admin-user-invoices", userId],
-    enabled,
-    queryFn: async () => {
-      const res = await secureFetch(`/api/admin/user/invoices?user_id=${userId}`, {
-        method: "GET",
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        console.error("admin user invoices failed", res.status, body);
-        throw new Error("Failed to load invoices");
-      }
-      const json = await res.json();
-      const list: AdminInvoice[] = json?.data || json?.invoices || json || [];
-      return { data: list };
-    },
-  });
-
-  const invoices = invoicesData?.data || [];
   const status: UserStatus = statusData?.status || "unknown";
 
   const isFreeForever =
@@ -390,92 +367,6 @@ const AdminUserProfilePage = () => {
     },
   });
 
-  const cancelSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      const res = await secureFetch(
-        `/api/admin/cancel-subscription?user_id=${userId}`,
-        { method: "POST" }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to cancel subscription.");
-      }
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-billing-info", userId] });
-      toast({
-        title: "Subscription cancelled",
-        description: "Plan will end at period end.",
-      });
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Error",
-        description: err?.message || "Failed to cancel subscription.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const reactivateSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      const res = await secureFetch(
-        `/api/admin/reactivate-subscription?user_id=${userId}`,
-        { method: "POST" }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to reactivate subscription.");
-      }
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-billing-info", userId] });
-      toast({
-        title: "Subscription reactivated",
-        description: "The subscription is now active again.",
-      });
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Error",
-        description: err?.message || "Failed to reactivate subscription.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const cancelDowngradeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await secureFetch(`/api/cancel-downgrade`, {
-        method: "POST",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(
-          data?.error || "Failed to cancel scheduled downgrade."
-        );
-      }
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-billing-info", userId] });
-      toast({
-        title: "Downgrade cancelled",
-        description: "Scheduled downgrade has been cancelled.",
-      });
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Error",
-        description:
-          err?.message || "Failed to cancel scheduled downgrade.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleEditClick = (website: AdminWebsite) => {
     setEditingWebsiteId(website.id);
     setEditForm({ name: website.website_name, timezone: website.timezone });
@@ -563,42 +454,6 @@ const AdminUserProfilePage = () => {
       : status === "pending"
       ? "bg-primary"
       : "bg-secondary";
-
-  const activeUntilLabel = (() => {
-    if (isFreeForever) return "Free Forever";
-    if (!billingInfo?.active_until) return "–";
-    return `Active until ${formatDate(billingInfo.active_until)}`;
-  })();
-
-  const isFreePlan =
-    isFreeForever ||
-    billingInfo?.price === 0 ||
-    billingInfo?.interval == null ||
-    (billingInfo?.plan_name || "").toLowerCase().includes("free");
-
-  const daysUsed =
-    billingInfo?.days_used ??
-    (isFreePlan ? new Date().getDate() : 0);
-  const totalDays =
-    billingInfo?.total_days ??
-    (isFreePlan
-      ? new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0
-        ).getDate()
-      : billingInfo?.interval === "year"
-      ? 365
-      : 30);
-  const percent =
-    totalDays > 0
-      ? Math.min(100, Math.round((daysUsed / totalDays) * 100))
-      : 0;
-
-  const daysLeft = billingInfo?.days_left ?? 0;
-  const hasScheduledDowngrade =
-    !!billingInfo?.scheduled_downgrade &&
-    !billingInfo.cancel_at_period_end;
 
   return (
     <DashboardLayout>
@@ -1016,273 +871,16 @@ const AdminUserProfilePage = () => {
               </Card>
             </TabsContent>
 
-            {/* BILLING & PLANS (admin view) */}
+            {/* BILLING & PLANS (admin view, shared component) */}
             <TabsContent value="billing" className="space-y-6">
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-semibold">
-                        Current Plan
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        Admin view of this user&apos;s subscription and
-                        usage.
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {effectivePlanName}
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Plan
-                      </p>
-                      <p className="font-medium">
-                        {effectivePlanName}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        {isFreePlan
-                          ? "Month Progress"
-                          : "Billing Period Progress"}
-                      </p>
-                      <p className="font-medium">
-                        {daysUsed} of {totalDays} days ({percent}%)
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Active Until
-                      </p>
-                      <p className="font-medium">
-                        {activeUntilLabel}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden mt-2">
-                    <div
-                      className="h-full bg-primary"
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-
-                  <div className="pt-4 border-t mt-4 space-y-3">
-                    <p className="text-sm">
-                      <span className="font-semibold">
-                        {Number(eventsThisMonth || 0).toLocaleString()}
-                      </span>{" "}
-                      <span className="text-muted-foreground">
-                        events used so far.
-                      </span>
-                    </p>
-
-                    {billingInfo?.plan_features && (
-                      <p className="text-sm text-muted-foreground">
-                        {billingInfo.plan_features}
-                      </p>
-                    )}
-
-                    {!isFreePlan && (
-                      <div className="space-y-2">
-                        {billingInfo?.cancel_at_period_end && (
-                          <Alert className="bg-amber-50 border-amber-200">
-                            <AlertDescription>
-                              <span className="font-semibold">
-                                Needs attention!
-                              </span>{" "}
-                              This subscription is set to cancel at
-                              period end.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {hasScheduledDowngrade &&
-                          billingInfo?.scheduled_downgrade && (
-                            <Alert className="bg-blue-50 border-blue-200">
-                              <AlertDescription>
-                                <span className="font-semibold">
-                                  Downgrade scheduled:
-                                </span>{" "}
-                                will downgrade to{" "}
-                                <span className="font-medium">
-                                  {
-                                    billingInfo
-                                      .scheduled_downgrade.plan_name
-                                  }
-                                </span>{" "}
-                                on{" "}
-                                <span className="font-medium">
-                                  {formatDate(
-                                    billingInfo.scheduled_downgrade
-                                      .start_date
-                                  )}
-                                </span>
-                                .
-                              </AlertDescription>
-                            </Alert>
-                          )}
-
-                        {!billingInfo?.cancel_at_period_end &&
-                          !hasScheduledDowngrade &&
-                          daysLeft > 0 &&
-                          daysLeft <= 7 && (
-                            <Alert className="bg-amber-50 border-amber-200">
-                              <AlertDescription>
-                                <span className="font-semibold">
-                                  Heads up!
-                                </span>{" "}
-                                Plan ends in {daysLeft} day
-                                {daysLeft === 1 ? "" : "s"}.
-                              </AlertDescription>
-                            </Alert>
-                          )}
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      {!isFreePlan &&
-                        !billingInfo?.cancel_at_period_end && (
-                          <Button
-                            variant="outline"
-                            className="border-destructive text-destructive hover:bg-destructive/10"
-                            onClick={() =>
-                              cancelSubscriptionMutation.mutate()
-                            }
-                            disabled={
-                              cancelSubscriptionMutation.isPending
-                            }
-                          >
-                            Cancel Subscription
-                          </Button>
-                        )}
-
-                      {billingInfo?.cancel_at_period_end && (
-                        <Button
-                          variant="outline"
-                          className="border-green-500 text-green-600 hover:bg-green-50"
-                          onClick={() =>
-                            reactivateSubscriptionMutation.mutate()
-                          }
-                          disabled={
-                            reactivateSubscriptionMutation.isPending
-                          }
-                        >
-                          Reactivate Subscription
-                        </Button>
-                      )}
-
-                      {hasScheduledDowngrade && (
-                        <Button
-                          variant="outline"
-                          onClick={() =>
-                            cancelDowngradeMutation.mutate()
-                          }
-                          disabled={cancelDowngradeMutation.isPending}
-                        >
-                          Cancel Downgrade
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Invoices – admin-only, but same card/table layout pattern */}
-              <Card>
-                <CardContent className="pt-6">
-                  <h3 className="text-xl font-semibold mb-4">
-                    Invoices
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="border-b bg-muted/50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">
-                            Date
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">
-                            Amount
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">
-                            Status
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">
-                            Invoice #
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoices.length === 0 && (
-                          <tr>
-                            <td
-                              colSpan={5}
-                              className="px-4 py-6 text-center text-sm text-muted-foreground"
-                            >
-                              No invoices found for this user.
-                            </td>
-                          </tr>
-                        )}
-                        {invoices.map((inv, idx) => (
-                          <tr
-                            key={idx}
-                            className="border-b last:border-0"
-                          >
-                            <td className="px-4 py-3 text-sm">
-                              {inv.issued_date}
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              ${Number(inv.total).toFixed(2)}
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              <Badge
-                                className={
-                                  inv.invoice_status
-                                    .toLowerCase() === "refunded"
-                                    ? "bg-destructive"
-                                    : "bg-primary"
-                                }
-                              >
-                                {inv.invoice_status}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-sm font-medium">
-                              {inv.invoice_id}
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              {inv.pdf_link ? (
-                                <Button
-                                  asChild
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-xs"
-                                >
-                                  <a
-                                    href={inv.pdf_link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    Download
-                                  </a>
-                                </Button>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
+              <Suspense fallback={null}>
+                {activeTab === "billing" && userId ? (
+                  <AdminBillingAndPlansLazy
+                    mode="admin"
+                    adminUserId={Number(userId)}
+                  />
+                ) : null}
+              </Suspense>
             </TabsContent>
 
             {/* ACCOUNT SUMMARY (admin) */}
