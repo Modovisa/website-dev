@@ -485,7 +485,9 @@ const Profile = () => {
             {/* BILLING mounts only when opened; no spinner */}
             <TabsContent value="billing" className="space-y-6">
               <Suspense fallback={null}>
-                {activeTab === "billing" ? <BillingAndPlansLazy /> : null}
+                {activeTab === "billing" ? (
+                  <BillingAndPlansLazy mode="self" />
+                ) : null}
               </Suspense>
             </TabsContent>
           </Tabs>
