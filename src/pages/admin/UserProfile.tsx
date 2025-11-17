@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+// ⬇️ use the same secureFetch as the rest of the app / Billing & Plans
 import { secureFetch } from "@/lib/auth/auth";
 
 const AdminBillingAndPlansLazy = lazy(
@@ -129,6 +130,9 @@ const AdminUserProfilePage = () => {
   // Queries disabled if no userId
   const enabled = !!userId;
 
+  // ─────────────────────────────
+  // Profile
+  // ─────────────────────────────
   const { data: profile } = useQuery<AdminUserProfile | null>({
     queryKey: ["admin-user-profile", userId],
     enabled,
@@ -136,17 +140,25 @@ const AdminUserProfilePage = () => {
       const res = await secureFetch(`/api/admin/user-profile?user_id=${userId}`, {
         method: "GET",
       });
+
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.error("admin user-profile failed", res.status, body);
         throw new Error("Failed to load user profile");
       }
-      const json = await res.json();
-      const user = json?.user || json?.profile || json;
-      return user ?? null;
+
+      // Backend returns the profile object directly (Bootstrap version)
+      const json = await res.json().catch(() => null);
+      if (!json) return null;
+
+      const user = (json as any).user || (json as any).profile || json;
+      return (user ?? null) as AdminUserProfile | null;
     },
   });
 
+  // ─────────────────────────────
+  // Status
+  // ─────────────────────────────
   const { data: statusData } = useQuery<{ status: UserStatus }>({
     queryKey: ["admin-user-status", userId],
     enabled,
@@ -163,6 +175,9 @@ const AdminUserProfilePage = () => {
     },
   });
 
+  // ─────────────────────────────
+  // Billing summary (for left card)
+  // ─────────────────────────────
   const { data: billingInfo } = useQuery<AdminBillingInfo | null>({
     queryKey: ["admin-billing-info", userId],
     enabled,
@@ -175,32 +190,45 @@ const AdminUserProfilePage = () => {
         console.error("admin user-billing-info failed", res.status, body);
         throw new Error("Failed to load billing info");
       }
-      const json = await res.json();
-      const info = json?.billing || json?.data || json;
-      return info ?? null;
+      const json = await res.json().catch(() => ({} as any));
+      const info =
+        json?.billing ??
+        json?.data ??
+        json?.info ??
+        json;
+      return (info ?? null) as AdminBillingInfo | null;
     },
   });
 
+  // ─────────────────────────────
+  // Tracking websites (match Bootstrap: POST + { projects: [...] })
+  // ─────────────────────────────
   const { data: websites = [] } = useQuery<AdminWebsite[]>({
     queryKey: ["admin-tracking-websites", userId],
     enabled,
     queryFn: async () => {
       const res = await secureFetch(
         `/api/admin/tracking-websites?user_id=${userId}`,
-        { method: "GET" }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
       );
+
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.error("admin tracking-websites failed", res.status, body);
         throw new Error("Failed to load tracking websites");
       }
-      const json = await res.json();
-      return (
-        json?.projects ||
-        json?.websites ||
-        json?.data ||
-        ([] as AdminWebsite[])
-      );
+
+      const json = await res.json().catch(() => ({} as any));
+      const trackingWebsites: AdminWebsite[] =
+        json?.projects ??
+        json?.websites ??
+        json?.data ??
+        json ??
+        [];
+      return trackingWebsites;
     },
   });
 
@@ -229,6 +257,9 @@ const AdminUserProfilePage = () => {
   );
   const initials = (username[0] || "U").toUpperCase();
 
+  // ─────────────────────────────
+  // Mutations
+  // ─────────────────────────────
   const toggleFreeForeverMutation = useMutation({
     mutationFn: async (nextValue: boolean) => {
       const res = await secureFetch(`/api/admin/set-free-forever`, {
@@ -458,7 +489,7 @@ const AdminUserProfilePage = () => {
   return (
     <DashboardLayout>
       <div className="flex flex-col lg:flex-row h-full">
-        {/* Left sidebar – same structure as Profile.tsx, with admin extras */}
+        {/* Left sidebar */}
         <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
           <Card className="border-primary/20">
             <CardContent className="pt-6 space-y-6">
@@ -547,7 +578,7 @@ const AdminUserProfilePage = () => {
           </Card>
         </div>
 
-        {/* Main content – same Tabs structure as Profile.tsx */}
+        {/* Main content */}
         <div className="flex-1 p-4 md:p-8">
           <Tabs
             value={activeTab}
@@ -561,7 +592,7 @@ const AdminUserProfilePage = () => {
               <TabsTrigger value="account">Account</TabsTrigger>
             </TabsList>
 
-            {/* TRACKED SITES – identical structure to Profile.tsx */}
+            {/* TRACKED SITES */}
             <TabsContent value="tracked-sites" className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Website Tracking List</h2>
@@ -706,7 +737,7 @@ const AdminUserProfilePage = () => {
               </div>
             </TabsContent>
 
-            {/* SECURITY – same card layout as Profile, admin-specific wording */}
+            {/* SECURITY */}
             <TabsContent value="security" className="space-y-6">
               {/* Change Password (admin) */}
               <Card>
