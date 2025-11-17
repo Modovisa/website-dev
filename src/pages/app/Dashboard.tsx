@@ -360,13 +360,26 @@ export default function Dashboard() {
                 <div className="lg:col-span-2">
                   <Card className="h-[660px]">
                     <CardHeader className="px-6 pt-6 pb-0">
-                      <CardTitle>World Visitors</CardTitle>
+                      {/* Title + info icon on first row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <CardTitle>World Visitors</CardTitle>
+                          <InfoTip text="Live map of where your visitors are located. Great for identifying geographic interest and potential target regions." />
+                        </div>
+                      </div>
+
+                      {/* Existing range label on second row */}
                       <p className="text-sm text-muted-foreground">
-                        {range === "24h" ? "Past 24 hours" :
-                         range === "7d"  ? "Past 7 days"   :
-                         range === "30d" ? "Past 30 days"  : "Past 12 months"}
+                        {range === "24h"
+                          ? "Past 24 hours"
+                          : range === "7d"
+                          ? "Past 7 days"
+                          : range === "30d"
+                          ? "Past 30 days"
+                          : "Past 12 months"}
                       </p>
                     </CardHeader>
+
                     <CardContent className="pt-2 h-[540px]">
                       <WorldMap
                         key={`map-${siteId}-${range}`}
@@ -377,15 +390,22 @@ export default function Dashboard() {
                     </CardContent>
                   </Card>
                 </div>
+
                 <div>
                   <Card className="h-[660px]">
-                    <CardHeader><CardTitle>Visits by Country</CardTitle></CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <CardTitle>Visits by Country</CardTitle>
+                        <InfoTip text="Table view of visitor counts by country. Helps you prioritize markets and tailor content to regions." />
+                      </div>
+                    </CardHeader>
                     <CardContent className="h-[540px] overflow-auto">
                       <CountryVisits countries={data.countries ?? []} />
                     </CardContent>
                   </Card>
                 </div>
               </div>
+
 
               {/* Heatmap */}
               <Card>

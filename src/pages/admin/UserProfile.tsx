@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { secureFetch } from "@/lib/auth/auth";
 
 // 🧩 Normal user auth helper (for non-admin pages, if ever needed here)
 // import { secureFetch } from "@/lib/auth/auth";
