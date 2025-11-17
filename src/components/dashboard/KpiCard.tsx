@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -35,7 +36,7 @@ export function KpiCard({
   const hasChange = typeof change === "number" && !Number.isNaN(change);
   const numericChange = hasChange ? Number(change) : 0;
 
-  // normal KPIs: up = good. reverseColor: down = good.
+  // normal KPIs: up = good. reverseColor KPIs: down = good.
   const goodIsUp = !reverseColor;
   const isGood = goodIsUp ? numericChange >= 0 : numericChange <= 0;
   const changeColor = isGood ? "text-green-600" : "text-red-600";
@@ -44,20 +45,20 @@ export function KpiCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-
+        {/* Title + info icon (same pattern as ChartCard) */}
         <div className="flex items-center gap-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {title}
+          </CardTitle>
           {info && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/40 bg-background text-[10px] text-muted-foreground hover:bg-muted"
-                  aria-label={info}
+                  aria-label="info"
+                  className="ml-2 text-muted-foreground hover:text-foreground"
                 >
-                  i
+                  <Info className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs text-xs leading-relaxed">
@@ -65,8 +66,10 @@ export function KpiCard({
               </TooltipContent>
             </Tooltip>
           )}
-          <Icon className="h-5 w-5 text-muted-foreground" />
         </div>
+
+        {/* KPI icon on the right */}
+        <Icon className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
 
       <CardContent>
