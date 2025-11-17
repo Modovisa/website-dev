@@ -561,7 +561,7 @@ const Settings = () => {
 
           {/* URL Patterns (lockable) */}
           <Card>
-            <CardHeader className="flex items-center justify-between text-left">
+            <CardHeader className="flex items-left justify-between">
               <div className="flex items-center gap-2">
                 <LinkIcon className="h-5 w-5 text-muted-foreground" />
                 <h2 className="font-semibold text-lg">URL Patterns</h2>
@@ -752,7 +752,7 @@ const Settings = () => {
 
           {/* Stripe Keys (publishable only) */}
           <Card>
-            <CardHeader className="flex items-center justify-between text-left">
+            <CardHeader className="flex items-left justify-between">
               <div className="flex items-center gap-2">
                 <img src="/stripe.svg" alt="Stripe" className="h-7 w-auto" />
                 <h2 className="font-semibold text-lg">
@@ -860,7 +860,7 @@ const Settings = () => {
 
           {/* Billing → Pricing Tiers (lockable) */}
           <Card>
-            <CardHeader className="flex items-center justify-between text-left">
+            <CardHeader className="flex items-left justify-between">
               <div className="flex items-center gap-2">
                 <img src="/stripe.svg" alt="Stripe" className="h-7 w-auto" />
                 <h2 className="font-semibold text-lg">
