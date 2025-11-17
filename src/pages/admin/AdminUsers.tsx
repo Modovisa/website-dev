@@ -87,7 +87,10 @@ function handleUnauthorized() {
 }
 
 async function adminJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await adminSecureFetch(url, { method: init?.method ?? "GET", ...init });
+  const res = await adminSecureFetch(url, {
+    method: init?.method ?? "GET",
+    ...init,
+  });
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("unauthorized");
@@ -126,7 +129,7 @@ const AdminUsers = () => {
   const [newContact, setNewContact] = useState("");
   const [newRole, setNewRole] = useState("");
 
-  // (optional) form errors like Users.tsx – simple, just for email/name sanity
+  // Simple validation errors
   const [addErrors, setAddErrors] = useState<Record<string, string>>({});
 
   /* ------------------------------- Data Queries ------------------------------ */
@@ -138,18 +141,27 @@ const AdminUsers = () => {
 
   const { data: metricsData } = useQuery<{ metrics: AdminMetrics }>({
     queryKey: ["adminUsers:metrics"],
-    queryFn: () => adminJson<{ metrics: AdminMetrics }>(`${API}/api/admin/admin-users/metrics`),
+    queryFn: () =>
+      adminJson<{ metrics: AdminMetrics }>(
+        `${API}/api/admin/admin-users/metrics`,
+      ),
   });
 
-  const { data: usersData, isLoading: usersLoading } = useQuery<AdminUsersResponse>({
+  const {
+    data: usersData,
+    isLoading: usersLoading,
+  } = useQuery<AdminUsersResponse>({
     queryKey: ["adminUsers:list"],
-    queryFn: () => adminJson<AdminUsersResponse>(`${API}/api/admin/admin-users`),
+    queryFn: () =>
+      adminJson<AdminUsersResponse>(`${API}/api/admin/admin-users`),
   });
 
   const { data: rolesData } = useQuery<AdminRolesResponse>({
     queryKey: ["adminUsers:roles"],
     queryFn: () =>
-      adminJson<AdminRolesResponse>(`${API}/api/dropdown/admin-user-roles`),
+      adminJson<AdminRolesResponse>(
+        `${API}/api/dropdown/admin-user-roles`,
+      ),
   });
 
   const isSuperadmin =
@@ -181,34 +193,46 @@ const AdminUsers = () => {
   const twofaTotal = metrics?.total_admins ?? 0;
   const twofaEnabled = metrics?.twofa_enabled ?? 0;
   const twofaPercent =
-    twofaTotal > 0 ? Math.round((twofaEnabled / twofaTotal) * 100) : 0;
+    twofaTotal > 0
+      ? Math.round((twofaEnabled / twofaTotal) * 100)
+      : 0;
 
   const stats = [
     {
       title: "Total Admins",
-      value: metrics ? String(metrics.total_admins ?? "--") : "--",
+      value: metrics
+        ? String(metrics.total_admins ?? "--")
+        : "--",
       subtitle: "All roles",
       icon: Shield,
       color: "text-primary" as const,
     },
     {
       title: "Active Admins",
-      value: metrics ? String(metrics.active_admins ?? "--") : "--",
+      value: metrics
+        ? String(metrics.active_admins ?? "--")
+        : "--",
       subtitle: "Can sign in now",
       icon: UserCheck,
       color: "text-success" as const,
     },
     {
       title: "2FA Coverage",
-      value: metrics ? `${twofaEnabled}/${twofaTotal}` : "--/--",
-      percentage: metrics ? `(${twofaPercent || 0}%)` : undefined,
+      value: metrics
+        ? `${twofaEnabled}/${twofaTotal}`
+        : "--/--",
+      percentage: metrics
+        ? `(${twofaPercent || 0}%)`
+        : undefined,
       subtitle: "We recommend ≥ 100%",
       icon: Lock,
       color: "text-warning" as const,
     },
     {
       title: "Admin Actions (24h)",
-      value: metrics ? String(metrics.admin_actions_24h ?? "0") : "0",
+      value: metrics
+        ? String(metrics.admin_actions_24h ?? "0")
+        : "0",
       subtitle: "From audit trail",
       icon: Activity,
       color: "text-cyan-500" as const,
@@ -222,7 +246,9 @@ const AdminUsers = () => {
       const errors: Record<string, string> = {};
       if (!newName.trim()) errors.name = "Please enter full name";
       if (!newEmail.trim()) errors.email = "Please enter email";
-      else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail.trim())) {
+      else if (
+        !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail.trim())
+      ) {
         errors.email = "Invalid email address";
       }
       setAddErrors(errors);
@@ -234,7 +260,7 @@ const AdminUsers = () => {
         name: newName.trim(),
         email: newEmail.trim(),
         role: newRole,
-        status: 2, // "active" – mirrors bootstrap
+        status: 2, // "active"
       };
 
       if (newContact.trim()) {
@@ -256,19 +282,28 @@ const AdminUsers = () => {
       setNewRole("");
       setAddErrors({});
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
-        qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
+        qc.invalidateQueries({
+          queryKey: ["adminUsers:list"],
+        }),
+        qc.invalidateQueries({
+          queryKey: ["adminUsers:metrics"],
+        }),
       ]);
     },
     onError: (err: any) => {
-      if (String(err?.message || "").includes("unauthorized")) return;
+      if (String(err?.message || "").includes("unauthorized"))
+        return;
       if (String(err?.message || "") === "validation") return;
       alert("❌ " + (err?.message || "Failed to create user"));
     },
   });
 
   const statusMutation = useMutation({
-    mutationFn: async (params: { id: number; status: string; reason?: string }) => {
+    mutationFn: async (params: {
+      id: number;
+      status: string;
+      reason?: string;
+    }) => {
       const res = await adminJson(
         `${API}/api/admin/admin-users/${params.id}/status`,
         {
@@ -278,19 +313,24 @@ const AdminUsers = () => {
             status: params.status,
             reason: params.reason || "",
           }),
-        }
+        },
       );
       return res;
     },
     onSuccess: async () => {
       alert("✅ Done.");
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
-        qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
+        qc.invalidateQueries({
+          queryKey: ["adminUsers:list"],
+        }),
+        qc.invalidateQueries({
+          queryKey: ["adminUsers:metrics"],
+        }),
       ]);
     },
     onError: (err: any) => {
-      if (String(err?.message || "").includes("unauthorized")) return;
+      if (String(err?.message || "").includes("unauthorized"))
+        return;
       alert("❌ " + (err?.message || "Operation failed"));
     },
   });
@@ -304,31 +344,38 @@ const AdminUsers = () => {
     onSuccess: async () => {
       alert("✅ User deleted.");
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["adminUsers:list"] }),
-        qc.invalidateQueries({ queryKey: ["adminUsers:metrics"] }),
+        qc.invalidateQueries({
+          queryKey: ["adminUsers:list"],
+        }),
+        qc.invalidateQueries({
+          queryKey: ["adminUsers:metrics"],
+        }),
       ]);
     },
     onError: (err: any) => {
-      if (String(err?.message || "").includes("unauthorized")) return;
+      if (String(err?.message || "").includes("unauthorized"))
+        return;
       alert("❌ " + (err?.message || "Failed to delete user"));
     },
   });
 
   /* ----------------------------- Effects / helpers -------------------------- */
 
-  // Mirror Users.tsx: clear errors when sheet opens
   useEffect(() => {
     if (isAddUserOpen) {
       setAddErrors({});
     }
   }, [isAddUserOpen]);
 
-  const handleAction = (user: AdminUser, action: "suspend" | "block" | "activate" | "delete") => {
+  const handleAction = (
+    user: AdminUser,
+    action: "suspend" | "block" | "activate" | "delete",
+  ) => {
     if (!isSuperadmin) return;
 
     if (action === "delete") {
       const confirmText = window.prompt(
-        "Type DELETE to permanently remove this admin (cannot delete the last superadmin)."
+        "Type DELETE to permanently remove this admin (cannot delete the last superadmin).",
       );
       if (confirmText !== "DELETE") return;
       deleteMutation.mutate(user.id);
@@ -341,18 +388,25 @@ const AdminUsers = () => {
       activate: "active",
     };
     const status = actionToStatus[action];
-    const reason = window.prompt(`Optional comment for ${action}:`) || "";
+    const reason =
+      window.prompt(`Optional comment for ${action}:`) || "";
     statusMutation.mutate({ id: user.id, status, reason });
   };
 
   const roleOptions = rolesData?.roles ?? [];
 
-  const statusBadgeClasses = (status: string | null | undefined) => {
+  const statusBadgeClasses = (
+    status: string | null | undefined,
+  ) => {
     const s = (status || "").toLowerCase();
-    if (s === "active") return "bg-emerald-100 text-emerald-700 border border-emerald-200";
-    if (s === "pending") return "bg-sky-100 text-sky-700 border border-sky-200";
-    if (s === "suspended") return "bg-amber-100 text-amber-700 border border-amber-200";
-    if (s === "blocked") return "bg-red-100 text-red-700 border border-red-200";
+    if (s === "active")
+      return "bg-emerald-100 text-emerald-700 border border-emerald-200";
+    if (s === "pending")
+      return "bg-sky-100 text-sky-700 border border-sky-200";
+    if (s === "suspended")
+      return "bg-amber-100 text-amber-700 border border-amber-200";
+    if (s === "blocked")
+      return "bg-red-100 text-red-700 border border-red-200";
     return "bg-slate-100 text-slate-700 border border-slate-200";
   };
 
@@ -376,7 +430,9 @@ const AdminUsers = () => {
                         : "bg-cyan-500/10"
                     }`}
                   >
-                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                    <stat.icon
+                      className={`h-5 w-5 ${stat.color}`}
+                    />
                   </div>
                   <button
                     type="button"
@@ -398,16 +454,23 @@ const AdminUsers = () => {
                   </button>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {stat.title}
+                  </p>
                   <div className="flex items-baseline gap-1">
-                    <p className="text-3xl font-bold">{stat.value}</p>
-                    {"percentage" in stat && stat.percentage && (
-                      <span className="text-sm text-muted-foreground">
-                        {stat.percentage}
-                      </span>
-                    )}
+                    <p className="text-3xl font-bold">
+                      {stat.value}
+                    </p>
+                    {"percentage" in stat &&
+                      stat.percentage && (
+                        <span className="text-sm text-muted-foreground">
+                          {stat.percentage}
+                        </span>
+                      )}
                   </div>
-                  <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {stat.subtitle}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -418,9 +481,11 @@ const AdminUsers = () => {
         <Card>
           <CardContent className="p-6">
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Admin Users</h2>
+              <h2 className="text-lg font-semibold">
+                Admin Users
+              </h2>
 
-              {/* Controls row – same structure as old version */}
+              {/* Controls row */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 {/* Page size select */}
                 <Select
@@ -454,14 +519,21 @@ const AdminUsers = () => {
                     }}
                   />
                   <div className="flex gap-2">
-                    {/* Export (stubbed client-side) */}
+                    {/* Export */}
                     <Button
                       type="button"
                       variant="outline"
                       className="flex-1 sm:flex-none"
                       onClick={() => {
                         const rows = [
-                          ["Name", "Email", "Roles", "Created", "Last Login", "Status"],
+                          [
+                            "Name",
+                            "Email",
+                            "Roles",
+                            "Created",
+                            "Last Login",
+                            "Status",
+                          ],
                           ...users.map((u) => [
                             u.name || "",
                             u.email || "",
@@ -474,15 +546,19 @@ const AdminUsers = () => {
                         const csv = rows.map((r) =>
                           r
                             .map((cell) =>
-                              `"${String(cell).replace(/"/g, '""')}"`
+                              `"${String(cell).replace(
+                                /"/g,
+                                '""',
+                              )}"`,
                             )
-                            .join(",")
+                            .join(","),
                         );
                         const blob = new Blob([csv.join("\n")], {
                           type: "text/csv;charset=utf-8;",
                         });
                         const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
+                        const a =
+                          document.createElement("a");
                         a.href = url;
                         a.download = "admin-users.csv";
                         a.click();
@@ -499,20 +575,22 @@ const AdminUsers = () => {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8-4-4m0 0L8 8m4-4v12"
                         />
                       </svg>
                       Export
                     </Button>
 
-                    {/* Add New User sheet – SAME MECHANISM as Users.tsx, plus hard stop of navigation */}
-                    <Sheet open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+                    {/* Add New User sheet */}
+                    <Sheet
+                      open={isAddUserOpen}
+                      onOpenChange={setIsAddUserOpen}
+                    >
                       <SheetTrigger asChild>
                         <Button
                           type="button"
                           className="flex-1 sm:flex-none"
                           onClick={(e) => {
-                            // Kill any parent <a>/<form> defaults and manually open
                             e.preventDefault();
                             e.stopPropagation();
                             setIsAddUserOpen(true);
@@ -521,31 +599,42 @@ const AdminUsers = () => {
                           + Add New User
                         </Button>
                       </SheetTrigger>
-                      <SheetContent side="right" className="w-full sm:w-[460px]">
+                      <SheetContent
+                        side="right"
+                        className="w-full sm:w-[460px]"
+                      >
                         <SheetHeader className="border-b pb-3">
-                          <SheetTitle>Add Admin User</SheetTitle>
+                          <SheetTitle>
+                            Add Admin User
+                          </SheetTitle>
                           <SheetDescription>
-                            Enter details to create a new admin user.
+                            Enter details to create a new admin
+                            user.
                           </SheetDescription>
                         </SheetHeader>
 
-                        {/* Form – mirrors Users.tsx style */}
                         <form
                           className="space-y-4 py-4 h-[calc(100%-4rem)] flex flex-col"
                           onSubmit={(e) => {
                             e.preventDefault();
-                            if (!createUserMutation.isPending) {
+                            if (
+                              !createUserMutation.isPending
+                            ) {
                               createUserMutation.mutate();
                             }
                           }}
                         >
                           <div className="space-y-1.5">
-                            <Label htmlFor="add-admin-fullname">Full Name</Label>
+                            <Label htmlFor="add-admin-fullname">
+                              Full Name
+                            </Label>
                             <Input
                               id="add-admin-fullname"
                               placeholder="John Doe"
                               value={newName}
-                              onChange={(e) => setNewName(e.target.value)}
+                              onChange={(e) =>
+                                setNewName(e.target.value)
+                              }
                             />
                             {addErrors.name && (
                               <p className="text-xs text-destructive">
@@ -555,13 +644,17 @@ const AdminUsers = () => {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label htmlFor="add-admin-email">Email</Label>
+                            <Label htmlFor="add-admin-email">
+                              Email
+                            </Label>
                             <Input
                               id="add-admin-email"
                               type="email"
                               placeholder="john.doe@example.com"
                               value={newEmail}
-                              onChange={(e) => setNewEmail(e.target.value)}
+                              onChange={(e) =>
+                                setNewEmail(e.target.value)
+                              }
                             />
                             {addErrors.email && (
                               <p className="text-xs text-destructive">
@@ -571,38 +664,51 @@ const AdminUsers = () => {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label htmlFor="add-admin-contact">Contact</Label>
+                            <Label htmlFor="add-admin-contact">
+                              Contact
+                            </Label>
                             <Input
                               id="add-admin-contact"
                               placeholder="+1 (609) 988-44-11"
                               value={newContact}
-                              onChange={(e) => setNewContact(e.target.value)}
+                              onChange={(e) =>
+                                setNewContact(e.target.value)
+                              }
                             />
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label htmlFor="add-admin-role">Admin Role</Label>
+                            <Label htmlFor="add-admin-role">
+                              Admin Role
+                            </Label>
                             <Select
-                              value={newRole}
-                              onValueChange={(val) => setNewRole(val)}
+                              value={newRole || undefined}
+                              onValueChange={(val) =>
+                                setNewRole(val)
+                              }
                             >
                               <SelectTrigger id="add-admin-role">
                                 <SelectValue placeholder="Select role" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Select Role</SelectItem>
                                 {roleOptions.map((r) => (
-                                  <SelectItem key={r.name} value={r.name}>
+                                  <SelectItem
+                                    key={r.name}
+                                    value={r.name}
+                                  >
                                     {r.name
                                       .replace(/_/g, " ")
-                                      .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                      .replace(
+                                        /\b\w/g,
+                                        (c) =>
+                                          c.toUpperCase(),
+                                      )}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
 
-                          {/* Actions pinned bottom */}
                           <div className="mt-auto flex gap-2 pt-2">
                             <Button
                               className="flex-1"
@@ -614,13 +720,17 @@ const AdminUsers = () => {
                                 !newRole
                               }
                             >
-                              {createUserMutation.isPending ? "Saving…" : "Submit"}
+                              {createUserMutation.isPending
+                                ? "Saving…"
+                                : "Submit"}
                             </Button>
                             <Button
                               type="button"
                               variant="outline"
                               className="flex-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:text-red-700"
-                              onClick={() => setIsAddUserOpen(false)}
+                              onClick={() =>
+                                setIsAddUserOpen(false)
+                              }
                             >
                               Cancel
                             </Button>
@@ -676,33 +786,40 @@ const AdminUsers = () => {
                       </tr>
                     )}
 
-                    {!usersLoading && pageUsers.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="py-6 text-center text-muted-foreground"
-                        >
-                          No admin users found.
-                        </td>
-                      </tr>
-                    )}
+                    {!usersLoading &&
+                      pageUsers.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="py-6 text-center text-muted-foreground"
+                          >
+                            No admin users found.
+                          </td>
+                        </tr>
+                      )}
 
                     {!usersLoading &&
                       pageUsers.map((user) => {
-                        const name = user.name || "(No name)";
+                        const name =
+                          user.name || "(No name)";
                         const email = user.email || "—";
                         const initials =
                           (name.match(/\b\w/g) || [])
                             .join("")
                             .substring(0, 2)
                             .toUpperCase() || "MV";
-                        const roles = (user.roles || "").split(",").map((r) => r.trim());
+                        const roles = (user.roles || "")
+                          .split(",")
+                          .map((r) => r.trim());
                         const isRowSuper = roles
                           .map((r) => r.toLowerCase())
                           .includes("superadmin");
 
                         return (
-                          <tr key={user.id} className="border-b last:border-0">
+                          <tr
+                            key={user.id}
+                            className="border-b last:border-0"
+                          >
                             <td className="py-4 pl-2">
                               <input
                                 type="checkbox"
@@ -718,7 +835,9 @@ const AdminUsers = () => {
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <p className="font-medium">{name}</p>
+                                  <p className="font-medium">
+                                    {name}
+                                  </p>
                                   <p className="text-sm text-muted-foreground">
                                     {email}
                                   </p>
@@ -745,23 +864,31 @@ const AdminUsers = () => {
                               )}
                             </td>
                             <td className="py-4 text-sm">
-                              {formatDate(user.created_at)}
+                              {formatDate(
+                                user.created_at,
+                              )}
                             </td>
                             <td className="py-4 text-sm">
-                              {formatDate(user.last_login_at)}
+                              {formatDate(
+                                user.last_login_at,
+                              )}
                             </td>
                             <td className="py-4">
                               <Badge
                                 className={`${statusBadgeClasses(
-                                  user.status
+                                  user.status,
                                 )} backdrop-blur-sm`}
                               >
-                                {user.status || "Inactive"}
+                                {user.status ||
+                                  "Inactive"}
                               </Badge>
                             </td>
                             <td className="py-4">
                               {!isSuperadmin || isRowSuper ? (
-                                <Button variant="ghost" size="sm">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                >
                                   —
                                 </Button>
                               ) : (
@@ -777,28 +904,50 @@ const AdminUsers = () => {
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuLabel>
+                                      Actions
+                                    </DropdownMenuLabel>
                                     <DropdownMenuItem
-                                      onClick={() => handleAction(user, "suspend")}
+                                      onClick={() =>
+                                        handleAction(
+                                          user,
+                                          "suspend",
+                                        )
+                                      }
                                       className="text-amber-600"
                                     >
                                       Suspend
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onClick={() => handleAction(user, "block")}
+                                      onClick={() =>
+                                        handleAction(
+                                          user,
+                                          "block",
+                                        )
+                                      }
                                       className="text-red-600"
                                     >
                                       Block
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onClick={() => handleAction(user, "activate")}
+                                      onClick={() =>
+                                        handleAction(
+                                          user,
+                                          "activate",
+                                        )
+                                      }
                                       className="text-emerald-600"
                                     >
                                       Activate
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
-                                      onClick={() => handleAction(user, "delete")}
+                                      onClick={() =>
+                                        handleAction(
+                                          user,
+                                          "delete",
+                                        )
+                                      }
                                       className="text-red-700"
                                     >
                                       Delete…
@@ -814,12 +963,14 @@ const AdminUsers = () => {
                 </table>
               </div>
 
-              {/* Pager – same semantics as old footer line */}
+              {/* Pager */}
               <div className="flex items-center justify-between pt-4 text-sm">
                 <span className="text-muted-foreground">
                   {totalEntries === 0
                     ? "Showing 0 entries"
-                    : `Showing ${startIndex + 1} to ${endIndex} of ${totalEntries} entries`}
+                    : `Showing ${startIndex + 1} to ${
+                        endIndex
+                      } of ${totalEntries} entries`}
                 </span>
                 <div className="flex gap-1">
                   <Button
@@ -827,7 +978,9 @@ const AdminUsers = () => {
                     size="sm"
                     type="button"
                     disabled={currentPage <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    onClick={() =>
+                      setPage((p) => Math.max(1, p - 1))
+                    }
                   >
                     &lt;
                   </Button>
@@ -840,7 +993,9 @@ const AdminUsers = () => {
                     type="button"
                     disabled={currentPage >= totalPages}
                     onClick={() =>
-                      setPage((p) => Math.min(totalPages, p + 1))
+                      setPage((p) =>
+                        Math.min(totalPages, p + 1),
+                      )
                     }
                   >
                     &gt;
