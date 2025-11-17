@@ -206,10 +206,15 @@ export default function Dashboard() {
                 <SelectValue placeholder={sitesLoading ? "Loading..." : "Choose Website"} />
               </SelectTrigger>
               <SelectContent>
-                {(websites.length === 0 && !sitesLoading)
-                  ? <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
-                  : websites.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.website_name}</SelectItem>)
-                }
+                {websites.length === 0 && !sitesLoading ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
+                ) : (
+                  websites.map((w) => (
+                    <SelectItem key={w.id} value={String(w.id)}>
+                      {w.website_name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
 
@@ -247,7 +252,12 @@ export default function Dashboard() {
               <div className="font-semibold text-destructive">Live stream error.</div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => dsFetchSnapshot()} disabled={!siteId}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => dsFetchSnapshot()}
+                  disabled={!siteId}
+                >
                   Try again
                 </Button>
               </div>
@@ -271,272 +281,256 @@ export default function Dashboard() {
           ))}
         </div>
 
-
-        {/* First paint skeletons */}
-        {showPageSkeleton ? (
-          <div className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2">
-                <Skeleton className="h-[360px] w-full" />
-              </div>
-              <Skeleton className="h-[300px] w-full" />
+        {/* Charts & tables */}
+        <>
+          {/* Charts Row 1 */}
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <TimeGroupedVisits
+                key={`tgv-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                data={data?.time_grouped_visits ?? []}
+                range={normalizeRange(range)}
+                loading={showPageSkeleton}
+                hasData={!!data?.time_grouped_visits?.length}
+                version={analyticsVersion}
+                frameKey={frameKey}
+              />
             </div>
-            <div className="grid gap-6 md:grid-cols-2">
-              <Skeleton className="h-[260px] w-full" />
-              <Skeleton className="h-[260px] w-full" />
-            </div>
-            <div className="grid gap-6 md:grid-cols-3">
-              <Skeleton className="h-[280px] w-full" />
-              <Skeleton className="h-[280px] w-full" />
-              <Skeleton className="h-[280px] w-full" />
-            </div>
+            <EventVolume
+              key={`evt-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              data={data?.events_timeline ?? []}
+              loading={showPageSkeleton}
+              hasData={!!data?.events_timeline?.length}
+              version={analyticsVersion}
+            />
           </div>
-        ) : (
-          data && (
-            <>
-              {/* Charts Row 1 */}
-              <div className="grid gap-6 md:grid-cols-3">
-                <div className="md:col-span-2">
-                  <TimeGroupedVisits
-                    key={`tgv-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                    data={data.time_grouped_visits ?? []}
-                    range={normalizeRange(range)}
-                    loading={false}
-                    hasData={!!data.time_grouped_visits?.length}
-                    version={analyticsVersion}
-                    frameKey={frameKey}
-                  />
-                </div>
-                <EventVolume
-                  key={`evt-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  data={data.events_timeline ?? []}
-                  loading={false}
-                  hasData={!!data.events_timeline?.length}
-                  version={analyticsVersion}
+
+          {/* Tables */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <SectionHeader
+                  title="Top Pages"
+                  info="List of most visited pages. Helps you identify your most engaging content."
                 />
-              </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <TopPagesTable
+                  rows={(data?.top_pages ?? []).map((p: any) => ({
+                    url: p.url,
+                    views: p.views,
+                  }))}
+                />
+              </CardContent>
+            </Card>
 
-              {/* Tables */}
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <SectionHeader
-                      title="Top Pages"
-                      info="List of most visited pages. Helps you identify your most engaging content."
-                    />
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <TopPagesTable
-                      rows={(data.top_pages ?? []).map((p: any) => ({
-                        url: p.url,
-                        views: p.views,
-                      }))}
-                    />
-                  </CardContent>
-                </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <SectionHeader
+                  title="Referrers"
+                  info="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution."
+                />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ReferrersTable
+                  rows={(data?.referrers ?? []).map((r: any) => ({
+                    domain: r.domain,
+                    visitors: r.visitors,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          </div>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <SectionHeader
-                      title="Referrers"
-                      info="Breakdown of external sites that sent visitors to you. Useful for traffic source attribution."
-                    />
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ReferrersTable
-                      rows={(data.referrers ?? []).map((r: any) => ({
-                        domain: r.domain,
-                        visitors: r.visitors,
-                      }))}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Geographic */}
-              <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                  <Card className="h-[660px]">
-                    <CardHeader className="px-6 pt-6 pb-0 space-y-1">
-                      <SectionHeader
-                        title="World Visitors"
-                        info="Live map of where your visitors are located. Great for identifying geographic interest and potential target regions."
-                      />
-                      <p className="text-sm text-muted-foreground px-4">
-                        {range === "24h"
-                          ? "Past 24 hours"
-                          : range === "7d"
-                          ? "Past 7 days"
-                          : range === "30d"
-                          ? "Past 30 days"
-                          : "Past 12 months"}
-                      </p>
-                    </CardHeader>
-
-                    <CardContent className="pt-2 h-[540px]">
-                      <WorldMap
-                        key={`map-${siteId}-${range}`}
-                        countries={data.countries ?? []}
-                        cities={liveCities}
-                        height={540}
-                      />
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div>
-                  <Card className="h-[660px]">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <SectionHeader
-                        title="Visits by Country"
-                        info="Table view of visitor counts by country. Helps you prioritize markets and tailor content to regions."
-                      />
-                    </CardHeader>
-                    <CardContent className="h-[540px] overflow-auto">
-                      <CountryVisits countries={data.countries ?? []} />
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-
-              {/* Heatmap */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
+          {/* Geographic */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <Card className="h-[660px]">
+                <CardHeader className="px-6 pt-6 pb-0 space-y-1">
                   <SectionHeader
-                    title="Visitor Density Calendar"
-                    info="Shows how many visitors came to your site on each day of the year. Helps track long-term trends."
+                    title="World Visitors"
+                    info="Live map of where your visitors are located. Great for identifying geographic interest and potential target regions."
                   />
+                  <p className="text-sm text-muted-foreground px-4">
+                    {range === "24h"
+                      ? "Past 24 hours"
+                      : range === "7d"
+                      ? "Past 7 days"
+                      : range === "30d"
+                      ? "Past 30 days"
+                      : "Past 12 months"}
+                  </p>
                 </CardHeader>
-                <CardContent>
-                  <VisitorsHeatmap
-                    key={`heat-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                    data={data.calendar_density ?? []}
-                    height={220}
+
+                <CardContent className="pt-2 h-[540px]">
+                  <WorldMap
+                    key={`map-${siteId}-${range}`}
+                    countries={data?.countries ?? []}
+                    cities={liveCities}
+                    height={540}
                   />
                 </CardContent>
               </Card>
+            </div>
 
+            <div>
+              <Card className="h-[660px]">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <SectionHeader
+                    title="Visits by Country"
+                    info="Table view of visitor counts by country. Helps you prioritize markets and tailor content to regions."
+                  />
+                </CardHeader>
+                <CardContent className="h-[540px] overflow-auto">
+                  <CountryVisits countries={data?.countries ?? []} />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
-              {/* Lines */}
-              <div className="grid gap-6 md:grid-cols-2">
-                <UniqueReturning
-                  key={`ur-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  data={data.unique_vs_returning ?? []}
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`conv-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Conversions"
-                  info="Counts completed conversions like thank-you page loads or order completions."
-                  current={data.conversions_timeline ?? []}
-                  previous={data.conversions_previous_timeline ?? []}
-                  color="#8b5cf6"
-                  filled
-                  version={analyticsVersion}
-                />
-              </div>
+          {/* Heatmap */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <SectionHeader
+                title="Visitor Density Calendar"
+                info="Shows how many visitors came to your site on each day of the year. Helps track long-term trends."
+              />
+            </CardHeader>
+            <CardContent>
+              <VisitorsHeatmap
+                key={`heat-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                data={data?.calendar_density ?? []}
+                height={220}
+              />
+            </CardContent>
+          </Card>
 
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <PerformanceLine
-                  key={`imp-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Impressions"
-                  info="Displays the total number of pageviews (impressions) recorded over time. The dotted line shows the previous period for comparison."
-                  current={data.impressions_timeline ?? []}
-                  previous={data.impressions_previous_timeline ?? []}
-                  color="#22c55e"
-                  filled
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`clk-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Clicks"
-                  info="Tracks click events across your site, such as product clicks or outbound links."
-                  current={data.clicks_timeline ?? []}
-                  previous={data.clicks_previous_timeline ?? []}
-                  color="#3b82f6"
-                  filled
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`srch-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="Visitors from Search"
-                  info="Shows how many unique visitors arrived from search engines like Google or Bing."
-                  current={data.search_visitors_timeline ?? []}
-                  previous={data.search_visitors_previous_timeline ?? []}
-                  color="#f59e0b"
-                  filled
-                  version={analyticsVersion}
-                />
-                <PerformanceLine
-                  key={`all-${frameKey}-${seriesSig}-${range}-${siteId}`}
-                  title="All Visitors"
-                  info="Number of unique visitors per time bucket."
-                  current={(data as any)?.unique_visitors_timeline ?? []}
-                  previous={(data as any)?.previous_unique_visitors_timeline ?? []}
-                  color="#0ea5e9"
-                  filled
-                  version={analyticsVersion}
-                />
-              </div>
+          {/* Lines */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <UniqueReturning
+              key={`ur-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              data={data?.unique_vs_returning ?? []}
+              loading={showPageSkeleton}
+              version={analyticsVersion}
+            />
+            <PerformanceLine
+              key={`conv-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              title="Conversions"
+              info="Counts completed conversions like thank-you page loads or order completions."
+              current={data?.conversions_timeline ?? []}
+              previous={data?.conversions_previous_timeline ?? []}
+              color="#8b5cf6"
+              filled
+              loading={showPageSkeleton}
+              version={analyticsVersion}
+            />
+          </div>
 
-              {/* Donuts */}
-              <div className="grid gap-6 md:grid-cols-3">
-                <Donut
-                  key={`br-${frameKey}-${seriesSig}`}
-                  title="Browsers"
-                  info="Breakdown of which web browsers your visitors are using (e.g. Chrome, Safari). Helps with compatibility decisions."
-                  data={data.browsers ?? []}
-                  nameKey="name"
-                  valueKey="count"
-                />
-                <Donut
-                  key={`dev-${frameKey}-${seriesSig}`}
-                  title="Devices"
-                  info="Shows whether visitors are browsing from phones, tablets, or desktops. Useful for responsive design and mobile prioritization."
-                  data={data.devices ?? []}
-                  nameKey="type"
-                  valueKey="count"
-                />
-                <Donut
-                  key={`os-${frameKey}-${seriesSig}`}
-                  title="OS"
-                  info="Distribution of operating systems like Windows, macOS, Android, etc. Good for optimizing user experience."
-                  data={data.os ?? []}
-                  nameKey="name"
-                  valueKey="count"
-                />
-              </div>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <PerformanceLine
+              key={`imp-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              title="Impressions"
+              info="Displays the total number of pageviews (impressions) recorded over time. The dotted line shows the previous period for comparison."
+              current={data?.impressions_timeline ?? []}
+              previous={data?.impressions_previous_timeline ?? []}
+              color="#22c55e"
+              filled
+              loading={showPageSkeleton}
+              version={analyticsVersion}
+            />
+            <PerformanceLine
+              key={`clk-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              title="Clicks"
+              info="Tracks click events across your site, such as product clicks or outbound links."
+              current={data?.clicks_timeline ?? []}
+              previous={data?.clicks_previous_timeline ?? []}
+              color="#3b82f6"
+              filled
+              loading={showPageSkeleton}
+              version={analyticsVersion}
+            />
+            <PerformanceLine
+              key={`srch-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              title="Visitors from Search"
+              info="Shows how many unique visitors arrived from search engines like Google or Bing."
+              current={data?.search_visitors_timeline ?? []}
+              previous={data?.search_visitors_previous_timeline ?? []}
+              color="#f59e0b"
+              filled
+              loading={showPageSkeleton}
+              version={analyticsVersion}
+            />
+            <PerformanceLine
+              key={`all-${frameKey}-${seriesSig}-${range}-${siteId}`}
+              title="All Visitors"
+              info="Number of unique visitors per time bucket."
+              current={(data as any)?.unique_visitors_timeline ?? []}
+              previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+              color="#0ea5e9"
+              filled
+              loading={showPageSkeleton}
+              version={analyticsVersion}
+            />
+          </div>
 
-              {/* UTMs */}
-              <div className="grid gap-6 md:grid-cols-3">
-                <Card className="md:col-span-2">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <SectionHeader
-                      title="UTM Campaign URLs"
-                      info="List of pages with UTM campaign parameters and how many visitors they attracted. Helps evaluate campaign performance."
-                    />
-                  </CardHeader>
-                  <CardContent>
-                    <UTMCampaignsTable rows={data.utm_campaigns ?? []} />
-                  </CardContent>
-                </Card>
+          {/* Donuts */}
+          <div className="grid gap-6 md:grid-cols-3">
+            <Donut
+              key={`br-${frameKey}-${seriesSig}`}
+              title="Browsers"
+              info="Breakdown of which web browsers your visitors are using (e.g. Chrome, Safari). Helps with compatibility decisions."
+              data={data?.browsers ?? []}
+              nameKey="name"
+              valueKey="count"
+              loading={showPageSkeleton}
+            />
+            <Donut
+              key={`dev-${frameKey}-${seriesSig}`}
+              title="Devices"
+              info="Shows whether visitors are browsing from phones, tablets, or desktops. Useful for responsive design and mobile prioritization."
+              data={data?.devices ?? []}
+              nameKey="type"
+              valueKey="count"
+              loading={showPageSkeleton}
+            />
+            <Donut
+              key={`os-${frameKey}-${seriesSig}`}
+              title="OS"
+              info="Distribution of operating systems like Windows, macOS, Android, etc. Good for optimizing user experience."
+              data={data?.os ?? []}
+              nameKey="name"
+              valueKey="count"
+              loading={showPageSkeleton}
+            />
+          </div>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <SectionHeader
-                      title="UTM Sources"
-                      info="Breakdown of traffic by utm_source tag. Useful for measuring campaign channel effectiveness."
-                    />
-                  </CardHeader>
-                  <CardContent>
-                    <UTMSourcesTable rows={data.utm_sources ?? []} />
-                  </CardContent>
-                </Card>
-              </div>
+          {/* UTMs */}
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card className="md:col-span-2">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <SectionHeader
+                  title="UTM Campaign URLs"
+                  info="List of pages with UTM campaign parameters and how many visitors they attracted. Helps evaluate campaign performance."
+                />
+              </CardHeader>
+              <CardContent>
+                <UTMCampaignsTable rows={data?.utm_campaigns ?? []} />
+              </CardContent>
+            </Card>
 
-            </>
-          )
-        )}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <SectionHeader
+                  title="UTM Sources"
+                  info="Breakdown of traffic by utm_source tag. Useful for measuring campaign channel effectiveness."
+                />
+              </CardHeader>
+              <CardContent>
+                <UTMSourcesTable rows={data?.utm_sources ?? []} />
+              </CardContent>
+            </Card>
+          </div>
+        </>
       </div>
     </DashboardLayout>
   );
