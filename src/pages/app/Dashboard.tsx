@@ -134,12 +134,49 @@ export default function Dashboard() {
   const showPageSkeleton = !firstPaintDone || isLoading;
 
   const topCards = [
-    { key: "live", name: "Live Visitors", value: liveCount ?? data?.live_visitors ?? 0, icon: Users, change: null as number | null },
-    { key: "unique", name: "Total Visitors", value: data?.unique_visitors?.total ?? 0, icon: Eye, change: data?.unique_visitors?.delta ?? null },
-    { key: "bounce", name: "Bounce Rate", value: (data?.bounce_rate ?? 0) + "%", icon: TrendingUp, change: data?.bounce_rate_delta ?? null, reverseColor: true },
-    { key: "avg", name: "Avg. Session", value: data?.avg_duration ?? "--", icon: Clock, change: data?.avg_duration_delta ?? null },
-    { key: "multipage", name: "Multi-Page Visits", value: data?.multi_page_visits ?? "--", icon: MousePointerClick, change: data?.multi_page_visits_delta ?? null },
+    {
+      key: "live",
+      name: "Live Visitors",
+      value: liveCount ?? data?.live_visitors ?? 0,
+      icon: Users,
+      change: null as number | null,
+      info: "Number of users currently active on your site in real time.",
+    },
+    {
+      key: "unique",
+      name: "Total Visitors",
+      value: data?.unique_visitors?.total ?? 0,
+      icon: Eye,
+      change: data?.unique_visitors?.delta ?? null,
+      info: "Unique users who visited during the selected time range.",
+    },
+    {
+      key: "bounce",
+      name: "Bounce Rate",
+      value: (data?.bounce_rate ?? 0) + "%",
+      icon: TrendingUp,
+      change: data?.bounce_rate_delta ?? null,
+      reverseColor: true,
+      info: "Percentage of visitors who left after viewing only one page. Lower is better.",
+    },
+    {
+      key: "avg",
+      name: "Avg. Session",
+      value: data?.avg_duration ?? "--",
+      icon: Clock,
+      change: data?.avg_duration_delta ?? null,
+      info: "Average time users spent on your site during a session.",
+    },
+    {
+      key: "multipage",
+      name: "Multi-Page Visits",
+      value: data?.multi_page_visits ?? "--",
+      icon: MousePointerClick,
+      change: data?.multi_page_visits_delta ?? null,
+      info: "Sessions with more than one page viewed. Indicates deeper user engagement.",
+    },
   ];
+
 
   if (!isAuthenticated) return null;
 

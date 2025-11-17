@@ -1,5 +1,7 @@
 // src/lib/auth/adminAuth.ts
 
+import { apiBase } from "../api";
+
 interface AdminAccessToken {
   token: string;
   exp: number;
@@ -11,7 +13,8 @@ declare global {
   }
 }
 
-const API = "https://api.modovisa.com";
+// Central API base (same as rest of app)
+const API = apiBase();
 const REFRESH_URL = `${API}/api/refresh-token?aud=admin`;
 
 // Parse JWT payload
@@ -73,6 +76,18 @@ async function ensureAdminAccess(): Promise<AdminAccessToken> {
   return window.__mvAdminAccess;
 }
 
+function isAbsoluteUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+function withAdminBase(url: string): string {
+  // If caller passes a full URL, keep it; if they pass "/api/…", prefix with API.
+  if (isAbsoluteUrl(url)) return url;
+  // Ensure exactly one slash between base and path
+  if (url.startsWith("/")) return `${API}${url}`;
+  return `${API}/${url}`;
+}
+
 // Secure fetch for admin APIs
 export async function secureAdminFetch(
   url: string,
@@ -85,11 +100,13 @@ export async function secureAdminFetch(
     throw new Error("admin_unauthorized");
   }
 
+  const fullUrl = withAdminBase(url);
+
   const headers = new Headers(options.headers || {});
   headers.set("Authorization", `Bearer ${window.__mvAdminAccess!.token}`);
 
   // First attempt
-  const firstAttempt = await fetch(url, {
+  const firstAttempt = await fetch(fullUrl, {
     ...options,
     headers,
     credentials: "include",
@@ -101,7 +118,7 @@ export async function secureAdminFetch(
       await refreshAdmin();
       headers.set("Authorization", `Bearer ${window.__mvAdminAccess!.token}`);
 
-      return await fetch(url, {
+      return await fetch(withAdminBase(url), {
         ...options,
         headers,
         credentials: "include",
