@@ -387,6 +387,7 @@ export default function Dashboard() {
                 <PerformanceLine
                   key={`conv-${frameKey}-${seriesSig}-${range}-${siteId}`}
                   title="Conversions"
+                  info="Counts completed conversions like thank-you page loads or order completions."
                   current={data.conversions_timeline ?? []}
                   previous={data.conversions_previous_timeline ?? []}
                   color="#8b5cf6"
@@ -394,6 +395,50 @@ export default function Dashboard() {
                   version={analyticsVersion}
                 />
               </div>
+
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <PerformanceLine
+                  key={`imp-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="Impressions"
+                  info="Displays the total number of pageviews (impressions) recorded over time. The dotted line shows the previous period for comparison."
+                  current={data.impressions_timeline ?? []}
+                  previous={data.impressions_previous_timeline ?? []}
+                  color="#22c55e"
+                  filled
+                  version={analyticsVersion}
+                />
+                <PerformanceLine
+                  key={`clk-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="Clicks"
+                  info="Tracks click events across your site, such as product clicks or outbound links."
+                  current={data.clicks_timeline ?? []}
+                  previous={data.clicks_previous_timeline ?? []}
+                  color="#3b82f6"
+                  filled
+                  version={analyticsVersion}
+                />
+                <PerformanceLine
+                  key={`srch-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="Visitors from Search"
+                  info="Shows how many unique visitors arrived from search engines like Google or Bing."
+                  current={data.search_visitors_timeline ?? []}
+                  previous={data.search_visitors_previous_timeline ?? []}
+                  color="#f59e0b"
+                  filled
+                  version={analyticsVersion}
+                />
+                <PerformanceLine
+                  key={`all-${frameKey}-${seriesSig}-${range}-${siteId}`}
+                  title="All Visitors"
+                  info="Number of unique visitors per time bucket."
+                  current={(data as any)?.unique_visitors_timeline ?? []}
+                  previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+                  color="#0ea5e9"
+                  filled
+                  version={analyticsVersion}
+                />
+              </div>
+
 
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <PerformanceLine
