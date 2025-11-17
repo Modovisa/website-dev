@@ -30,12 +30,15 @@ export function KpiCard({
   reverseColor,
   loading,
 }: KpiCardProps) {
-  const displayValue = typeof value === "number" ? nf(value) : value;
+  // ✅ Use nf.format, not nf(...)
+  const displayValue =
+    typeof value === "number" ? nf.format(value) : value;
 
   const hasChange = typeof change === "number" && !Number.isNaN(change);
   const numericChange = hasChange ? Number(change) : 0;
 
-  const goodIsUp = !reverseColor; // normal KPIs: up = good. reverseColor: down = good.
+  // normal KPIs: up = good. reverseColor: down = good.
+  const goodIsUp = !reverseColor;
   const isGood = goodIsUp ? numericChange >= 0 : numericChange <= 0;
   const changeColor = isGood ? "text-green-600" : "text-red-600";
   const arrow = numericChange >= 0 ? "↑" : "↓";
