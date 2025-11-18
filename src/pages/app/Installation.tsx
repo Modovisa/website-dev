@@ -769,7 +769,7 @@ function modovisa_page_attachments(array &$attachments) {
 
         {/* Installation instructions – platforms */}
         <section className="space-y-6" id="installation-instructions">
-          <Badge className="inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-sky-500/10 text-sky-600 border border-sky-500/40 rounded-full text-[12px] font-medium">
+          <Badge className="hover:bg-sky-500/10 inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-sky-500/10 text-sky-600 border border-sky-500/40 rounded-full text-[12px] font-medium">
             Installation Instructions
           </Badge>
 
