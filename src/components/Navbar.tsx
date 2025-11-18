@@ -90,9 +90,12 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
               <div className="pt-4 border-t">
                 {isAuthed ? (
                   <>
-                    <Link to="/app/dashboard">
-                      <Button variant="outline" className="w-full mb-2">
-                        Dashboard
+                    <Link to="/app/live-tracking">
+                      <Button
+                        variant="outline"
+                        className="w-full mb-2 bg-white/50 hover:bg-white/75 border-transparent text-foreground font-semibold transition-colors"
+                      >
+                        Live Tracking &gt;
                       </Button>
                     </Link>
                     <Button
@@ -163,12 +166,12 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
         <div className="hidden md:flex items-center gap-4">
           {isAuthed ? (
             <>
-              <Link to="/app/dashboard">
+              <Link to="/app/live-tracking">
                 <Button
                   variant="outline"
-                  className="rounded-md px-6 py-2.5 text-base font-semibold"
+                  className="rounded-md px-6 py-2.5 text-base font-semibold bg-white/50 hover:bg.white/75 border-transparent text-foreground transition-colors"
                 >
-                  Dashboard
+                  Live Tracking &gt;
                 </Button>
               </Link>
               <Button
