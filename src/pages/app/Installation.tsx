@@ -532,7 +532,7 @@ function modovisa_page_attachments(array &$attachments) {
         return {
           label: "Inactive (no activity in last 24 hours)",
           className:
-            "bg-amber-500/15 text-amber-700 border border-amber-500/40",
+            "inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent ml-2 bg-warning text-primary-foreground text-xs",
         };
       case "unknown":
       default:
@@ -769,7 +769,7 @@ function modovisa_page_attachments(array &$attachments) {
 
         {/* Installation instructions – platforms */}
         <section className="space-y-6" id="installation-instructions">
-          <Badge className="bg-sky-500/10 text-sky-600 border border-sky-500/40 rounded-full text-[11px] font-medium">
+          <Badge className="inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-sky-500/10 text-sky-600 border border-sky-500/40 rounded-full text-[12px] font-medium">
             Installation Instructions
           </Badge>
 
@@ -1139,7 +1139,7 @@ function modovisa_page_attachments(array &$attachments) {
         {/* Custom event tracking guide */}
         <section className="space-y-6" id="custom-event-tracking-guide">
           <hr className="border-border/60" />
-          <Badge className="bg-amber-500/10 text-amber-600 border border-amber-500/40 rounded-full text-[11px] font-medium">
+          <Badge className="inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-amber-500/10 text-amber-600 border border-amber-500/40 rounded-full text-[12px] font-medium">
             Custom Event Instructions
           </Badge>
 
@@ -1291,7 +1291,7 @@ function modovisa_page_attachments(array &$attachments) {
         {/* App SDK section */}
         <section className="space-y-6" id="app-sdk-tracking-guide">
           <hr className="border-border/60" />
-          <Badge className="bg-purple-500/10 text-purple-600 border border-purple-500/40 rounded-full text-[11px] font-medium">
+          <Badge className="inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-purple-500/10 text-purple-600 border border-purple-500/40 rounded-full text-[12px] font-medium">
             App SDK (iOS / Android / WebView / RN)
           </Badge>
 
@@ -1322,7 +1322,7 @@ function modovisa_page_attachments(array &$attachments) {
 
               {/* Step 1 – include SDK */}
               <div className="space-y-3">
-                <Badge className="bg-muted text-xs font-medium rounded-full">
+                <Badge className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Step 1 — Include the SDK
                 </Badge>
                 <p>Use the minified build in production:</p>
@@ -1331,7 +1331,7 @@ function modovisa_page_attachments(array &$attachments) {
 
               {/* Step 2 – initialize */}
               <div className="space-y-3">
-                <Badge className="bg-muted text-xs font-medium rounded-full">
+                <Badge className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Step 2 — Initialize
                 </Badge>
                 <p>
@@ -1454,7 +1454,7 @@ function modovisa_page_attachments(array &$attachments) {
 
               {/* Step 4 – verify */}
               <div className="space-y-3">
-                <Badge className="bg-muted text-xs font-medium rounded-full">
+                <Badge className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Step 3 — Verify
                 </Badge>
                 <ol className="list-decimal pl-5 text-xs md:text-sm space-y-1">
