@@ -45,8 +45,6 @@ import {
 } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 
-import { useLiveSimStream, DemoVisitor } from "@/hooks/useLiveSimStream";
-
 // TypeScript declaration for Gradient + Bootstrap
 declare global {
   interface Window {
