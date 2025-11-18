@@ -276,9 +276,9 @@ const LandingLiveDemo = () => {
   const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
   const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
 
-  // Auto-select a visitor when stream updates (using shared store selection)
+  // Auto-select a visitor when stream updates (only if nothing is selected yet)
   useEffect(() => {
-    if (selectedId && storeSelectedVisitor) return;
+    if (selectedId) return;
 
     const firstActive = activeVisitors[0];
     const firstRecent = recentVisitors[0];
@@ -287,16 +287,20 @@ const LandingLiveDemo = () => {
     if (next) {
       selectVisitor(next.id);
     }
-  }, [
-    selectedId,
-    storeSelectedVisitor,
-    activeVisitors,
-    recentVisitors,
-    selectVisitor,
-  ]);
+  }, [selectedId, activeVisitors, recentVisitors, selectVisitor]);
+
+  // Derive selected visitor by id to ensure sidebar clicks drive the right pane
+  const selectedById: LiveSimVisitor | null = useMemo(() => {
+    if (!selectedId) return null;
+    return visitors.find((v) => v.id === selectedId) ?? null;
+  }, [selectedId, visitors]);
 
   const selectedVisitor: LiveSimVisitor | null =
-    storeSelectedVisitor || activeVisitors[0] || recentVisitors[0] || null;
+    selectedById ||
+    storeSelectedVisitor ||
+    activeVisitors[0] ||
+    recentVisitors[0] ||
+    null;
 
   const selectedPagesForTimeline =
     selectedVisitor && selectedVisitor.journey.length > 0
@@ -749,8 +753,8 @@ const LandingLiveDemo = () => {
                   </h4>
                 </div>
 
-                <div className="px-3 pb-4 flex-1 overflow-hidden">
-                  <div className="h-[700px] md:h-[740px] overflow-y-auto pr-1">
+                <div className="px-3 pb-4">
+                  <div className="max-h-[720px] overflow-y-auto pr-1">
                     {selectedVisitor && selectedPagesForTimeline.length > 0 ? (
                       <ul className="list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
@@ -1056,7 +1060,7 @@ const Index = () => {
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
               Intuitive Analytics
               <br />
-              <span className="bg-gradient-to-r from-white to white/60 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
                 for Modern Teams
               </span>
             </h1>
