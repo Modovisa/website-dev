@@ -5,15 +5,19 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, ShieldCheck } from "lucide-react";
+import { useTrackingScriptToken } from "@/hooks/useTrackingScriptToken";
 
 const WordPress = () => {
+  const { trackingToken } = useTrackingScriptToken();
+  const tokenPlaceholder = trackingToken || "YOUR_TRACKING_TOKEN";
+
   const copyScriptToClipboard = () => {
     const code = `<script>
 !function(){
   var s=document.createElement("script");
   s.src="https://cdn.modovisa.com/modovisa.min.js";
   s.async=1;
-  s.dataset.token="YOUR_TRACKING_TOKEN";
+  s.dataset.token="${tokenPlaceholder}";
   document.head.appendChild(s);
 }();
 </script>
@@ -29,7 +33,7 @@ const WordPress = () => {
       var s=document.createElement("script");
       s.src="https://cdn.modovisa.com/modovisa.min.js";
       s.async=1;
-      s.dataset.token="YOUR_TRACKING_TOKEN";
+      s.dataset.token="${tokenPlaceholder}";
       document.head.appendChild(s);
     }();
   </script>
@@ -57,7 +61,8 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
           {/* Introduction */}
           <div className="mb-8">
             <p className="text-lg text-muted-foreground mb-4">
-              The easiest way to add Modovisa to WordPress is our official plugin. Paste your <span className="font-semibold text-foreground">Tracking Token</span> into
+              The easiest way to add Modovisa to WordPress is our official plugin. Paste your{" "}
+              <span className="font-semibold text-foreground">Tracking Token</span> into
               the plugin settings and you're done. Admin pages (wp-admin) are automatically excluded from tracking.
             </p>
 
@@ -174,7 +179,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
   var s=document.createElement("script");
   s.src="https://cdn.modovisa.com/modovisa.min.js";
   s.async=1;
-  s.dataset.token="`}<span className="text-green-400">YOUR_TRACKING_TOKEN</span>{`";
+  s.dataset.token="`}<span className="text-green-400">{tokenPlaceholder}</span>{`";
   document.head.appendChild(s);
 }();
 </script>
@@ -218,7 +223,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
       var s=document.createElement("script");
       s.src="https://cdn.modovisa.com/modovisa.min.js";
       s.async=1;
-      s.dataset.token="`}<span className="text-green-400">YOUR_TRACKING_TOKEN</span>{`";
+      s.dataset.token="`}<span className="text-green-400">{tokenPlaceholder}</span>{`";
       document.head.appendChild(s);
     }();
   </script>
