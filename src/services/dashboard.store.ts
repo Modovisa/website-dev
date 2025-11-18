@@ -458,7 +458,7 @@ async function doFetchSnapshot(addToSeeded: boolean) {
     state.siteId
   )}`;
 
-    try {
+  try {
     const res = await secureFetch(url, { method: "GET" });
     if (!res.ok) {
       console.error(
@@ -520,37 +520,47 @@ async function doFetchSnapshot(addToSeeded: boolean) {
   }
 }
 
+
 /** Hard refresh that ignores the one-time 'seeded' guard */
 export async function fetchSnapshotHard() {
   await doFetchSnapshot(false);
 }
 
 /** COMPAT alias for Dashboard.tsx */
+/** Single refresh entry point used by Dashboard.tsx */
 export async function fetchSnapshot() {
-  const r = normalizeRange(state.range);
   if (!state.siteId) {
     console.warn("[REFRESH] Ignored: no siteId in state");
     return;
   }
 
+  const r = normalizeRange(state.range);
+
   if (r === "24h") {
-    // 24h = WS-only, so we force a WS reconnect + series request
-    console.log("[REFRESH] 24h: forcing WS reconnect + fresh series", {
+    // 24h = WS-only. If WS is already open, just ask for a fresh series.
+    console.log("[REFRESH] 24h: requesting fresh WS series", {
       siteId: state.siteId,
       range: r,
+      wsState: ws?.readyState,
     });
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      requestSeries(true); // force = true, bypass throttle
+      return;
+    }
+
+    // If WS isn't open, reconnect; onopen will seed + request series.
     await connectWS(true);
-  } else {
-    // Non-24h ranges: always hit REST, ignoring the 'seeded' guard
-    console.log("[REFRESH] non-24h: forcing REST snapshot", {
-      siteId: state.siteId,
-      range: r,
-    });
-    await fetchSnapshotHard();
+    return;
   }
+
+  // Non-24h ranges: force a REST snapshot (ignores the seeded guard)
+  console.log("[REFRESH] non-24h: forcing REST snapshot", {
+    siteId: state.siteId,
+    range: r,
+  });
+  await fetchSnapshotHard();
 }
-
-
 
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   const res = await secureFetch(`${API}/api/tracking-websites`, {
@@ -625,10 +635,11 @@ async function getWSTicket(): Promise<string> {
   }
 }
 
-function requestSeries() {
+function requestSeries(force = false) {
   const now = Date.now();
-  if (now - lastSeriesRequestAt < REQUEST_SERIES_THROTTLE_MS) return;
+  if (!force && now - lastSeriesRequestAt < REQUEST_SERIES_THROTTLE_MS) return;
   lastSeriesRequestAt = now;
+
   try {
     ws?.send(
       JSON.stringify({
@@ -636,10 +647,15 @@ function requestSeries() {
         range: normalizeRange(state.range),
       })
     );
-  } catch {
-    // ignore
+    console.log("[REFRESH] request_series sent", {
+      range: normalizeRange(state.range),
+      force,
+    });
+  } catch (e) {
+    console.warn("[REFRESH] request_series failed", e);
   }
 }
+
 
 export async function connectWS(forceNew = false) {
   if (!state.siteId) return;
