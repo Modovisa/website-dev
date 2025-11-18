@@ -458,7 +458,7 @@ async function doFetchSnapshot(addToSeeded: boolean) {
     state.siteId
   )}`;
 
-  try {
+    try {
     const res = await secureFetch(url, { method: "GET" });
     if (!res.ok) {
       console.error(
@@ -470,13 +470,32 @@ async function doFetchSnapshot(addToSeeded: boolean) {
       return;
     }
 
+    // --- prev snapshot summary BEFORE we overwrite state ---
+    const prevData = state.data as any;
+    const prevTgv = (prevData?.time_grouped_visits ?? []) as any[];
+    const prevViews = sumBy(prevTgv, "views");
+    const prevVisitors = sumBy(prevTgv, "visitors");
+    const prevTotalUnique = Number(prevData?.unique_visitors?.total ?? 0);
+
     let data = (await res.json()) as DashboardPayload;
     (data as any).range = r;
+
+    const nextTgv = ((data as any)?.time_grouped_visits ?? []) as any[];
+    const nextViews = sumBy(nextTgv, "views");
+    const nextVisitors = sumBy(nextTgv, "visitors");
+    const nextTotalUnique = Number((data as any)?.unique_visitors?.total ?? 0);
 
     logTgvDelta(
       "REST",
       state.data?.time_grouped_visits as any[],
       (data as any)?.time_grouped_visits as any[]
+    );
+
+    console.log(
+      `[REST REFRESH] range=${r} site=${state.siteId} ` +
+        `views: ${prevViews} → ${nextViews} (Δ=${nextViews - prevViews}), ` +
+        `visitors: ${prevVisitors} → ${nextVisitors} (Δ=${nextVisitors - prevVisitors}), ` +
+        `unique_total: ${prevTotalUnique} → ${nextTotalUnique} (Δ=${nextTotalUnique - prevTotalUnique})`
     );
 
     saveSnapshot(state.siteId!, r, data);
