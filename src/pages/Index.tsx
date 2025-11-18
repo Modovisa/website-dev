@@ -39,24 +39,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 
-import {
-  useLiveSimStream,
-  DemoVisitor,
-} from "@/hooks/useLiveSimStream";
+import { useLiveSimStream, DemoVisitor } from "@/hooks/useLiveSimStream";
 
 // TypeScript declaration for Gradient + Bootstrap
 declare global {
@@ -268,16 +257,6 @@ const LandingLiveDemo = () => {
   const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
   const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
 
-  // "current website" for the demo dropdown
-  const demoWebsites = [
-    {
-      id: 1,
-      website_name: "Demo Moda Store",
-      domain: "demomoda.com",
-    },
-  ];
-  const [currentWebsite, setCurrentWebsite] = useState(demoWebsites[0]);
-
   // Auto-select a visitor when stream updates
   useEffect(() => {
     if (selectedId && visitors.some((v) => v.id === selectedId)) return;
@@ -311,33 +290,11 @@ const LandingLiveDemo = () => {
   const VisitorSidebar = () => (
     <div className="w-full h-full bg-background flex flex-col border rounded-2xl">
       <div className="p-6 space-y-4 pt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Visitors</h2>
+        <h2 className="text-2xl font-bold">Visitors</h2>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" className="h-9 px-3">
-                {currentWebsite ? currentWebsite.website_name : "Choose Website"}
-                <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Choose Website</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {demoWebsites.map((site) => (
-                <DropdownMenuItem
-                  key={site.id}
-                  onClick={() => setCurrentWebsite(site)}
-                >
-                  {site.website_name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="bg-[#dff7fb] text-[#055160] rounded px-4 py-2 text-center text-sm font-medium">
-          {currentWebsite?.domain || "Loading domain..."}
+        {/* Domain pill – matches live tracking look without dropdown */}
+        <div className="bg-[#dff7fb] text-[#00b6ff] rounded-lg px-4 py-3 text-center text-sm font-medium">
+          demomoda.com
         </div>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -661,8 +618,8 @@ const LandingLiveDemo = () => {
 
         {/* Live visitor tracking simulation */}
         <Card className="rounded-3xl shadow-sm border pb-4">
-          <CardContent className="p-3 md:p-6">
-            <div className="grid gap-4 md:gap-6 md:grid-cols-[340px_minmax(0,1fr)]">
+          <CardContent className="p-3 md:p-6 min-h-[660px]">
+            <div className="grid h-full gap-4 md:gap-6 md:grid-cols-[340px_minmax(0,1fr)]">
               {/* Sidebar – Visitors (mirrors live tracking layout) */}
               <VisitorSidebar />
 
@@ -722,7 +679,7 @@ const LandingLiveDemo = () => {
                 </div>
 
                 <div className="px-3 pb-4 flex-1 overflow-hidden">
-                  <div className="h-[260px] overflow-y-auto pr-1">
+                  <div className="h-[300px] md:h-[340px] overflow-y-auto pr-1">
                     {selectedVisitor && selectedPagesForTimeline.length > 0 ? (
                       <ul className="list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
