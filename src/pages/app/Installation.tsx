@@ -525,7 +525,7 @@ function modovisa_page_attachments(array &$attachments) {
         return {
           label: "Active within last 24 hours",
           className:
-            "bg-emerald-500/15 text-emerald-700 border border-emerald-500/40",
+            "inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent ml-2 bg-success text-primary-foreground text-xs",
         };
       case "inactive":
       case "no-activity":
@@ -725,7 +725,7 @@ function modovisa_page_attachments(array &$attachments) {
                   variant="outline"
                   className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/40 text-[11px]"
                 >
-                  <span className="opacity-80 mr-0.5">Token:</span>
+                  <span className="opacity-80 mr-0.5">Tracking Token:</span>
                   <button
                     type="button"
                     onClick={handleCopyToken}
