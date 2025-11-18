@@ -121,9 +121,23 @@ const Installation = () => {
   const [overlapUntil, setOverlapUntil] = useState<string | null>(null);
   const [overlapEta, setOverlapEta] = useState<string>("");
 
+  const [tokenCopied, setTokenCopied] = useState(false);
+
   const handle401 = () => {
     (window as any).logoutAndRedirect?.("401");
   };
+
+    const handleCopyToken = async () => {
+    if (!trackingToken) return;
+    try {
+      await navigator.clipboard.writeText(trackingToken);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 1200);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
 
   // Load websites / projects
   useEffect(() => {
@@ -511,14 +525,14 @@ function modovisa_page_attachments(array &$attachments) {
         return {
           label: "Active within last 24 hours",
           className:
-            "bg-emerald-500/15 text-emerald-400 border border-emerald-500/40",
+            "bg-emerald-500/15 text-emerald-700 border border-emerald-500/40",
         };
       case "inactive":
       case "no-activity":
         return {
           label: "Inactive (no activity in last 24 hours)",
           className:
-            "bg-amber-500/15 text-amber-400 border border-amber-500/40",
+            "bg-amber-500/15 text-amber-700 border border-amber-500/40",
         };
       case "unknown":
       default:
@@ -709,9 +723,19 @@ function modovisa_page_attachments(array &$attachments) {
               {trackingToken && (
                 <Badge
                   variant="outline"
-                  className="bg-emerald-500/10 text-emerald-500 border-emerald-500/40 text-[11px]"
+                  className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/40 text-[11px]"
                 >
-                  Token: {trackingToken}
+                  <span className="opacity-80 mr-0.5">Token:</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyToken}
+                    className="font-mono underline-offset-2 hover:underline focus-visible:outline-none"
+                  >
+                    {trackingToken}
+                  </button>
+                  {tokenCopied && (
+                    <span className="ml-1 text-[10px] opacity-80">Copied</span>
+                  )}
                 </Badge>
               )}
             </div>
