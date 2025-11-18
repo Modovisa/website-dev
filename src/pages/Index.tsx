@@ -246,10 +246,16 @@ const formatPageTime = (seconds: number) => {
 const LandingLiveDemo = () => {
   const {
     visitors,
-    selectedVisitor: storeSelectedVisitor,
-    selectedId,
+    // these still exist in the store but we now drive selection locally
+    selectedVisitor: _storeSelectedVisitor,
+    selectedId: _storeSelectedId,
     selectVisitor,
   } = useLiveSimulation();
+
+  // local selection drives both sidebar highlight and right pane
+  const [selectedVisitorId, setSelectedVisitorId] = useState<
+    string | number | null
+  >(null);
 
   // treat "connected" as true once we see any snapshot
   const connected = visitors.length > 0;
@@ -272,55 +278,60 @@ const LandingLiveDemo = () => {
   const LIMIT_STEP = 5;
 
   const [liveVisitorsOpen, setLiveVisitorsOpen] = useState(true);
-  const [recentlyLeftOpen, setRecentlyLeftOpen] = useState(true);
+  // ✅ Recently left collapsed by default
+  const [recentlyLeftOpen, setRecentlyLeftOpen] = useState(false);
   const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
   const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
 
-  // Auto-select a visitor when stream updates (only if nothing is selected yet)
+  // Auto-select first visitor when stream updates (only if nothing is selected yet)
   useEffect(() => {
-    if (selectedId) return;
+    if (selectedVisitorId != null) return;
 
     const firstActive = activeVisitors[0];
     const firstRecent = recentVisitors[0];
     const next = firstActive || firstRecent || null;
 
     if (next) {
-      selectVisitor(next.id);
+      setSelectedVisitorId(next.id);
+      // still notify the store for internal purposes
+      try {
+        selectVisitor?.(next.id as any);
+      } catch {
+        // ignore
+      }
     }
-  }, [selectedId, activeVisitors, recentVisitors, selectVisitor]);
+  }, [selectedVisitorId, activeVisitors, recentVisitors, selectVisitor]);
 
-  // Derive selected visitor by id to ensure sidebar clicks drive the right pane
-  const selectedById: LiveSimVisitor | null = useMemo(() => {
-    if (!selectedId) return null;
-    return visitors.find((v) => v.id === selectedId) ?? null;
-  }, [selectedId, visitors]);
+  // derive the visitor purely from our local selectedVisitorId
+  const selectedVisitor: LiveSimVisitor | null = useMemo(() => {
+    if (selectedVisitorId == null) {
+      return activeVisitors[0] || recentVisitors[0] || null;
+    }
+    return (
+      visitors.find((v) => v.id === selectedVisitorId) ||
+      activeVisitors[0] ||
+      recentVisitors[0] ||
+      null
+    );
+  }, [selectedVisitorId, visitors, activeVisitors, recentVisitors]);
 
-  const selectedVisitor: LiveSimVisitor | null =
-    selectedById ||
-    storeSelectedVisitor ||
-    activeVisitors[0] ||
-    recentVisitors[0] ||
-    null;
-
+  // pages timeline: always reflect the currently selected visitor
   const selectedPagesForTimeline =
     selectedVisitor && selectedVisitor.journey.length > 0
       ? selectedVisitor.journey
-          .slice(
-            0,
-            (selectedVisitor.currentPage ??
-              selectedVisitor.journey.length - 1) + 1,
-          )
-          .map((p, idx) => {
-            const isActive =
-              idx === (selectedVisitor.currentPage ?? 0) &&
-              selectedVisitor.active;
-
+          .map((p, idx, arr) => {
             const perPage =
               (selectedVisitor as any).perPageSeconds ??
               selectedVisitor.perPageDurations ??
               [];
-
             const timeSpent = perPage[idx] ?? 0;
+
+            const lastIndex =
+              selectedVisitor.currentPage != null
+                ? selectedVisitor.currentPage
+                : arr.length - 1;
+
+            const isActive = idx === lastIndex && selectedVisitor.active;
 
             return {
               ...p,
@@ -330,6 +341,15 @@ const LandingLiveDemo = () => {
           })
           .reverse()
       : [];
+
+  const handleSelectVisitor = (visitor: LiveSimVisitor) => {
+    setSelectedVisitorId(visitor.id);
+    try {
+      selectVisitor?.(visitor.id as any);
+    } catch {
+      // ignore if the store signature differs; UI is driven locally anyway
+    }
+  };
 
   /* --------------------------- sidebar component --------------------------- */
   const VisitorSidebar = () => (
@@ -426,15 +446,15 @@ const LandingLiveDemo = () => {
                         visitor.duration ??
                         0;
 
+                      const isSelected = selectedVisitorId === visitor.id;
+
                       return (
                         <div
                           key={visitor.id}
                           className={`p-1 cursor-pointer transition-colors ${
-                            selectedId === visitor.id
-                              ? "bg-muted/30"
-                              : "hover:bg-muted/20"
+                            isSelected ? "bg-muted/30" : "hover:bg-muted/20"
                           }`}
-                          onClick={() => selectVisitor(visitor.id)}
+                          onClick={() => handleSelectVisitor(visitor)}
                         >
                           <div className="flex items-center gap-3 px-3 py-4 rounded-sm border shadow-sm">
                             <Avatar className="h-7 w-7 flex-shrink-0">
@@ -572,15 +592,15 @@ const LandingLiveDemo = () => {
                           visitor.duration ??
                           0;
 
+                        const isSelected = selectedVisitorId === visitor.id;
+
                         return (
                           <div
                             key={visitor.id}
                             className={`p-1 cursor-pointer transition-colors ${
-                              selectedId === visitor.id
-                                ? "bg-muted/30"
-                                : "hover:bg-muted/20"
+                              isSelected ? "bg-muted/30" : "hover:bg-muted/20"
                             }`}
-                            onClick={() => selectVisitor(visitor.id)}
+                            onClick={() => handleSelectVisitor(visitor)}
                           >
                             <div className="flex items-center gap-3 px-3 py-4 rounded-sm border bg-[#f8f8f8]">
                               <Avatar className="h-7 w-7 flex-shrink-0">
