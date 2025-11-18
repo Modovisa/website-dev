@@ -95,7 +95,7 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
                         variant="outline"
                         className="w-full mb-2 bg-white/50 hover:bg-white/75 border-transparent text-foreground font-semibold transition-colors"
                       >
-                        Live Tracking &gt;
+                        Live Tracking
                       </Button>
                     </Link>
                     <Button
@@ -169,9 +169,9 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
               <Link to="/app/live-tracking">
                 <Button
                   variant="outline"
-                  className="rounded-md px-6 py-2.5 text-base font-semibold bg-white/50 hover:bg.white/75 border-transparent text-foreground transition-colors"
+                  className="rounded-md px-6 py-2.5 text-base font-semibold bg-white/50 hover:bg-white/75 border-transparent text-foreground hover:text-foreground transition-colors"
                 >
-                  Live Tracking &gt;
+                  Live Tracking
                 </Button>
               </Link>
               <Button
@@ -195,6 +195,7 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             </Link>
           )}
         </div>
+
 
         {/* Mobile: Auth icon */}
         <div className="md:hidden">
