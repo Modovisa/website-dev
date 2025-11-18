@@ -1,6 +1,8 @@
 // src/pages/Index.tsx
 
 import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, useMemo } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +30,8 @@ import {
   Monitor,
   Users,
   User as UserIcon,
-  ShoppingCart,
-  CreditCard,
-  CheckCircle2,
 } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import { useState, useEffect, useRef, useMemo } from "react";
 import { secureFetch } from "@/lib/auth/auth";
 import { apiBase } from "@/lib/api";
 import { RegisterModal } from "@/components/auth/RegisterModal";
@@ -55,6 +53,11 @@ import {
 } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 
+import {
+  useLiveSimStream,
+  DemoVisitor,
+} from "@/hooks/useLiveSimStream";
+
 // TypeScript declaration for Gradient + Bootstrap
 declare global {
   interface Window {
@@ -64,6 +67,99 @@ declare global {
     hideGlobalLoadingModal?: () => void;
   }
 }
+
+/* ------------------------------ SVG icons ---------------------------- */
+
+const IconWindow = ({ className = "h-5 w-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className={className}
+  >
+    <path
+      fill="currentColor"
+      d="M4 21h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2m0-2V7h16l.001 12z"
+    />
+  </svg>
+);
+
+const IconAddToCart = ({ className = "h-5 w-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className={className}
+  >
+    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" />
+    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" />
+    <path
+      fill="currentColor"
+      d="M13 13h2v-2.99h2.99v-2H15V5.03h-2v2.98h-2.99v2H13z"
+    />
+    <path
+      fill="currentColor"
+      d="M10 17h8a1 1 0 0 0 .93-.64L21.76 9h-2.14l-2.31 6h-6.64L6.18 4.23A2 2 0 0 0 4.33 3H2v2h2.33l4.75 11.38A1 1 0 0 0 10 17"
+    />
+  </svg>
+);
+
+const IconCheckout = ({ className = "h-5 w-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className={className}
+  >
+    <path
+      fill="currentColor"
+      d="M21.822 7.431A1 1 0 0 0 21 7H7.333L6.179 4.23A1.99 1.99 0 0 0 4.333 3H2v2h2.333l4.744 11.385A1 1 0 0 0 10 17h8c.417 0 .79-.259.937-.648l3-8a1 1 0 0 0-.115-.921M17.307 15h-6.64l-2.5-6h11.39z"
+    />
+    <circle cx="10.5" cy="19.5" r="1.5" fill="currentColor" />
+    <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+const IconThankYou = ({ className = "h-5 w-5" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className={className}
+  >
+    <path
+      fill="currentColor"
+      d="M12 15c-1.84 0-2-.86-2-1H8c0 .92.66 2.55 3 2.92V18h2v-1.08c2-.34 3-1.63 3-2.92c0-1.12-.52-3-4-3c-2 0-2-.63-2-1s.7-1 2-1s1.39.64 1.4 1h2A3 3 0 0 0 13 7.12V6h-2v1.09C9 7.42 8 8.71 8 10c0 1.12.52 3 4 3c2 0 2 .68 2 1s-.62 1-2 1"
+    />
+    <path
+      fill="currentColor"
+      d="M5 2H2v2h2v17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4h2V2zm13 18H6V4h12z"
+    />
+  </svg>
+);
+
+/* Helpers for stage ➜ icon + label (used in sidebar + timeline) */
+const stageMeta = (stage?: string | null) => {
+  if (stage === "cart")
+    return {
+      Icon: IconAddToCart,
+      label: "Product added to cart",
+      className: "text-[#56ca00]",
+    };
+  if (stage === "checkout")
+    return {
+      Icon: IconCheckout,
+      label: "Visitor started checkout",
+      className: "text-[#56ca00]",
+    };
+  if (stage === "thank_you")
+    return {
+      Icon: IconThankYou,
+      label: "Order completed",
+      className: "text-[#56ca00]",
+    };
+  return {
+    Icon: IconWindow,
+    label: null,
+    className: "text-[#ffab00]", // generic page view = orange
+  };
+};
 
 /* ------------------------------------------------------------------ */
 /*                        PRICING TYPES & CONSTANTS                    */
@@ -95,8 +191,6 @@ const SNAP_STEPS = [
 const INTENT_KEY = "intent_upgrade";
 
 // Fallback in case the public tiers endpoint is unavailable.
-// Only used as a safety net; real environments should rely on the API.
-// IMPORTANT: These IDs now mirror the real D1 table (start at 2).
 const FALLBACK_PAID_TIERS: PublicPricingTier[] = [
   {
     id: 2,
@@ -136,175 +230,8 @@ const FALLBACK_PAID_TIERS: PublicPricingTier[] = [
 ];
 
 /* ------------------------------------------------------------------ */
-/*                        LANDING LIVE DEMO TYPES                      */
+/*                          TIME FORMAT HELPERS                        */
 /* ------------------------------------------------------------------ */
-
-type DemoStage = "cart" | "checkout" | "thank_you" | "view";
-
-interface DemoPage {
-  title: string;
-  url: string;
-  stage?: DemoStage;
-}
-
-interface DemoVisitor {
-  id: string;
-  isNew: boolean;
-  location: string; // "Tokyo, Japan"
-  referrer: string; // "Google / Organic"
-  device: string;
-  browser: string;
-  pages: DemoPage[];
-  currentPageIndex: number;
-  sessionSeconds: number;
-  perPageSeconds: number[];
-  pageDurationTargets: number[];
-  active: boolean;
-  leftAt?: number;
-}
-
-/* ------------------------------------------------------------------ */
-/*                        LANDING LIVE DEMO DATA                       */
-/* ------------------------------------------------------------------ */
-
-const DEMO_LOCATIONS = [
-  "Tokyo, Japan",
-  "London, United Kingdom",
-  "Sydney, Australia",
-  "Berlin, Germany",
-  "New York, United States",
-  "Mumbai, India",
-  "Toronto, Canada",
-];
-
-const DEMO_REFERRERS = [
-  "Google / Organic",
-  "Meta Ads",
-  "Direct / None",
-  "Newsletter",
-  "Affiliate Blog",
-  "Instagram",
-];
-
-const DEMO_DEVICES = ["Desktop", "Mobile", "Tablet"];
-
-const DEMO_BROWSERS = ["Chrome", "Safari", "Firefox", "Edge"];
-
-const DEMO_JOURNEYS: DemoPage[][] = [
-  [
-    {
-      title: "Home",
-      url: "https://demomoda.com/",
-      stage: "view",
-    },
-    {
-      title: "Summer Dresses Collection",
-      url: "https://demomoda.com/collections/summer-dresses",
-      stage: "view",
-    },
-    {
-      title: "Linen Wrap Dress",
-      url: "https://demomoda.com/products/linen-wrap-dress",
-      stage: "cart",
-    },
-    {
-      title: "Cart",
-      url: "https://demomoda.com/cart",
-      stage: "cart",
-    },
-    {
-      title: "Checkout",
-      url: "https://demomoda.com/checkout",
-      stage: "checkout",
-    },
-    {
-      title: "Order Received",
-      url: "https://demomoda.com/order-received/10493",
-      stage: "thank_you",
-    },
-  ],
-  [
-    {
-      title: "Home",
-      url: "https://demomoda.com/",
-      stage: "view",
-    },
-    {
-      title: "Mens Sneakers",
-      url: "https://demomoda.com/collections/mens-sneakers",
-      stage: "view",
-    },
-    {
-      title: "AirFlex Runner",
-      url: "https://demomoda.com/products/airflex-runner",
-      stage: "cart",
-    },
-    {
-      title: "Cart",
-      url: "https://demomoda.com/cart",
-      stage: "cart",
-    },
-    {
-      title: "Checkout",
-      url: "https://demomoda.com/checkout",
-      stage: "checkout",
-    },
-  ],
-  [
-    {
-      title: "Landing Page",
-      url: "https://demomoda.com/",
-      stage: "view",
-    },
-    {
-      title: "New Arrivals",
-      url: "https://demomoda.com/collections/new-arrivals",
-      stage: "view",
-    },
-    {
-      title: "Silk Shirt",
-      url: "https://demomoda.com/products/silk-shirt",
-      stage: "cart",
-    },
-    {
-      title: "Checkout",
-      url: "https://demomoda.com/checkout",
-      stage: "checkout",
-    },
-    {
-      title: "Order Completed",
-      url: "https://demomoda.com/order-received/10501",
-      stage: "thank_you",
-    },
-  ],
-  [
-    {
-      title: "Home",
-      url: "https://demomoda.com/",
-      stage: "view",
-    },
-    {
-      title: "Accessories",
-      url: "https://demomoda.com/collections/accessories",
-      stage: "view",
-    },
-    {
-      title: "Leather Tote Bag",
-      url: "https://demomoda.com/products/leather-tote-bag",
-      stage: "cart",
-    },
-    {
-      title: "Cart",
-      url: "https://demomoda.com/cart",
-      stage: "cart",
-    },
-  ],
-];
-
-const randomFrom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
-const randInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
 
 const formatSessionTime = (seconds: number) => {
   const s = Math.max(0, Math.round(seconds));
@@ -322,64 +249,15 @@ const formatPageTime = (seconds: number) => {
   return `${m}m ${r.toString().padStart(2, "0")}s`;
 };
 
-const stageMeta = (stage?: DemoStage) => {
-  if (stage === "cart") {
-    return {
-      Icon: ShoppingCart,
-      label: "Product added to cart",
-      className: "text-[#56ca00]",
-    };
-  }
-  if (stage === "checkout") {
-    return {
-      Icon: CreditCard,
-      label: "Visitor started checkout",
-      className: "text-[#56ca00]",
-    };
-  }
-  if (stage === "thank_you") {
-    return {
-      Icon: CheckCircle2,
-      label: "Order completed",
-      className: "text-[#56ca00]",
-    };
-  }
-  return {
-    Icon: Monitor,
-    label: null,
-    className: "text-[#ffab00]",
-  };
-};
-
-
-const createDemoVisitor = (idNum: number): DemoVisitor => {
-  const journey = randomFrom(DEMO_JOURNEYS);
-  const pageDurationTargets = journey.map(() => randInt(8, 18));
-  return {
-    id: `demo-${idNum}-${Date.now()}`,
-    isNew: Math.random() < 0.6,
-    location: randomFrom(DEMO_LOCATIONS),
-    referrer: randomFrom(DEMO_REFERRERS),
-    device: randomFrom(DEMO_DEVICES),
-    browser: randomFrom(DEMO_BROWSERS),
-    pages: journey,
-    currentPageIndex: 0,
-    sessionSeconds: 0,
-    perPageSeconds: new Array(journey.length).fill(0),
-    pageDurationTargets,
-    active: true,
-    leftAt: undefined,
-  };
-};
-
 /* ------------------------------------------------------------------ */
 /*                       LANDING LIVE DEMO COMPONENT                   */
 /* ------------------------------------------------------------------ */
 
 const LandingLiveDemo = () => {
-  const [visitors, setVisitors] = useState<DemoVisitor[]>([]);
+  const { visitors, activeVisitors, recentVisitors, connected } =
+    useLiveSimStream();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const idCounterRef = useRef<number>(1);
 
   // collapsible + limits (mirrors live tracking behavior)
   const INITIAL_ACTIVE_LIMIT = 5;
@@ -400,88 +278,18 @@ const LandingLiveDemo = () => {
   ];
   const [currentWebsite, setCurrentWebsite] = useState(demoWebsites[0]);
 
-  // initialise demo visitors
+  // Auto-select a visitor when stream updates
   useEffect(() => {
-    const initial: DemoVisitor[] = [];
-    for (let i = 0; i < 4; i++) {
-      initial.push(createDemoVisitor(idCounterRef.current++));
-    }
-    setVisitors(initial);
-    if (initial[0]) setSelectedId(initial[0].id);
-  }, []);
+    if (selectedId && visitors.some((v) => v.id === selectedId)) return;
 
-  // ticking simulation
-  useEffect(() => {
-    const TICK_MS = 3_000;
-    const RECENT_TTL_MS = 45_000;
+    const firstActive = activeVisitors[0];
+    const firstRecent = recentVisitors[0];
+    const next = firstActive || firstRecent || null;
 
-    const interval = setInterval(() => {
-      setVisitors((prev) => {
-        const now = Date.now();
-        let next = prev.map((v) => {
-          // recycle old "recent" visitors after TTL
-          if (!v.active) {
-            if (v.leftAt && now - v.leftAt > RECENT_TTL_MS) {
-              return createDemoVisitor(idCounterRef.current++);
-            }
-            return v;
-          }
+    setSelectedId(next ? next.id : null);
+  }, [visitors, activeVisitors, recentVisitors, selectedId]);
 
-          const delta = 3; // seconds per tick
-          const sessionSeconds = v.sessionSeconds + delta;
-          const perPageSeconds = [...v.perPageSeconds];
-          let currentPageIndex = v.currentPageIndex;
-          let active: boolean = v.active;
-          let leftAt = v.leftAt;
-
-          perPageSeconds[currentPageIndex] =
-            (perPageSeconds[currentPageIndex] ?? 0) + delta;
-
-          const target = v.pageDurationTargets[currentPageIndex] ?? 10;
-
-          // advance page or mark visitor as left
-          if (perPageSeconds[currentPageIndex] >= target) {
-            const isLastPage = currentPageIndex >= v.pages.length - 1;
-            if (!isLastPage) {
-              currentPageIndex += 1;
-            } else {
-              active = false;
-              leftAt = now;
-            }
-          }
-
-          return {
-            ...v,
-            sessionSeconds,
-            perPageSeconds,
-            currentPageIndex,
-            active,
-            leftAt,
-          };
-        });
-
-        // keep at least 4 active visitors
-        const activeCount = next.filter((v) => v.active).length;
-        for (let i = 0; i < Math.max(0, 4 - activeCount); i++) {
-          next.push(createDemoVisitor(idCounterRef.current++));
-        }
-
-        // cap total list length
-        if (next.length > 8) {
-          next = next.slice(next.length - 8);
-        }
-
-        return next;
-      });
-    }, TICK_MS);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const activeVisitors = visitors.filter((v) => v.active);
-  const recentVisitors = visitors.filter((v) => !v.active);
-
-  const selectedVisitor =
+  const selectedVisitor: DemoVisitor | null =
     (selectedId && visitors.find((v) => v.id === selectedId)) ||
     activeVisitors[0] ||
     recentVisitors[0] ||
@@ -492,7 +300,8 @@ const LandingLiveDemo = () => {
         .slice(0, selectedVisitor.currentPageIndex + 1)
         .map((p, idx) => ({
           ...p,
-          isActive: idx === selectedVisitor.currentPageIndex && selectedVisitor.active,
+          isActive:
+            idx === selectedVisitor.currentPageIndex && selectedVisitor.active,
           timeSpent: selectedVisitor.perPageSeconds[idx] ?? 0,
         }))
         .reverse()
@@ -530,6 +339,26 @@ const LandingLiveDemo = () => {
         <div className="bg-[#dff7fb] text-[#055160] rounded px-4 py-2 text-center text-sm font-medium">
           {currentWebsite?.domain || "Loading domain..."}
         </div>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {connected ? "Live simulation connected" : "Connecting…"}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
+              connected
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                connected ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+            />
+            {connected ? "Live" : "Waiting"}
+          </span>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -537,7 +366,9 @@ const LandingLiveDemo = () => {
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
             <Users className="h-10 w-10 opacity-60" />
             <p className="text-sm">
-              No visitors yet. Waiting for traffic to arrive...
+              {connected
+                ? "No visitors yet. Waiting for traffic to arrive..."
+                : "Connecting to live simulation..."}
             </p>
           </div>
         ) : (
@@ -578,7 +409,7 @@ const LandingLiveDemo = () => {
                         visitor.pages[visitor.currentPageIndex] ||
                         visitor.pages[0];
                       const { Icon, label, className } = stageMeta(
-                        currentPage?.stage,
+                        currentPage?.stage as string | null,
                       );
 
                       return (
@@ -711,10 +542,11 @@ const LandingLiveDemo = () => {
                     <>
                       {recentVisitors.slice(0, recentShowLimit).map((visitor) => {
                         const lastPage =
+                          visitor.pages[visitor.currentPageIndex] ||
                           visitor.pages[visitor.pages.length - 1] ||
                           visitor.pages[0];
                         const { Icon, label, className } = stageMeta(
-                          lastPage?.stage,
+                          lastPage?.stage as string | null,
                         );
 
                         return (
@@ -834,7 +666,7 @@ const LandingLiveDemo = () => {
               {/* Sidebar – Visitors (mirrors live tracking layout) */}
               <VisitorSidebar />
 
-              {/* Journey / details (unchanged for now) */}
+              {/* Journey / details panel */}
               <div className="rounded-2xl border bg-card flex flex-col">
                 <div className="px-5 pt-5 pb-3 flex items-center gap-3">
                   <Avatar className="h-10 w-10">
@@ -859,7 +691,7 @@ const LandingLiveDemo = () => {
                     <div>
                       <p className="text-xs text-muted-foreground">Referrer:</p>
                       <p className="text-xs font-medium text-[#ff3e1d]">
-                        {selectedVisitor?.referrer || "Direct"}
+                        {selectedVisitor?.referrer || "Direct / None"}
                       </p>
                     </div>
                   </div>
@@ -894,7 +726,9 @@ const LandingLiveDemo = () => {
                     {selectedVisitor && selectedPagesForTimeline.length > 0 ? (
                       <ul className="list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
-                          const { Icon, className } = stageMeta(page.stage);
+                          const { Icon, className } = stageMeta(
+                            page.stage as string | null,
+                          );
                           return (
                             <li
                               key={`${page.url}-${idx}`}
@@ -965,7 +799,6 @@ const LandingLiveDemo = () => {
   );
 };
 
-
 /* ------------------------------------------------------------------ */
 /*                                 PAGE                                */
 /* ------------------------------------------------------------------ */
@@ -1031,7 +864,6 @@ const Index = () => {
     async function loadTiers() {
       setTiersLoading(true);
       try {
-        // ⚠️ DO NOT use secureFetch here - this endpoint is public
         const res = await fetch(
           `${apiBase()}/api/billing-pricing-tiers?public=1`,
           {
@@ -1090,10 +922,7 @@ const Index = () => {
     return isYearly ? Math.ceil(base * 0.8) : base;
   }, [matchedTier, isYearly]);
 
-  // 🔑 Pro plan CTA behavior:
-  // - If NOT logged in → open React RegisterModal
-  // - If logged in → redirect to /app/user-profile with loading modal
-  // NOTE: Only this click writes intent_upgrade + mv_new_signup for checkout.
+  // 🔑 Pro plan CTA behavior
   const handleProPlanClick = async () => {
     try {
       if (matchedTier && typeof window !== "undefined") {
@@ -1121,12 +950,10 @@ const Index = () => {
       }
 
       if (!loggedIn) {
-        // 👉 Open React register modal instead of navigating
         setShowRegisterModal(true);
         return;
       }
 
-      // Logged in: send them to the profile page (like Bootstrap version)
       if (typeof window.showGlobalLoadingModal === "function") {
         window.showGlobalLoadingModal("Redirecting to your profile...");
       }
@@ -1147,17 +974,20 @@ const Index = () => {
     {
       icon: BarChart2,
       title: "Advanced Analytics",
-      description: "Deep insights into user behavior, conversions, and funnel analysis.",
+      description:
+        "Deep insights into user behavior, conversions, and funnel analysis.",
     },
     {
       icon: Zap,
       title: "Lightning Fast",
-      description: "Lightweight script that won't slow down your website performance.",
+      description:
+        "Lightweight script that won't slow down your website performance.",
     },
     {
       icon: Shield,
       title: "Privacy First",
-      description: "GDPR compliant with respect for user privacy and data protection.",
+      description:
+        "GDPR compliant with respect for user privacy and data protection.",
     },
     {
       icon: Globe,
@@ -1181,19 +1011,15 @@ const Index = () => {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden flex items-center">
-        {/* Canvas directly in section - just like Bootstrap */}
         <canvas
           ref={canvasRef}
           className="gradient-canvas"
           style={{ height: "100%", width: "100%" }}
         />
 
-        {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
 
-        {/* Content container - positioned above the canvas */}
         <div className="container relative mx-auto px-4 pt-6 pb-20 z-10">
-          {/* Navbar Component */}
           <Navbar className="mb-16" />
 
           <div className="max-w-4xl mx-auto text-center text-white space-y-8 py-20">
@@ -1205,11 +1031,10 @@ const Index = () => {
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-white/80 max-w-2xl mx-auto">
-              Track visitors, analyze behavior, and grow your business with beautiful,
-              actionable insights.
+              Track visitors, analyze behavior, and grow your business with
+              beautiful, actionable insights.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
-              {/* Hero CTA: simple link to /register (Free path – no intent set) */}
               <Link to="/register">
                 <Button
                   size="lg"
@@ -1282,7 +1107,6 @@ const Index = () => {
                 </div>
               </div>
 
-              {/* Free plan Get Started → /register (no intent set) */}
               <Link to="/register" className="block">
                 <Button
                   variant="outline"
@@ -1413,7 +1237,6 @@ const Index = () => {
                 </div>
               </div>
 
-              {/* 🔥 Only this button drives paid checkout intent */}
               <Button
                 className="w-full h-12 text-base"
                 size="lg"
@@ -1426,7 +1249,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Features Section – moved below Pricing */}
+      {/* Features Section */}
       <section className="py-24 bg-background">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
@@ -1434,8 +1257,8 @@ const Index = () => {
               Everything you need to grow
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Powerful features designed for teams who want to understand their users
-              better.
+              Powerful features designed for teams who want to understand their
+              users better.
             </p>
           </div>
 
@@ -1448,7 +1271,9 @@ const Index = () => {
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-6">
                   <feature.icon className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
+                <h3 className="text-xl font-semibold mb-3">
+                  {feature.title}
+                </h3>
                 <p className="text-muted-foreground">{feature.description}</p>
               </div>
             ))}
@@ -1458,19 +1283,15 @@ const Index = () => {
 
       {/* CTA Section */}
       <section className="py-24 gradient-primary relative overflow-hidden">
-        {/* Optional grid overlay for texture */}
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
-
-        {/* Content - positioned above the canvas */}
         <div className="container relative mx-auto px-4 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to get started?
           </h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
-            Join thousands of teams already using Modovisa to understand their users
-            better.
+            Join thousands of teams already using Modovisa to understand their
+            users better.
           </p>
-          {/* Bottom CTA: still goes straight to /register (Free path) */}
           <Link to="/register">
             <Button
               size="lg"
@@ -1509,8 +1330,8 @@ const Index = () => {
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
                   An event is any tracked action taken by a visitor on your
-                  website—such as a page view, button click, form submission, or
-                  cart activity. You can define custom events to capture the
+                  website—such as a page view, button click, form submission,
+                  or cart activity. You can define custom events to capture the
                   interactions that matter most to your business.
                 </AccordionContent>
               </AccordionItem>
@@ -1523,9 +1344,9 @@ const Index = () => {
                   How is this different from Google Analytics?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Modovisa focuses on clarity and actionability with privacy-first
-                  insights, beautiful visualizations, and session replay—without the
-                  complexity of traditional analytics tools.
+                  Modovisa focuses on clarity and actionability with
+                  privacy-first insights, beautiful visualizations, and session
+                  replay—without the complexity of traditional analytics tools.
                 </AccordionContent>
               </AccordionItem>
 
@@ -1537,8 +1358,8 @@ const Index = () => {
                   Do I need to install any code to get started?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Yes, you’ll add a lightweight script to your site. It’s optimized for
-                  performance and won’t slow down your pages.
+                  Yes, you’ll add a lightweight script to your site. It’s
+                  optimized for performance and won’t slow down your pages.
                 </AccordionContent>
               </AccordionItem>
 
@@ -1550,8 +1371,8 @@ const Index = () => {
                   Is there a free plan available?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  Absolutely. Our free plan includes generous limits so you can explore
-                  the product and get value before upgrading.
+                  Absolutely. Our free plan includes generous limits so you can
+                  explore the product and get value before upgrading.
                 </AccordionContent>
               </AccordionItem>
 
@@ -1563,8 +1384,8 @@ const Index = () => {
                   Will using this tool affect my website&apos;s load time?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
-                  No—our script is tiny, loads asynchronously, and is designed to have
-                  negligible impact on performance.
+                  No—our script is tiny, loads asynchronously, and is designed
+                  to have negligible impact on performance.
                 </AccordionContent>
               </AccordionItem>
 
@@ -1573,7 +1394,8 @@ const Index = () => {
                 className="rounded-2xl border bg-card px-6"
               >
                 <AccordionTrigger className="py-5 text-left">
-                  Can I track custom events like form submissions or product clicks?
+                  Can I track custom events like form submissions or product
+                  clicks?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pt-0 pb-6">
                   Yes, you can define and track custom events to measure the
@@ -1585,10 +1407,8 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Footer */}
       <SiteFooter />
 
-      {/* 🔐 React Register Modal, reusing the Register page UI */}
       <RegisterModal
         open={showRegisterModal}
         onOpenChange={setShowRegisterModal}
