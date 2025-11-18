@@ -139,13 +139,13 @@ if (typeof window !== 'undefined') {
 // Initialize auth token on app start
 export async function initAuth(): Promise<boolean> {
   try {
-    console.log('🔐 Initializing auth...');
+    //console.log('🔐 Initializing auth...');
     // Try to get access token from refresh token (cookie-based)
     await refresh();
-    console.log('✅ Auth initialized successfully with token');
+    //console.log('✅ Auth initialized successfully with token');
     return true;
   } catch (err) {
-    console.warn('⚠️ Auth initialization failed - user needs to login:', err);
+    //console.warn('⚠️ Auth initialization failed - user needs to login:', err);
     return false;
   }
 }
