@@ -508,8 +508,18 @@ export async function fetchSnapshotHard() {
 
 /** COMPAT alias for Dashboard.tsx */
 export async function fetchSnapshot() {
-  return fetchSnapshotSeedOnce();
+  const r = normalizeRange(state.range);
+  if (!state.siteId) return;
+
+  if (r === "24h") {
+    // 24h is WS-only → force a fresh WS series
+    await connectWS(true);
+  } else {
+    // Non-24h ranges → always hit REST, ignoring the one-time seed guard
+    await fetchSnapshotHard();
+  }
 }
+
 
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
   const res = await secureFetch(`${API}/api/tracking-websites`, {
