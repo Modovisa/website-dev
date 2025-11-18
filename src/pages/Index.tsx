@@ -750,7 +750,7 @@ const LandingLiveDemo = () => {
                 </div>
 
                 <div className="px-3 pb-4 flex-1 overflow-hidden">
-                  <div className="h-[300px] md:h-[340px] overflow-y-auto pr-1">
+                  <div className="h-[700px] md:h-[740px] overflow-y-auto pr-1">
                     {selectedVisitor && selectedPagesForTimeline.length > 0 ? (
                       <ul className="list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
