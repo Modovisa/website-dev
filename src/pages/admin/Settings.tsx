@@ -53,6 +53,16 @@ type StripeSettingsState = {
   livePk: string;
 };
 
+// Snapshot of what we loaded from /api/admin/settings
+type AdminSettingsSnapshot = {
+  DEACTIVATE_GRACE_DAYS?: number | null;
+  HARD_DELETE_GRACE_DAYS?: number | null;
+  USERNAME_COOLDOWN_DAYS?: number | null;
+  stripe_mode?: "test" | "live";
+  stripe_test_pk?: string | null;
+  stripe_live_pk?: string | null;
+};
+
 const fallbackUrlPatterns: UrlPatternRow[] = [
   {
     id: "checkout",
@@ -104,12 +114,17 @@ const Settings = () => {
   // global dirty + sticky bar
   const [isDirty, setIsDirty] = useState(false);
 
-  // ----- General / lifecycle + privacy -----
+  // snapshot of what we got from /api/admin/settings
+  const [originalSettings, setOriginalSettings] =
+    useState<AdminSettingsSnapshot | null>(null);
+
+  // ----- General / lifecycle -----
   const [userLifecycle, setUserLifecycle] = useState<UserLifecycleState>({
     deactivateGrace: "",
     hardDelete: "",
     usernameCooldown: "",
   });
+  const [lifecycleDirty, setLifecycleDirty] = useState(false);
 
   // ----- URL patterns -----
   const [urlPatterns, setUrlPatterns] =
@@ -151,133 +166,368 @@ const Settings = () => {
   // --------------------------------
   // LOAD DATA FROM ADMIN ENDPOINTS
   // --------------------------------
+
+  async function loadAdminSettings() {
+    try {
+      const res = await adminSecureFetch("/api/admin/settings");
+      if (res.status === 404) {
+        console.info("[admin/settings] 404 – leaving defaults.");
+        return;
+      }
+
+      const j = await res.json();
+      if (!res.ok) {
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const s = j.settings || {};
+
+      // lifecycle inputs
+      setUserLifecycle({
+        deactivateGrace:
+          s.DEACTIVATE_GRACE_DAYS != null
+            ? String(s.DEACTIVATE_GRACE_DAYS)
+            : "",
+        hardDelete:
+          s.HARD_DELETE_GRACE_DAYS != null
+            ? String(s.HARD_DELETE_GRACE_DAYS)
+            : "",
+        usernameCooldown:
+          s.USERNAME_COOLDOWN_DAYS != null
+            ? String(s.USERNAME_COOLDOWN_DAYS)
+            : "",
+      });
+
+      // Stripe mode & keys (mirrors Bootstrap data-key: stripe_mode / stripe_test_pk / stripe_live_pk)
+      const mode = (s.stripe_mode || "test") as "test" | "live";
+      const testPk = s.stripe_test_pk || "";
+      const livePk = s.stripe_live_pk || "";
+
+      setStripeSettings({
+        mode,
+        testPk,
+        livePk,
+      });
+
+      setOriginalSettings({
+        DEACTIVATE_GRACE_DAYS:
+          s.DEACTIVATE_GRACE_DAYS != null
+            ? Number(s.DEACTIVATE_GRACE_DAYS)
+            : null,
+        HARD_DELETE_GRACE_DAYS:
+          s.HARD_DELETE_GRACE_DAYS != null
+            ? Number(s.HARD_DELETE_GRACE_DAYS)
+            : null,
+        USERNAME_COOLDOWN_DAYS:
+          s.USERNAME_COOLDOWN_DAYS != null
+            ? Number(s.USERNAME_COOLDOWN_DAYS)
+            : null,
+        stripe_mode: mode,
+        stripe_test_pk: testPk,
+        stripe_live_pk: livePk,
+      });
+
+      setLifecycleDirty(false);
+      setStripeDirty(false);
+    } catch (err) {
+      console.error("Failed to load /api/admin/settings", err);
+    }
+  }
+
+  async function loadUrlPatterns() {
+    try {
+      const res = await adminSecureFetch("/api/admin/url-patterns");
+      const j = await res.json();
+      if (!res.ok) {
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const patterns = (j.patterns || []).map((p: any): UrlPatternRow => ({
+        id: p.id ?? null,
+        siteId: p.site_id != null ? Number(p.site_id) : null,
+        pattern: p.pattern || "",
+        pageGroup: (p.page_group || "other") as UrlPatternRow["pageGroup"],
+        skip: !!p.skip,
+        mask: !!p.mask,
+        createdAt: p.created_at || null,
+      }));
+      setUrlPatterns(patterns.length ? patterns : fallbackUrlPatterns);
+      setUrlPatternsDirty(false);
+    } catch (err) {
+      console.error("Failed to load /api/admin/url-patterns", err);
+      setUrlPatterns(fallbackUrlPatterns);
+    }
+  }
+
+  async function loadTiers() {
+    try {
+      const res = await adminSecureFetch("/api/admin/billing/tiers");
+      const j = await res.json();
+      if (!res.ok) {
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const mapped: TierRow[] = (j.tiers || []).map((t: any) => ({
+        id: t.id ?? null,
+        minEvents:
+          t.min_events != null
+            ? Number(t.min_events)
+            : (null as number | null),
+        maxEvents:
+          t.max_events != null
+            ? Number(t.max_events)
+            : (null as number | null),
+        monthlyPrice:
+          t.monthly_price != null
+            ? Number(t.monthly_price)
+            : (null as number | null),
+        yearlyPerMonth:
+          t.yearly_per_month != null
+            ? Number(t.yearly_per_month)
+            : (null as number | null),
+        yearlyDiscountPercent:
+          t.yearly_discount_percent != null
+            ? Number(t.yearly_discount_percent)
+            : (null as number | null),
+        featureLabel: t.feature_label ?? null,
+        planId: t.plan_id != null ? Number(t.plan_id) : null,
+        stripePriceIdMonth: t.stripe_price_id_month || null,
+        stripePriceIdYear: t.stripe_price_id_year || null,
+      }));
+      setTiers(mapped.length ? mapped : fallbackTiers);
+      setTiersDirty(false);
+    } catch (err) {
+      console.error("Failed to load /api/admin/billing/tiers", err);
+      setTiers(fallbackTiers);
+    }
+  }
+
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadAdminSettings() {
-      try {
-        const res = await adminSecureFetch("/api/admin/settings");
-        if (res.status === 404) {
-          console.info("[admin/settings] 404 – leaving defaults.");
-          return;
-        }
-
-        const j = await res.json();
-        if (!res.ok) {
-          throw new Error(j.error || `HTTP ${res.status}`);
-        }
-        if (cancelled) return;
-        const s = j.settings || {};
-
-        setUserLifecycle({
-          deactivateGrace:
-            s.DEACTIVATE_GRACE_DAYS != null
-              ? String(s.DEACTIVATE_GRACE_DAYS)
-              : "",
-          hardDelete:
-            s.HARD_DELETE_GRACE_DAYS != null
-              ? String(s.HARD_DELETE_GRACE_DAYS)
-              : "",
-          usernameCooldown:
-            s.USERNAME_COOLDOWN_DAYS != null
-              ? String(s.USERNAME_COOLDOWN_DAYS)
-              : "",
-        });
-
-        // Mirror Bootstrap keys: stripe_mode / stripe_test_pk / stripe_live_pk
-        setStripeSettings({
-          mode: (s.stripe_mode || "test") as "test" | "live",
-          testPk: s.stripe_test_pk || "",
-          livePk: s.stripe_live_pk || "",
-        });
-      } catch (err) {
-        console.error("Failed to load /api/admin/settings", err);
-      }
-    }
-
-    async function loadUrlPatterns() {
-      try {
-        const res = await adminSecureFetch("/api/admin/url-patterns");
-        const j = await res.json();
-        if (!res.ok) {
-          throw new Error(j.error || `HTTP ${res.status}`);
-        }
-        if (cancelled) return;
-        const patterns = (j.patterns || []).map((p: any): UrlPatternRow => ({
-          id: p.id ?? null,
-          siteId: p.site_id != null ? Number(p.site_id) : null,
-          pattern: p.pattern || "",
-          pageGroup: (p.page_group || "other") as UrlPatternRow["pageGroup"],
-          skip: !!p.skip,
-          mask: !!p.mask,
-          createdAt: p.created_at || null,
-        }));
-        setUrlPatterns(patterns.length ? patterns : fallbackUrlPatterns);
-      } catch (err) {
-        console.error("Failed to load /api/admin/url-patterns", err);
-        setUrlPatterns(fallbackUrlPatterns);
-      }
-    }
-
-    async function loadTiers() {
-      try {
-        const res = await adminSecureFetch("/api/admin/billing/tiers");
-        const j = await res.json();
-        if (!res.ok) {
-          throw new Error(j.error || `HTTP ${res.status}`);
-        }
-        if (cancelled) return;
-        const mapped: TierRow[] = (j.tiers || []).map((t: any) => ({
-          id: t.id ?? null,
-          minEvents:
-            t.min_events != null ? Number(t.min_events) : (null as number | null),
-          maxEvents:
-            t.max_events != null ? Number(t.max_events) : (null as number | null),
-          monthlyPrice:
-            t.monthly_price != null
-              ? Number(t.monthly_price)
-              : (null as number | null),
-          yearlyPerMonth:
-            t.yearly_per_month != null
-              ? Number(t.yearly_per_month)
-              : (null as number | null),
-          yearlyDiscountPercent:
-            t.yearly_discount_percent != null
-              ? Number(t.yearly_discount_percent)
-              : (null as number | null),
-          featureLabel: t.feature_label ?? null,
-          planId: t.plan_id != null ? Number(t.plan_id) : null,
-          stripePriceIdMonth: t.stripe_price_id_month || null,
-          stripePriceIdYear: t.stripe_price_id_year || null,
-        }));
-        setTiers(mapped.length ? mapped : fallbackTiers);
-      } catch (err) {
-        console.error("Failed to load /api/admin/billing/tiers", err);
-        setTiers(fallbackTiers);
-      }
-    }
-
+    // initial boot: load all sections
     loadAdminSettings();
     loadUrlPatterns();
     loadTiers();
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   // --------------------------------
-  // DISCARD / SAVE (still local only)
+  // SAVE HELPERS
+  // --------------------------------
+
+  async function saveAdminSettings() {
+    if (!originalSettings) return;
+
+    const changes: Record<string, any> = {};
+
+    const numOrNull = (s: string) =>
+      s.trim() === "" ? null : Number(s.trim());
+
+    const newDeactivate = numOrNull(userLifecycle.deactivateGrace);
+    const newHardDelete = numOrNull(userLifecycle.hardDelete);
+    const newUsernameCooldown = numOrNull(userLifecycle.usernameCooldown);
+
+    const maybeSet = (key: keyof AdminSettingsSnapshot, newVal: any) => {
+      const oldVal = (originalSettings as any)[key];
+      // compare as strings to avoid 1 vs "1" nonsense
+      if (String(oldVal ?? "") !== String(newVal ?? "")) {
+        changes[key] = newVal;
+      }
+    };
+
+    maybeSet("DEACTIVATE_GRACE_DAYS", newDeactivate);
+    maybeSet("HARD_DELETE_GRACE_DAYS", newHardDelete);
+    maybeSet("USERNAME_COOLDOWN_DAYS", newUsernameCooldown);
+    maybeSet("stripe_mode", stripeSettings.mode);
+    maybeSet("stripe_test_pk", stripeSettings.testPk || null);
+    maybeSet("stripe_live_pk", stripeSettings.livePk || null);
+
+    if (Object.keys(changes).length === 0) {
+      return;
+    }
+
+    const res = await adminSecureFetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes }),
+    });
+    const j = await res.json();
+    if (!res.ok) {
+      throw new Error(j.error || `HTTP ${res.status}`);
+    }
+
+    // Merge snapshot so subsequent saves diff correctly
+    setOriginalSettings((prev) => ({
+      ...(prev || {}),
+      ...changes,
+    }));
+    setLifecycleDirty(false);
+    setStripeDirty(false);
+  }
+
+  function validateTiersClient(all: TierRow[]): { ok: boolean; msg?: string } {
+    for (const t of all) {
+      if (
+        t.minEvents == null ||
+        t.maxEvents == null ||
+        t.monthlyPrice == null
+      ) {
+        return {
+          ok: false,
+          msg: "All numeric fields are required (min, max, monthly price).",
+        };
+      }
+      if (!(t.minEvents < t.maxEvents)) {
+        return {
+          ok: false,
+          msg: `Invalid range for "${t.featureLabel || "(no label)"}" (min must be < max).`,
+        };
+      }
+    }
+
+    const sorted = [...all].sort(
+      (a, b) => (a.minEvents ?? 0) - (b.minEvents ?? 0)
+    );
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const cur = sorted[i];
+      if ((prev.maxEvents ?? 0) >= (cur.minEvents ?? 0)) {
+        return {
+          ok: false,
+          msg: `Overlapping ranges: "${prev.featureLabel || prev.id}" and "${cur.featureLabel || cur.id}".`,
+        };
+      }
+    }
+
+    for (const t of all) {
+      if (
+        t.monthlyPrice === 0 &&
+        ((t.stripePriceIdMonth && t.stripePriceIdMonth !== "") ||
+          (t.stripePriceIdYear && t.stripePriceIdYear !== ""))
+      ) {
+        return {
+          ok: false,
+          msg: `Free tier "${t.featureLabel || t.id}" must not have Stripe price IDs.`,
+        };
+      }
+    }
+
+    return { ok: true };
+  }
+
+  async function saveTiers() {
+    if (tiersLocked || !tiersDirty) return;
+
+    const all: TierRow[] = tiers.map((t) => {
+      const cleaned: TierRow = {
+        ...t,
+        minEvents: t.minEvents ?? null,
+        maxEvents: t.maxEvents ?? null,
+        monthlyPrice: t.monthlyPrice ?? null,
+        yearlyDiscountPercent: t.yearlyDiscountPercent ?? null,
+        featureLabel: t.featureLabel ?? null,
+        planId: t.planId ?? null,
+        stripePriceIdMonth: t.stripePriceIdMonth || null,
+        stripePriceIdYear: t.stripePriceIdYear || null,
+        yearlyPerMonth: null, // server recomputes
+      };
+
+      // Free tier safety
+      if (cleaned.monthlyPrice === 0) {
+        cleaned.stripePriceIdMonth = null;
+        cleaned.stripePriceIdYear = null;
+      }
+
+      return cleaned;
+    });
+
+    const v = validateTiersClient(all);
+    if (!v.ok) {
+      alert(v.msg || "Invalid pricing tiers.");
+      throw new Error(v.msg || "Invalid pricing tiers.");
+    }
+
+    const payload = all.map((t) => ({
+      id: t.id,
+      min_events: t.minEvents,
+      max_events: t.maxEvents,
+      monthly_price: t.monthlyPrice,
+      yearly_discount_percent: t.yearlyDiscountPercent,
+      feature_label: t.featureLabel,
+      plan_id: t.planId,
+      stripe_price_id_month: t.stripePriceIdMonth,
+      stripe_price_id_year: t.stripePriceIdYear,
+    }));
+
+    const res = await adminSecureFetch("/api/admin/billing/tiers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tiers: payload }),
+    });
+    const j = await res.json();
+    if (!res.ok) {
+      throw new Error(j.error || `HTTP ${res.status}`);
+    }
+
+    // Reload from server so IDs/plan_ids/yearly_per_month are in sync
+    await loadTiers();
+  }
+
+  async function saveUrlPatterns() {
+    if (urlPatternsLocked || !urlPatternsDirty) return;
+
+    const payload = urlPatterns.map((p, idx) => ({
+      id: p.id,
+      site_id: p.siteId,
+      pattern: p.pattern,
+      page_group: p.pageGroup,
+      skip: p.skip ? 1 : 0,
+      mask: p.mask ? 1 : 0,
+      sort_order: idx + 1,
+    }));
+
+    const res = await adminSecureFetch("/api/admin/url-patterns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patterns: payload }),
+    });
+    const j = await res.json();
+    if (!res.ok) {
+      throw new Error(j.error || `HTTP ${res.status}`);
+    }
+
+    // Reload so IDs/created_at/sort_order match DB
+    await loadUrlPatterns();
+  }
+
+  // --------------------------------
+  // DISCARD / SAVE
   // --------------------------------
   const handleDiscard = () => {
     window.location.reload();
   };
 
-  const handleSave = () => {
-    setUrlPatternsDirty(false);
-    setTiersDirty(false);
-    setStripeDirty(false);
-    setIsDirty(false);
+  const handleSave = async () => {
+    try {
+      // 1) General/lifecycle + Stripe settings
+      if ((lifecycleDirty || stripeDirty) && originalSettings) {
+        await saveAdminSettings();
+      }
+
+      // 2) URL patterns (only if unlocked & dirty)
+      if (urlPatternsDirty && !urlPatternsLocked) {
+        await saveUrlPatterns();
+      }
+
+      // 3) Tiers (only if unlocked & dirty)
+      if (tiersDirty && !tiersLocked) {
+        await saveTiers();
+      }
+
+      setIsDirty(false);
+      setStripeDirty(false);
+      setTiersDirty(false);
+      setUrlPatternsDirty(false);
+      setLifecycleDirty(false);
+    } catch (err: any) {
+      console.error("Save failed", err);
+      alert(err?.message || "Save failed.");
+    }
   };
 
   // --------------------------------
@@ -459,6 +709,7 @@ const Settings = () => {
                       ...s,
                       deactivateGrace: e.target.value,
                     }));
+                    setLifecycleDirty(true);
                     touchDirty();
                   }}
                 />
@@ -481,6 +732,7 @@ const Settings = () => {
                       ...s,
                       hardDelete: e.target.value,
                     }));
+                    setLifecycleDirty(true);
                     touchDirty();
                   }}
                 />
@@ -504,6 +756,7 @@ const Settings = () => {
                       ...s,
                       usernameCooldown: e.target.value,
                     }));
+                    setLifecycleDirty(true);
                     touchDirty();
                   }}
                 />
