@@ -37,7 +37,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { secureFetch } from "@/lib/auth/auth";
 import { apiBase } from "@/lib/api";
 import { RegisterModal } from "@/components/auth/RegisterModal";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // TypeScript declaration for Gradient + Bootstrap
@@ -378,13 +378,14 @@ const LandingLiveDemo = () => {
   // ticking simulation
   useEffect(() => {
     const TICK_MS = 3_000;
-    const RECENT_TTL_MS = 45_000;
+    const RECENT_TTL_MS = 120_000; // keep “recently left” visible longer
 
     const interval = setInterval(() => {
       setVisitors((prev) => {
         const now = Date.now();
+
         let next = prev.map((v) => {
-          // recycle old "recent" visitors
+          // recycle old "recent" visitors into fresh ones
           if (!v.active) {
             if (v.leftAt && now - v.leftAt > RECENT_TTL_MS) {
               return createDemoVisitor(idCounterRef.current++);
@@ -396,21 +397,23 @@ const LandingLiveDemo = () => {
           const sessionSeconds = v.sessionSeconds + delta;
           const perPageSeconds = [...v.perPageSeconds];
           let currentPageIndex = v.currentPageIndex;
-          let active = v.active;
+          // 👇 Force-widen the literal type to boolean
+          let active: boolean = v.active;
           let leftAt = v.leftAt;
+
 
           perPageSeconds[currentPageIndex] =
             (perPageSeconds[currentPageIndex] ?? 0) + delta;
 
           const target = v.pageDurationTargets[currentPageIndex] ?? 10;
 
-          // advance page or mark left
+          // advance page or mark visitor as left
           if (perPageSeconds[currentPageIndex] >= target) {
             const isLastPage = currentPageIndex >= v.pages.length - 1;
             if (!isLastPage) {
               currentPageIndex += 1;
             } else {
-              let active = true;
+              active = false;
               leftAt = now;
             }
           }
@@ -460,7 +463,7 @@ const LandingLiveDemo = () => {
           isActive: idx === selectedVisitor.currentPageIndex && selectedVisitor.active,
           timeSpent: selectedVisitor.perPageSeconds[idx] ?? 0,
         }))
-        .reverse()
+        .reverse() // newest first
     : [];
 
   return (
@@ -500,8 +503,8 @@ const LandingLiveDemo = () => {
 
         {/* Live visitor tracking simulation */}
         <Card className="rounded-3xl shadow-sm border pb-4">
-          <CardContent className="p-3 md:p-6">
-            <div className="grid gap-4 md:gap-6 md:grid-cols-[340px_minmax(0,1fr)]">
+          <CardContent className="p-3 md:p-6 min-h-[430px]">
+            <div className="grid gap-4 md:gap-6 md:grid-cols-[340px_minmax(0,1fr)] h-full">
               {/* Sidebar – Visitors */}
               <div className="border rounded-2xl bg-card flex flex-col">
                 <div className="px-6 pt-6 pb-4 flex flex-col items-center gap-2">
@@ -529,7 +532,7 @@ const LandingLiveDemo = () => {
                 </div>
 
                 <div className="px-3 pb-2 flex-1 overflow-hidden">
-                  <div className="h-[260px] overflow-y-auto pr-1 space-y-2">
+                  <div className="h-[320px] md:h-[360px] overflow-y-auto pr-1 space-y-2">
                     {activeVisitors.length === 0 && recentVisitors.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <Users className="h-10 w-10 opacity-60" />
@@ -611,7 +614,9 @@ const LandingLiveDemo = () => {
                         </div>
 
                         {recentVisitors.map((v) => {
-                          const lastPage = v.pages[v.currentPageIndex] || v.pages[v.pages.length - 1];
+                          const lastPage =
+                            v.pages[v.currentPageIndex] ||
+                            v.pages[v.pages.length - 1];
                           const meta = demoStageMeta(lastPage?.stage);
                           const Icon = meta.icon;
 
@@ -725,7 +730,7 @@ const LandingLiveDemo = () => {
                 </div>
 
                 <div className="px-3 pb-4 flex-1 overflow-hidden">
-                  <div className="h-[260px] overflow-y-auto pr-1">
+                  <div className="h-[320px] md:h-[360px] overflow-y-auto pr-1">
                     {selectedVisitor && selectedPagesForTimeline.length > 0 ? (
                       <ul className="list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
@@ -734,8 +739,10 @@ const LandingLiveDemo = () => {
                           return (
                             <li
                               key={`${page.url}-${idx}`}
-                              className={`relative flex items-center m-2 rounded-xl border p-3 bg-card ${
-                                page.isActive ? "shadow-sm border-primary/50" : "bg-muted/40"
+                              className={`relative flex items-center m-2 rounded-xl border p-3 ${
+                                page.isActive
+                                  ? "bg-card shadow-sm border-primary/50"
+                                  : "bg-muted/40"
                               }`}
                             >
                               <span className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-[2px] bg-muted rounded-full" />
@@ -764,7 +771,7 @@ const LandingLiveDemo = () => {
                                   </small>
                                 </div>
                                 <div className="ml-auto flex flex-col items-end gap-1">
-                                  {page.isActive && (
+                                  {page.isActive && selectedVisitor?.active && (
                                     <Badge className="text-[11px] bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
                                       Active now
                                     </Badge>
@@ -1062,7 +1069,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* 🔴 NEW: Product / Live Tracking Demo section (mirrors Bootstrap) */}
+      {/* Product / Live Tracking Demo section */}
       <LandingLiveDemo />
 
       {/* Pricing Section */}
