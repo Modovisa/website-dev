@@ -29,9 +29,11 @@ import {
   init as dsInit,
   setSite as dsSetSite,
   setRange as dsSetRange,
-  fetchSnapshot as dsFetchSnapshot,
+  fetchSnapshotHard as dsFetchSnapshotHard,
+  connectWS as dsConnectWS,
   getTrackingWebsites,
 } from "@/services/dashboard.store";
+
 import { nf } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
@@ -233,7 +235,16 @@ export default function Dashboard() {
             {/* Refresh: snapshot only */}
             <Button
               variant="outline"
-              onClick={() => dsFetchSnapshot()}
+              onClick={() => {
+                const r = normalizeRange(range);
+                if (r === "24h") {
+                  // For "Today" we rely on live WS data, so force a reconnect & series request
+                  dsConnectWS(true);
+                } else {
+                  // For 7d/30d/12mo force a fresh REST snapshot, ignoring the seeded guard
+                  dsFetchSnapshotHard();
+                }
+              }}
               disabled={!siteId}
               className="gap-2"
               title="Refresh snapshot"
@@ -241,6 +252,7 @@ export default function Dashboard() {
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
+
           </div>
         </div>
 
@@ -255,7 +267,14 @@ export default function Dashboard() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => dsFetchSnapshot()}
+                  onClick={() => {
+                    const r = normalizeRange(range);
+                    if (r === "24h") {
+                      dsConnectWS(true);
+                    } else {
+                      dsFetchSnapshotHard();
+                    }
+                  }}
                   disabled={!siteId}
                 >
                   Try again
