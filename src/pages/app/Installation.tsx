@@ -1139,7 +1139,7 @@ function modovisa_page_attachments(array &$attachments) {
         {/* Custom event tracking guide */}
         <section className="space-y-6" id="custom-event-tracking-guide">
           <hr className="border-border/60" />
-          <Badge className="inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-amber-500/10 text-amber-600 border border-amber-500/40 rounded-full text-[12px] font-medium">
+          <Badge className="hover:bg-amber-500/10 inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-amber-500/10 text-amber-600 border border-amber-500/40 rounded-full text-[12px] font-medium">
             Custom Event Instructions
           </Badge>
 
@@ -1291,7 +1291,7 @@ function modovisa_page_attachments(array &$attachments) {
         {/* App SDK section */}
         <section className="space-y-6" id="app-sdk-tracking-guide">
           <hr className="border-border/60" />
-          <Badge className="inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-purple-500/10 text-purple-600 border border-purple-500/40 rounded-full text-[12px] font-medium">
+          <Badge className="hover:bg-purple-500/10 inline-flex items-center px-2.5 py-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-purple-500/10 text-purple-600 border border-purple-500/40 rounded-full text-[12px] font-medium">
             App SDK (iOS / Android / WebView / RN)
           </Badge>
 
@@ -1322,18 +1322,18 @@ function modovisa_page_attachments(array &$attachments) {
 
               {/* Step 1 – include SDK */}
               <div className="space-y-3">
-                <Badge className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <h3 className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Step 1 — Include the SDK
-                </Badge>
+                </h3>
                 <p>Use the minified build in production:</p>
                 <CodeSnippet code={sdkScriptSnippet} />
               </div>
 
               {/* Step 2 – initialize */}
               <div className="space-y-3">
-                <Badge className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <h3 className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Step 2 — Initialize
-                </Badge>
+                </h3>
                 <p>
                   Initialize once on app start. <code>siteId</code> is
                   required; <code>appKey</code> is optional but recommended if
@@ -1454,9 +1454,9 @@ function modovisa_page_attachments(array &$attachments) {
 
               {/* Step 4 – verify */}
               <div className="space-y-3">
-                <Badge className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <h3 className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                   Step 3 — Verify
-                </Badge>
+                </h3>
                 <ol className="list-decimal pl-5 text-xs md:text-sm space-y-1">
                   <li>Run the app with the initialized SDK.</li>
                   <li>
