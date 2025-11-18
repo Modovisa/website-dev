@@ -1,3 +1,5 @@
+// src/pages/admin/Sites.tsx
+
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
