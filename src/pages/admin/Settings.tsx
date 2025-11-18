@@ -1325,7 +1325,7 @@ const Settings = () => {
                     overlap.
                   </li>
                   <li>
-                    <strong>Yearly price (per mo)</strong> is computed on the
+                    <strong>Yearly price (per mo)</strong> is computed as <span className="text-warning">ceil(monthly × (1 − discount%))</span> on the
                     server and is read-only.
                   </li>
                   <li>
