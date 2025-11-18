@@ -45,6 +45,9 @@ import {
 } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 
+import { useLiveSimulation } from "@/hooks/useLiveSimulation";
+import type { LiveSimVisitor } from "@/services/liveSimulation.store";
+
 // TypeScript declaration for Gradient + Bootstrap
 declare global {
   interface Window {
@@ -241,10 +244,28 @@ const formatPageTime = (seconds: number) => {
 /* ------------------------------------------------------------------ */
 
 const LandingLiveDemo = () => {
-  const { visitors, activeVisitors, recentVisitors, connected } =
-    useLiveSimStream();
+  const {
+    visitors,
+    selectedVisitor: storeSelectedVisitor,
+    selectedId,
+    selectVisitor,
+  } = useLiveSimulation();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // treat "connected" as true once we see any snapshot
+  const connected = visitors.length > 0;
+
+  const activeVisitors = useMemo(
+    () => visitors.filter((v) => v.active),
+    [visitors],
+  );
+
+  const recentVisitors = useMemo(
+    () =>
+      visitors
+        .filter((v) => !v.active)
+        .sort((a, b) => (b.leftAt ?? 0) - (a.leftAt ?? 0)),
+    [visitors],
+  );
 
   // collapsible + limits (mirrors live tracking behavior)
   const INITIAL_ACTIVE_LIMIT = 5;
@@ -255,34 +276,56 @@ const LandingLiveDemo = () => {
   const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
   const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
 
-  // Auto-select a visitor when stream updates
+  // Auto-select a visitor when stream updates (using shared store selection)
   useEffect(() => {
-    if (selectedId && visitors.some((v) => v.id === selectedId)) return;
+    if (selectedId && storeSelectedVisitor) return;
 
     const firstActive = activeVisitors[0];
     const firstRecent = recentVisitors[0];
     const next = firstActive || firstRecent || null;
 
-    setSelectedId(next ? next.id : null);
-  }, [visitors, activeVisitors, recentVisitors, selectedId]);
+    if (next) {
+      selectVisitor(next.id);
+    }
+  }, [
+    selectedId,
+    storeSelectedVisitor,
+    activeVisitors,
+    recentVisitors,
+    selectVisitor,
+  ]);
 
-  const selectedVisitor: DemoVisitor | null =
-    (selectedId && visitors.find((v) => v.id === selectedId)) ||
-    activeVisitors[0] ||
-    recentVisitors[0] ||
-    null;
+  const selectedVisitor: LiveSimVisitor | null =
+    storeSelectedVisitor || activeVisitors[0] || recentVisitors[0] || null;
 
-  const selectedPagesForTimeline = selectedVisitor
-    ? selectedVisitor.pages
-        .slice(0, selectedVisitor.currentPageIndex + 1)
-        .map((p, idx) => ({
-          ...p,
-          isActive:
-            idx === selectedVisitor.currentPageIndex && selectedVisitor.active,
-          timeSpent: selectedVisitor.perPageSeconds[idx] ?? 0,
-        }))
-        .reverse()
-    : [];
+  const selectedPagesForTimeline =
+    selectedVisitor && selectedVisitor.journey.length > 0
+      ? selectedVisitor.journey
+          .slice(
+            0,
+            (selectedVisitor.currentPage ??
+              selectedVisitor.journey.length - 1) + 1,
+          )
+          .map((p, idx) => {
+            const isActive =
+              idx === (selectedVisitor.currentPage ?? 0) &&
+              selectedVisitor.active;
+
+            const perPage =
+              (selectedVisitor as any).perPageSeconds ??
+              selectedVisitor.perPageDurations ??
+              [];
+
+            const timeSpent = perPage[idx] ?? 0;
+
+            return {
+              ...p,
+              isActive,
+              timeSpent,
+            };
+          })
+          .reverse()
+      : [];
 
   /* --------------------------- sidebar component --------------------------- */
   const VisitorSidebar = () => (
@@ -361,11 +404,23 @@ const LandingLiveDemo = () => {
                   <div className="bg-background">
                     {activeVisitors.slice(0, activeShowLimit).map((visitor) => {
                       const currentPage =
-                        visitor.pages[visitor.currentPageIndex] ||
-                        visitor.pages[0];
+                        visitor.journey[visitor.currentPage ?? 0] ||
+                        visitor.journey[0];
+
                       const { Icon, label, className } = stageMeta(
-                        currentPage?.stage as string | null,
+                        (currentPage as any)?.stage ?? null,
                       );
+
+                      const isNew =
+                        (visitor as any).isNew ??
+                        (visitor as any).new ??
+                        visitor.new ??
+                        false;
+
+                      const sessionSeconds =
+                        (visitor as any).sessionSeconds ??
+                        visitor.duration ??
+                        0;
 
                       return (
                         <div
@@ -375,7 +430,7 @@ const LandingLiveDemo = () => {
                               ? "bg-muted/30"
                               : "hover:bg-muted/20"
                           }`}
-                          onClick={() => setSelectedId(visitor.id)}
+                          onClick={() => selectVisitor(visitor.id)}
                         >
                           <div className="flex items-center gap-3 px-3 py-4 rounded-sm border shadow-sm">
                             <Avatar className="h-7 w-7 flex-shrink-0">
@@ -390,20 +445,19 @@ const LandingLiveDemo = () => {
                               <div className="flex items-center gap-2 flex-wrap justify-between">
                                 <Badge
                                   className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
-                                    visitor.isNew
+                                    isNew
                                       ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
                                       : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
                                   }`}
                                 >
-                                  {visitor.isNew
-                                    ? "New Visitor"
-                                    : "Returning Visitor"}
+                                  {isNew ? "New Visitor" : "Returning Visitor"}
                                 </Badge>
                                 <Badge
                                   variant="secondary"
                                   className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
                                 >
-                                  Session: {formatSessionTime(visitor.sessionSeconds)}
+                                  Session:{" "}
+                                  {formatSessionTime(sessionSeconds)}
                                 </Badge>
                               </div>
 
@@ -496,13 +550,23 @@ const LandingLiveDemo = () => {
                   ) : (
                     <>
                       {recentVisitors.slice(0, recentShowLimit).map((visitor) => {
+                        const lastIndex =
+                          visitor.currentPage ??
+                          visitor.journey.length - 1;
+
                         const lastPage =
-                          visitor.pages[visitor.currentPageIndex] ||
-                          visitor.pages[visitor.pages.length - 1] ||
-                          visitor.pages[0];
+                          visitor.journey[lastIndex] ||
+                          visitor.journey[visitor.journey.length - 1] ||
+                          visitor.journey[0];
+
                         const { Icon, label, className } = stageMeta(
-                          lastPage?.stage as string | null,
+                          (lastPage as any)?.stage ?? null,
                         );
+
+                        const sessionSeconds =
+                          (visitor as any).sessionSeconds ??
+                          visitor.duration ??
+                          0;
 
                         return (
                           <div
@@ -512,7 +576,7 @@ const LandingLiveDemo = () => {
                                 ? "bg-muted/30"
                                 : "hover:bg-muted/20"
                             }`}
-                            onClick={() => setSelectedId(visitor.id)}
+                            onClick={() => selectVisitor(visitor.id)}
                           >
                             <div className="flex items-center gap-3 px-3 py-4 rounded-sm border bg-[#f8f8f8]">
                               <Avatar className="h-7 w-7 flex-shrink-0">
@@ -536,7 +600,7 @@ const LandingLiveDemo = () => {
                                     className="text-xs font-medium bg-muted text-foreground hover:bg-muted border-0 rounded-md px-2 py-1 mr-2 whitespace-nowrap"
                                   >
                                     Session:{" "}
-                                    {formatSessionTime(visitor.sessionSeconds)}
+                                    {formatSessionTime(sessionSeconds)}
                                   </Badge>
                                 </div>
 
@@ -563,7 +627,8 @@ const LandingLiveDemo = () => {
                               setRecentShowLimit((n) => n + LIMIT_STEP)
                             }
                           >
-                            Show more ({recentVisitors.length - recentShowLimit})
+                            Show more (
+                            {recentVisitors.length - recentShowLimit})
                           </Button>
                         </div>
                       )}
@@ -579,6 +644,14 @@ const LandingLiveDemo = () => {
   );
 
   /* ------------------------------ main layout ------------------------------ */
+  const selectedLocation =
+    selectedVisitor &&
+    [selectedVisitor.city, selectedVisitor.country].filter(Boolean).join(", ");
+
+  const selectedReferrer =
+    selectedVisitor &&
+    ((selectedVisitor as any).referrer ?? selectedVisitor.ref ?? null);
+
   return (
     <section id="landingProduct" className="py-20 bg-background">
       <div className="container mx-auto px-4">
@@ -637,7 +710,7 @@ const LandingLiveDemo = () => {
                     <div>
                       <p className="text-xs text-muted-foreground">Location:</p>
                       <p className="text-xs font-medium text-[#ff3e1d]">
-                        {selectedVisitor?.location || "Unknown"}
+                        {selectedLocation || "Unknown"}
                       </p>
                     </div>
                   </div>
@@ -646,7 +719,7 @@ const LandingLiveDemo = () => {
                     <div>
                       <p className="text-xs text-muted-foreground">Referrer:</p>
                       <p className="text-xs font-medium text-[#ff3e1d]">
-                        {selectedVisitor?.referrer || "Direct / None"}
+                        {selectedReferrer || "Direct / None"}
                       </p>
                     </div>
                   </div>
@@ -682,13 +755,13 @@ const LandingLiveDemo = () => {
                       <ul className="list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
                           const { Icon, className } = stageMeta(
-                            page.stage as string | null,
+                            (page as any).stage ?? null,
                           );
                           return (
                             <li
                               key={`${page.url}-${idx}`}
                               className={`relative flex items-center m-2 rounded-xl border p-3 bg-card ${
-                                page.isActive
+                                (page as any).isActive
                                   ? "shadow-sm border-primary/50"
                                   : "bg-muted/40"
                               }`}
@@ -720,7 +793,7 @@ const LandingLiveDemo = () => {
                                   </small>
                                 </div>
                                 <div className="ml-auto flex flex-col items-end gap-1">
-                                  {page.isActive && (
+                                  {(page as any).isActive && (
                                     <Badge className="text-[11px] bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
                                       Active now
                                     </Badge>
@@ -729,7 +802,9 @@ const LandingLiveDemo = () => {
                                     variant="secondary"
                                     className="text-[11px] bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"
                                   >
-                                    {formatPageTime(page.timeSpent)}
+                                    {formatPageTime(
+                                      (page as any).timeSpent ?? 0,
+                                    )}
                                   </Badge>
                                 </div>
                               </div>
@@ -981,7 +1056,7 @@ const Index = () => {
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
               Intuitive Analytics
               <br />
-              <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-white to white/60 bg-clip-text text-transparent">
                 for Modern Teams
               </span>
             </h1>
