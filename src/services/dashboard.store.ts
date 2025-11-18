@@ -509,16 +509,28 @@ export async function fetchSnapshotHard() {
 /** COMPAT alias for Dashboard.tsx */
 export async function fetchSnapshot() {
   const r = normalizeRange(state.range);
-  if (!state.siteId) return;
+  if (!state.siteId) {
+    console.warn("[REFRESH] Ignored: no siteId in state");
+    return;
+  }
 
   if (r === "24h") {
-    // 24h is WS-only → force a fresh WS series
+    // 24h = WS-only, so we force a WS reconnect + series request
+    console.log("[REFRESH] 24h: forcing WS reconnect + fresh series", {
+      siteId: state.siteId,
+      range: r,
+    });
     await connectWS(true);
   } else {
-    // Non-24h ranges → always hit REST, ignoring the one-time seed guard
+    // Non-24h ranges: always hit REST, ignoring the 'seeded' guard
+    console.log("[REFRESH] non-24h: forcing REST snapshot", {
+      siteId: state.siteId,
+      range: r,
+    });
     await fetchSnapshotHard();
   }
 }
+
 
 
 export async function getTrackingWebsites(): Promise<TrackingWebsite[]> {
