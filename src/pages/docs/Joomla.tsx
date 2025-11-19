@@ -56,7 +56,8 @@ const Joomla = () => {
           <div className="mb-8">
             <p className="text-lg text-muted-foreground mb-4">
               This guide walks you through adding Modovisa to a Joomla site using
-              the official <span className="font-semibold text-foreground">
+              the official{" "}
+              <span className="font-semibold text-foreground">
                 Modovisa extension for Joomla
               </span>
               . You’ll paste your{" "}
@@ -109,7 +110,7 @@ const Joomla = () => {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-xs"
+                      className="h-7 px-2 text-xs border border-black bg-black text-white hover:bg-white hover:text-black"
                       onClick={handleCopyToken}
                     >
                       Copy
@@ -138,9 +139,9 @@ const Joomla = () => {
               </li>
               <li>
                 Go to{" "}
-                <span className="font-semibold text-foreground">
-                  System → Manage → Extensions
-                </span>{" "}
+                  <span className="font-semibold text-foreground">
+                    System → Manage → Extensions
+                  </span>{" "}
                 and make sure it’s{" "}
                 <span className="font-semibold text-foreground">Enabled</span>.
               </li>
@@ -304,7 +305,7 @@ const Joomla = () => {
                   variant="outline"
                   size="sm"
                   onClick={copyZipUrlToClipboard}
-                  className="text-xs"
+                  className="text-xs border border-black bg-black text-white hover:bg-white hover:text-black"
                 >
                   Copy URL
                 </Button>
@@ -404,7 +405,7 @@ const Joomla = () => {
                   variant="outline"
                   size="sm"
                   onClick={copyScriptToClipboard}
-                  className="text-xs"
+                  className="text-xs border border-black bg-black text-white hover:bg-white hover:text-black"
                 >
                   Copy Code
                 </Button>

@@ -151,6 +151,29 @@ const stageMeta = (stage?: string | null) => {
   };
 };
 
+const deriveStageFromUrl = (url?: string | null): string | null => {
+  if (!url) return null;
+  const lower = url.toLowerCase();
+
+  if (lower.includes("cart")) return "cart";
+  if (lower.includes("checkout")) return "checkout";
+
+  if (
+    lower.includes("thank-you") ||
+    lower.includes("order-confirmation") ||
+    lower.includes("order-received")
+  ) {
+    return "thank_you";
+  }
+
+  return null;
+};
+
+const getStageForPage = (page?: { stage?: string | null; url?: string | null }) => {
+  if (!page) return null;
+  return (page.stage as string | null) ?? deriveStageFromUrl(page.url ?? null);
+};
+
 /* ------------------------------------------------------------------ */
 /*                        PRICING TYPES & CONSTANTS                    */
 /* ------------------------------------------------------------------ */
@@ -436,8 +459,9 @@ const LandingLiveDemo = () => {
                         visitor.journey[0];
 
                       const { Icon, label, className } = stageMeta(
-                        (currentPage as any)?.stage ?? null,
+                        getStageForPage(currentPage as any),
                       );
+
 
                       const isNew =
                         (visitor as any).isNew ??
@@ -588,7 +612,7 @@ const LandingLiveDemo = () => {
                           visitor.journey[0];
 
                         const { Icon, label, className } = stageMeta(
-                          (lastPage as any)?.stage ?? null,
+                          getStageForPage(lastPage as any),
                         );
 
                         const sessionSeconds =
@@ -784,7 +808,7 @@ const LandingLiveDemo = () => {
                       <ul className="journey-timeline list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
                           const meta = stageMeta(
-                            (page as any).stage ?? null,
+                            getStageForPage(page as any),
                           );
                           const isActive = (page as any).isActive;
                           const timeLabel = formatPageTime(
