@@ -246,13 +246,13 @@ const formatPageTime = (seconds: number) => {
 const LandingLiveDemo = () => {
   const {
     visitors,
-    // these still exist in the store but we now drive selection locally
+    // store has these, but we drive selection locally
     selectedVisitor: _storeSelectedVisitor,
     selectedId: _storeSelectedId,
     selectVisitor,
   } = useLiveSimulation();
 
-  // local selection drives both sidebar highlight and right pane
+  // local selection drives sidebar + right pane
   const [selectedVisitorId, setSelectedVisitorId] = useState<
     string | number | null
   >(null);
@@ -273,7 +273,7 @@ const LandingLiveDemo = () => {
     [visitors],
   );
 
-  // collapsible + limits (mirrors live tracking behavior)
+  // collapsible + limits
   const INITIAL_ACTIVE_LIMIT = 5;
   const LIMIT_STEP = 5;
 
@@ -283,7 +283,7 @@ const LandingLiveDemo = () => {
   const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
   const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
 
-  // Auto-select first visitor when stream updates (only if nothing is selected yet)
+  // Auto-select first visitor when stream updates (only if nothing selected yet)
   useEffect(() => {
     if (selectedVisitorId != null) return;
 
@@ -293,7 +293,6 @@ const LandingLiveDemo = () => {
 
     if (next) {
       setSelectedVisitorId(next.id);
-      // still notify the store for internal purposes
       try {
         selectVisitor?.(next.id as any);
       } catch {
@@ -302,7 +301,7 @@ const LandingLiveDemo = () => {
     }
   }, [selectedVisitorId, activeVisitors, recentVisitors, selectVisitor]);
 
-  // derive the visitor purely from our local selectedVisitorId
+  // derive selected visitor from local id
   const selectedVisitor: LiveSimVisitor | null = useMemo(() => {
     if (selectedVisitorId == null) {
       return activeVisitors[0] || recentVisitors[0] || null;
@@ -315,31 +314,36 @@ const LandingLiveDemo = () => {
     );
   }, [selectedVisitorId, visitors, activeVisitors, recentVisitors]);
 
-  // pages timeline: always reflect the currently selected visitor
+  // ✅ Journey: only pages up to currentPage, newest (active) at the top
   const selectedPagesForTimeline =
     selectedVisitor && selectedVisitor.journey.length > 0
-      ? selectedVisitor.journey
-          .map((p, idx, arr) => {
-            const perPage =
-              (selectedVisitor as any).perPageSeconds ??
-              selectedVisitor.perPageDurations ??
-              [];
-            const timeSpent = perPage[idx] ?? 0;
+      ? (() => {
+          const journey = selectedVisitor.journey;
+          const lastIndex =
+            selectedVisitor.currentPage != null
+              ? selectedVisitor.currentPage
+              : journey.length - 1;
 
-            const lastIndex =
-              selectedVisitor.currentPage != null
-                ? selectedVisitor.currentPage
-                : arr.length - 1;
+          const perPage =
+            (selectedVisitor as any).perPageSeconds ??
+            selectedVisitor.perPageDurations ??
+            [];
 
-            const isActive = idx === lastIndex && selectedVisitor.active;
+          // slice to only visited pages, then reverse so active is on top
+          return journey
+            .slice(0, lastIndex + 1)
+            .map((p, idx) => {
+              const timeSpent = perPage[idx] ?? 0;
+              const isActive = idx === lastIndex && selectedVisitor.active;
 
-            return {
-              ...p,
-              isActive,
-              timeSpent,
-            };
-          })
-          .reverse()
+              return {
+                ...p,
+                isActive,
+                timeSpent,
+              };
+            })
+            .reverse();
+        })()
       : [];
 
   const handleSelectVisitor = (visitor: LiveSimVisitor) => {
@@ -347,7 +351,7 @@ const LandingLiveDemo = () => {
     try {
       selectVisitor?.(visitor.id as any);
     } catch {
-      // ignore if the store signature differs; UI is driven locally anyway
+      // ignore differences in store signature
     }
   };
 
@@ -357,7 +361,7 @@ const LandingLiveDemo = () => {
       <div className="p-6 space-y-4 pt-8">
         <h2 className="text-2xl font-bold">Visitors</h2>
 
-        {/* Domain pill – matches live tracking look without dropdown */}
+        {/* Domain pill */}
         <div className="bg-[#dff7fb] text-[#00b6ff] rounded-lg px-4 py-3 text-center text-sm font-medium">
           demomoda.com
         </div>
@@ -715,7 +719,7 @@ const LandingLiveDemo = () => {
         <Card className="rounded-3xl shadow-sm border pb-4">
           <CardContent className="p-3 md:p-6 min-h-[660px]">
             <div className="grid h-full gap-4 md:gap-6 md:grid-cols-[340px_minmax(0,1fr)]">
-              {/* Sidebar – Visitors (mirrors live tracking layout) */}
+              {/* Sidebar – Visitors */}
               <VisitorSidebar />
 
               {/* Journey / details panel */}
