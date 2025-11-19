@@ -5,8 +5,19 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Download } from "lucide-react";
+import { useTrackingScriptToken } from "@/hooks/useTrackingScriptToken";
+
+const PRESTASHOP_ZIP_URL =
+  "https://cdn.modovisa.com/prestashop/releases/modovisa-1.0.1.zip";
 
 const PrestaShop = () => {
+  const { trackingToken } = useTrackingScriptToken();
+
+  const handleCopyToken = () => {
+    if (!trackingToken) return;
+    navigator.clipboard.writeText(trackingToken);
+  };
+
   return (
     <DocsLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
@@ -16,7 +27,8 @@ const PrestaShop = () => {
             Install on PrestaShop
           </h1>
           <Badge className="bg-primary/10 text-primary px-6 py-2 text-sm">
-            Add Modovisa via the official PrestaShop module and start real-time analytics — no theme edits required.
+            Add Modovisa via the official PrestaShop module and start real-time
+            analytics — no theme edits required.
           </Badge>
         </div>
 
@@ -25,18 +37,33 @@ const PrestaShop = () => {
           {/* Introduction */}
           <div className="mb-8">
             <p className="text-lg text-muted-foreground mb-4">
-              You'll install the <span className="font-semibold text-foreground">Modovisa Analytics</span> module, enable it, and paste your{" "}
-              <span className="font-semibold text-foreground">Tracking Token</span>. The module injects the script automatically across your storefront.
+              You&apos;ll install the{" "}
+              <span className="font-semibold text-foreground">
+                Modovisa Analytics
+              </span>{" "}
+              module, enable it, and paste your{" "}
+              <span className="font-semibold text-foreground">
+                Tracking Token
+              </span>
+              . The module injects the script automatically across your
+              storefront.
             </p>
 
             <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
               <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-blue-900 dark:text-blue-100">
-                Don't have a token yet? Sign in to{" "}
-                <a href="https://modovisa.com" target="_blank" rel="noopener" className="font-semibold underline">
+                Don&apos;t have a token yet? Sign in to{" "}
+                <a
+                  href="https://modovisa.com"
+                  target="_blank"
+                  rel="noopener"
+                  className="font-semibold underline"
+                >
                   modovisa.com
                 </a>
-                , add your site, and copy the token from <em>Account → Tracked Sites</em> or the <em>Installation</em> page.
+                , add your site, and copy the token from{" "}
+                <em>Account → Tracked Sites</em> or the <em>Installation</em>{" "}
+                page.
               </p>
             </div>
           </div>
@@ -45,37 +72,66 @@ const PrestaShop = () => {
 
           {/* Download Section */}
           <div className="mb-8">
-            <Button asChild className="gap-2">
-              <a 
-                href="https://cdn.modovisa.com/prestashop/releases/modovisa-1.0.1.zip" 
-                target="_blank" 
-                rel="noopener"
-              >
+            <Button
+              asChild
+              className="gap-2 border border-black bg-black text-white hover:bg-white hover:text-black"
+            >
+              <a href={PRESTASHOP_ZIP_URL} target="_blank" rel="noopener">
                 <Download className="h-4 w-4" />
                 Download Modovisa Module (v1.0.1)
               </a>
             </Button>
-            <p className="text-sm text-muted-foreground mt-2">ZIP file for manual upload</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              ZIP file for manual upload
+            </p>
           </div>
 
           {/* Installation Steps */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-6">Step-by-step</h2>
-            
+
             <ol className="space-y-3 list-decimal list-inside text-muted-foreground">
               <li>
                 Sign up at{" "}
-                <a href="https://modovisa.com" target="_blank" rel="noopener" className="text-primary hover:underline">
+                <a
+                  href="https://modovisa.com"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-primary hover:underline"
+                >
                   modovisa.com
                 </a>
                 .
               </li>
-              <li>Set up tracking for your website to get your <span className="font-semibold text-foreground">Tracking Token</span>.</li>
+              <li>
+                Set up tracking for your website to get your{" "}
+                <span className="font-semibold text-foreground">
+                  Tracking Token
+                </span>
+                .
+                {trackingToken && (
+                  <div className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs">
+                    <span className="text-muted-foreground">Detected token:</span>
+                    <code className="rounded bg-background px-2 py-0.5 text-foreground">
+                      {trackingToken}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs border border-black bg-black text-white hover:bg-white hover:text-black"
+                      onClick={handleCopyToken}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                )}
+              </li>
               <li>
                 Download the module:{" "}
-                <a 
-                  href="https://cdn.modovisa.com/prestashop/releases/modovisa-1.0.1.zip" 
-                  target="_blank" 
+                <a
+                  href={PRESTASHOP_ZIP_URL}
+                  target="_blank"
                   rel="noopener"
                   className="text-primary hover:underline"
                 >
@@ -83,14 +139,53 @@ const PrestaShop = () => {
                 </a>
                 .
               </li>
-              <li>Log in to your <span className="font-semibold text-foreground">PrestaShop</span> admin dashboard.</li>
-              <li>In the left sidebar, go to <span className="font-semibold text-foreground">Modules → Module Manager</span>.</li>
-              <li>Click <span className="font-semibold text-foreground">Upload a module</span> (top right) → <span className="font-semibold text-foreground">Select file</span>.</li>
-              <li>Choose the ZIP you downloaded and click <span className="font-semibold text-foreground">Open</span>. The module will auto-install.</li>
-              <li>Click <span className="font-semibold text-foreground">Configure</span> on the Modovisa module.</li>
+              <li>
+                Log in to your{" "}
+                <span className="font-semibold text-foreground">
+                  PrestaShop
+                </span>{" "}
+                admin dashboard.
+              </li>
+              <li>
+                In the left sidebar, go to{" "}
+                <span className="font-semibold text-foreground">
+                  Modules → Module Manager
+                </span>
+                .
+              </li>
+              <li>
+                Click{" "}
+                <span className="font-semibold text-foreground">
+                  Upload a module
+                </span>{" "}
+                (top right) →{" "}
+                <span className="font-semibold text-foreground">
+                  Select file
+                </span>
+                .
+              </li>
+              <li>
+                Choose the ZIP you downloaded and click{" "}
+                <span className="font-semibold text-foreground">Open</span>. The
+                module will auto-install.
+              </li>
+              <li>
+                Click{" "}
+                <span className="font-semibold text-foreground">Configure</span>{" "}
+                on the Modovisa module.
+              </li>
               <li>Enable the module.</li>
-              <li>Paste your <span className="font-semibold text-foreground">Tracking Token</span> (from Modovisa → <em>Installation</em> or <em>Account</em>).</li>
-              <li>Click <span className="font-semibold text-foreground">Save</span>.</li>
+              <li>
+                Paste your{" "}
+                <span className="font-semibold text-foreground">
+                  Tracking Token
+                </span>{" "}
+                (from Modovisa → <em>Installation</em> or <em>Account</em>).
+              </li>
+              <li>
+                Click{" "}
+                <span className="font-semibold text-foreground">Save</span>.
+              </li>
             </ol>
           </div>
 
@@ -98,7 +193,7 @@ const PrestaShop = () => {
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-4">Video Tutorial</h2>
             <div className="border border-border rounded-lg overflow-hidden shadow-lg">
-              <div className="relative" style={{ paddingBottom: '56.25%' }}>
+              <div className="relative" style={{ paddingBottom: "56.25%" }}>
                 <iframe
                   src="https://www.youtube.com/embed/POxDTJZS--w?si=phk9Y8WPKh_Ms0MM"
                   title="Install Modovisa on PrestaShop"
@@ -118,15 +213,32 @@ const PrestaShop = () => {
           <div>
             <h2 className="text-2xl font-bold mb-4">Verify the installation</h2>
             <ul className="space-y-2 list-disc list-inside text-muted-foreground mb-6">
-              <li>Open your storefront → DevTools → <span className="font-mono text-foreground">Network</span>, search for <code className="px-2 py-1 bg-muted rounded text-foreground">modovisa.min.js</code>.</li>
-              <li>Enable "Preserve log" and refresh — confirm the script loads on public pages.</li>
-              <li>In Modovisa, open <span className="font-semibold text-foreground">Live</span> to see your visit in real time.</li>
+              <li>
+                Open your storefront → DevTools →{" "}
+                <span className="font-mono text-foreground">Network</span>,
+                search for{" "}
+                <code className="px-2 py-1 bg-muted rounded text-foreground">
+                  modovisa.min.js
+                </code>
+                .
+              </li>
+              <li>
+                Enable &quot;Preserve log&quot; and refresh — confirm the script
+                loads on public pages.
+              </li>
+              <li>
+                In Modovisa, open{" "}
+                <span className="font-semibold text-foreground">Live</span> to
+                see your visit in real time.
+              </li>
             </ul>
 
             <div className="flex items-start gap-3 p-4 bg-muted rounded-lg">
               <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
               <p className="text-sm text-muted-foreground">
-                If you don't see events, clear the PrestaShop cache (<em>Advanced Parameters → Performance</em>) and any CDN cache, then reload your storefront.
+                If you don&apos;t see events, clear the PrestaShop cache (
+                <em>Advanced Parameters → Performance</em>) and any CDN cache,
+                then reload your storefront.
               </p>
             </div>
           </div>
@@ -138,7 +250,11 @@ const PrestaShop = () => {
             <a href="/docs">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
-            <a href="https://support.modovisa.com" target="_blank" rel="noopener">
+            <a
+              href="https://support.modovisa.com"
+              target="_blank"
+              rel="noopener"
+            >
               Need help? Contact Support
             </a>
           </Button>
