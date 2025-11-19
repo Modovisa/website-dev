@@ -12,8 +12,8 @@ const Shopify = () => {
   const tokenPlaceholder = trackingToken || "YOUR_TRACKING_TOKEN";
 
   const handleCopyToken = () => {
-    if (!tokenPlaceholder) return;
-    navigator.clipboard.writeText(tokenPlaceholder);
+    if (!trackingToken) return;
+    navigator.clipboard.writeText(trackingToken);
   };
 
   return (
@@ -79,11 +79,11 @@ const Shopify = () => {
                 <span className="font-semibold text-foreground">Tracking Token</span> for this store
                 (found under <em>Account → Tracked Sites</em> or on the{" "}
                 <em>Installation</em> page).
-                {tokenPlaceholder && (
+                {trackingToken && (
                   <div className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs">
                     <span className="text-muted-foreground">Detected token:</span>
                     <code className="rounded bg-background px-2 py-0.5 text-foreground">
-                      {tokenPlaceholder}
+                      {trackingToken}
                     </code>
                     <Button
                       type="button"
