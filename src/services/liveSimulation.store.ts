@@ -33,6 +33,8 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
   "https://api.modovisa.com";
 
+// 🔑 single source of truth (internal)
+// we will ALWAYS replace this with a new object on updates
 let state: LiveSimState = {
   visitors: [],
   selectedId: null,
@@ -42,8 +44,19 @@ let listeners = new Set<Listener>();
 let source: EventSource | null = null;
 let started = false;
 
+/**
+ * Create an immutable snapshot for consumers.
+ * This ensures React's useState always sees fresh references.
+ */
+function makeSnapshot(): LiveSimState {
+  return {
+    visitors: [...state.visitors],
+    selectedId: state.selectedId,
+  };
+}
+
 function emit() {
-  const snapshot = state;
+  const snapshot = makeSnapshot();
   listeners.forEach((fn) => fn(snapshot));
 }
 
@@ -63,13 +76,20 @@ function ensureEventSource() {
         ? payload.activeVisitors
         : [];
 
-      state.visitors = incoming;
+      // compute next selectedId based on previous selection
+      const prevSelectedId = state.selectedId;
+      const selectedVisitor =
+        incoming.find((v) => v.id === prevSelectedId) ||
+        incoming[0] ||
+        null;
 
-      const prev = state.selectedId;
-      const selected =
-        state.visitors.find((v) => v.id === prev) || state.visitors[0] || null;
+      const nextSelectedId = selectedVisitor ? selectedVisitor.id : null;
 
-      state.selectedId = selected ? selected.id : null;
+      // 🔁 REPLACE state object instead of mutating it
+      state = {
+        visitors: incoming,
+        selectedId: nextSelectedId,
+      };
 
       emit();
 
@@ -93,14 +113,15 @@ function ensureEventSource() {
 /**
  * Subscribe to live simulation snapshots.
  * - Ensures SSE is started
- * - Immediately calls listener with current state
+ * - Immediately calls listener with current snapshot
  * - Returns an unsubscribe fn
  */
 export function subscribeLiveSimulation(listener: Listener) {
   listeners.add(listener);
   ensureEventSource();
+
   // send current snapshot immediately
-  listener(state);
+  listener(makeSnapshot());
 
   return () => {
     listeners.delete(listener);
@@ -110,10 +131,19 @@ export function subscribeLiveSimulation(listener: Listener) {
 }
 
 export function getLiveSimulationState(): LiveSimState {
-  return state;
+  return makeSnapshot();
 }
 
+/**
+ * Imperatively select a visitor in the global store.
+ * Not used on the homepage demo (we keep local selection there),
+ * but used by other views that want store-driven selection.
+ */
 export function setSelectedVisitor(id: string | null) {
-  state.selectedId = id;
+  // REPLACE state object immutably
+  state = {
+    ...state,
+    selectedId: id,
+  };
   emit();
 }
