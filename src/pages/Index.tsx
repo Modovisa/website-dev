@@ -272,7 +272,9 @@ const LandingLiveDemo = () => {
     // store has these, but we drive selection locally
     selectedVisitor: _storeSelectedVisitor,
     selectedId: _storeSelectedId,
-    selectVisitor,
+    // NOTE: we intentionally do NOT use selectVisitor here for the homepage demo
+    // to avoid freezing the simulation when a visitor is selected.
+    // selectVisitor,
   } = useLiveSimulation();
 
   // local selection drives sidebar + right pane
@@ -315,14 +317,10 @@ const LandingLiveDemo = () => {
     const next = firstActive || firstRecent || null;
 
     if (next) {
+      // purely local selection – do not lock the store
       setSelectedVisitorId(next.id);
-      try {
-        selectVisitor?.(next.id as any);
-      } catch {
-        // ignore
-      }
     }
-  }, [selectedVisitorId, activeVisitors, recentVisitors, selectVisitor]);
+  }, [selectedVisitorId, activeVisitors, recentVisitors]);
 
   // derive selected visitor from local id
   const selectedVisitor: LiveSimVisitor | null = useMemo(() => {
@@ -370,12 +368,8 @@ const LandingLiveDemo = () => {
       : [];
 
   const handleSelectVisitor = (visitor: LiveSimVisitor) => {
+    // only local state; do NOT call store.selectVisitor for the demo
     setSelectedVisitorId(visitor.id);
-    try {
-      selectVisitor?.(visitor.id as any);
-    } catch {
-      // ignore differences in store signature
-    }
   };
 
   /* --------------------------- sidebar component --------------------------- */
@@ -461,7 +455,6 @@ const LandingLiveDemo = () => {
                       const { Icon, label, className } = stageMeta(
                         getStageForPage(currentPage as any),
                       );
-
 
                       const isNew =
                         (visitor as any).isNew ??
@@ -1114,7 +1107,7 @@ const Index = () => {
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
               Intuitive Analytics
               <br />
-              <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-white to_white/60 bg-clip-text text-transparent">
                 for Modern Teams
               </span>
             </h1>
@@ -1395,7 +1388,7 @@ const Index = () => {
       {/* FAQ Section */}
       <section className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center mb-12">
+          <div className="max-w-3xl mx_auto text-center mb-12">
             <Badge variant="secondary" className="mb-3">
               FAQ
             </Badge>
