@@ -337,25 +337,47 @@ const LandingLiveDemo = () => {
 
   // Journey: only pages up to currentPage, newest (active) at the top
   const selectedPagesForTimeline =
-    selectedVisitor && selectedVisitor.journey.length > 0
+    selectedVisitor &&
+    Array.isArray((selectedVisitor as any).journey) &&
+    (selectedVisitor as any).journey.length > 0
       ? (() => {
-          const journey = selectedVisitor.journey;
-          const lastIndex =
-            selectedVisitor.currentPage != null
-              ? selectedVisitor.currentPage
-              : journey.length - 1;
+          // Always work with a safe array
+          const journey = Array.isArray((selectedVisitor as any).journey)
+            ? (selectedVisitor as any).journey
+            : [];
+
+          if (!journey.length) {
+            return [];
+          }
+
+          // Clamp currentPage into valid bounds
+          let lastIndex =
+            (selectedVisitor as any).currentPage ??
+            journey.length - 1;
+
+          if (typeof lastIndex !== "number" || Number.isNaN(lastIndex)) {
+            lastIndex = journey.length - 1;
+          }
+
+          if (lastIndex < 0) lastIndex = 0;
+          if (lastIndex >= journey.length) lastIndex = journey.length - 1;
 
           const perPage =
             (selectedVisitor as any).perPageSeconds ??
-            selectedVisitor.perPageDurations ??
+            (selectedVisitor as any).perPageDurations ??
             [];
 
           // slice to only visited pages, then reverse so active is on top
           return journey
             .slice(0, lastIndex + 1)
-            .map((p, idx) => {
-              const timeSpent = perPage[idx] ?? 0;
-              const isActive = idx === lastIndex && selectedVisitor.active;
+            .map((p: any, idx: number) => {
+              const timeSpent =
+                Array.isArray(perPage) && perPage[idx] != null
+                  ? perPage[idx]
+                  : 0;
+
+              const isActive =
+                idx === lastIndex && !!selectedVisitor.active;
 
               return {
                 ...p,
