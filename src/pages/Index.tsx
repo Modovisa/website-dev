@@ -278,7 +278,7 @@ const LandingLiveDemo = () => {
   const LIMIT_STEP = 5;
 
   const [liveVisitorsOpen, setLiveVisitorsOpen] = useState(true);
-  // ✅ Recently left collapsed by default
+  // Recently left collapsed by default
   const [recentlyLeftOpen, setRecentlyLeftOpen] = useState(false);
   const [activeShowLimit, setActiveShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
   const [recentShowLimit, setRecentShowLimit] = useState(INITIAL_ACTIVE_LIMIT);
@@ -314,7 +314,7 @@ const LandingLiveDemo = () => {
     );
   }, [selectedVisitorId, visitors, activeVisitors, recentVisitors]);
 
-  // ✅ Journey: only pages up to currentPage, newest (active) at the top
+  // Journey: only pages up to currentPage, newest (active) at the top
   const selectedPagesForTimeline =
     selectedVisitor && selectedVisitor.journey.length > 0
       ? (() => {
@@ -474,7 +474,7 @@ const LandingLiveDemo = () => {
                                 <Badge
                                   className={`text-xs font-medium border-0 rounded-md px-2 py-1 whitespace-nowrap ${
                                     isNew
-                                      ? "bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9]"
+                                      ? "bg-[#e7f8e9] text-[#56ca00] hover:bg[#e7f8e9]"
                                       : "bg-[#eae8fd] text-[#7367f0] hover:bg-[#eae8fd]"
                                   }`}
                                 >
@@ -777,62 +777,68 @@ const LandingLiveDemo = () => {
                   </h4>
                 </div>
 
+                {/* Journey timeline – mirrored from live tracking */}
                 <div className="px-3 pb-4">
                   <div className="max-h-[720px] overflow-y-auto pr-1">
                     {selectedVisitor && selectedPagesForTimeline.length > 0 ? (
-                      <ul className="list-none p-0 m-0">
+                      <ul className="journey-timeline list-none p-0 m-0">
                         {selectedPagesForTimeline.map((page, idx) => {
-                          const { Icon, className } = stageMeta(
+                          const meta = stageMeta(
                             (page as any).stage ?? null,
                           );
+                          const isActive = (page as any).isActive;
+                          const timeLabel = formatPageTime(
+                            (page as any).timeSpent ?? 0,
+                          );
+
                           return (
                             <li
                               key={`${page.url}-${idx}`}
-                              className={`relative flex items-center m-2 rounded-xl border p-3 bg-card ${
-                                (page as any).isActive
-                                  ? "shadow-sm border-primary/50"
-                                  : "bg-muted/40"
+                              className={`jt-item ${
+                                isActive ? "is-active" : "is-left"
+                              } flex items-center m-2 ${
+                                isActive ? "shadow-sm" : ""
+                              } rounded-md border p-3 ${
+                                !isActive ? "bg-muted/30" : "bg-card"
                               }`}
                             >
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-[2px] bg-muted rounded-full" />
-                              <div className="flex items-center w-full pl-4">
-                                <span className="mr-4 hidden sm:inline-block">
-                                  <Icon
-                                    className={`h-[42px] w-[42px] ${className}`}
+                              <span className="jt-dot"></span>
+                              <div className="flex items-center w-full">
+                                <span className="me-4">
+                                  <meta.Icon
+                                    className={`h-[55px] w-[55px] ${meta.className}`}
                                   />
                                 </span>
-                                <div className="flex-1 min-w-0 mr-2">
-                                  <span className="font-medium text-sm text-foreground">
+                                <div className="flex-1 min-w-0 me-2">
+                                  <span className="font-medium text-base text-foreground">
                                     {page.title || "(No title)"}
                                   </span>
-                                  <small className="text-xs text-muted-foreground block mt-1">
+                                  <small className="text-sm text-muted-foreground block mt-2">
                                     View this page by clicking on the following
                                     link:
                                   </small>
-                                  <small className="block mt-1">
+                                  <small className="block mt-2">
                                     <a
                                       href={page.url || "#"}
+                                      className="text-sm text-[#ff3e1d] hover:underline break-all"
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-xs text-[#ff3e1d] hover:underline break-all"
                                     >
                                       {page.url}
                                     </a>
                                   </small>
                                 </div>
-                                <div className="ml-auto flex flex-col items-end gap-1">
-                                  {(page as any).isActive && (
-                                    <Badge className="text-[11px] bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
+                                <div className="ms-auto flex items-center gap-2">
+                                  {isActive && (
+                                    <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
                                       Active now
                                     </Badge>
                                   )}
                                   <Badge
                                     variant="secondary"
-                                    className="text-[11px] bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"
+                                    className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"
                                   >
-                                    {formatPageTime(
-                                      (page as any).timeSpent ?? 0,
-                                    )}
+                                    {timeLabel}
                                   </Badge>
                                 </div>
                               </div>
@@ -980,7 +986,7 @@ const Index = () => {
     return isYearly ? Math.ceil(base * 0.8) : base;
   }, [matchedTier, isYearly]);
 
-  // 🔑 Pro plan CTA behavior
+  // Pro plan CTA behavior
   const handleProPlanClick = async () => {
     try {
       if (matchedTier && typeof window !== "undefined") {
