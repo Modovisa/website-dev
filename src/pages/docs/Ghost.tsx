@@ -78,7 +78,7 @@ const Ghost = () => {
 
             <div className="border border-border rounded-lg overflow-hidden mb-4">
               <img
-                src="/assets/img/installation/1-ghost-workspace.webp"
+                src="/assets/img/docs/1-ghost-workspace.webp"
                 alt="Ghost workspace settings icon"
                 className="w-full"
                 loading="lazy"
@@ -104,7 +104,7 @@ const Ghost = () => {
 
             <div className="border border-border rounded-lg overflow-hidden mb-4">
               <img
-                src="/assets/img/installation/2-code-injection-menu.webp"
+                src="/assets/img/docs/2-code-injection-menu.webp"
                 alt="Ghost Code Injection menu location"
                 className="w-full"
                 loading="lazy"
@@ -126,7 +126,7 @@ const Ghost = () => {
 
             <div className="border border-border rounded-lg overflow-hidden mb-6">
               <img
-                src="/assets/img/installation/3-code-injection.webp"
+                src="/assets/img/docs/3-code-injection.webp"
                 alt="Ghost Code Injection panel"
                 className="w-full"
                 loading="lazy"
