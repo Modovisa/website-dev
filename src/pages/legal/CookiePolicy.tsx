@@ -84,15 +84,15 @@ const CookiePolicy = () => {
               <p>
                 Cookies are small text files placed on your device when you visit
                 a website. They help websites function, remember user preferences,
-                and collect information for analytics. Cookies may be session-based
-                (deleted when you close your browser) or persistent (stored until
-                they expire or are deleted).
+                and collect information for analytics. Cookies may be
+                session-based (deleted when you close your browser) or persistent
+                (stored until they expire or are deleted).
               </p>
 
               <h2>3. Cookies We Use</h2>
               <p>
-                When you use Modovisa or when our tracking script is installed on a
-                customer&apos;s website, we may set the following first-party
+                When you use Modovisa or when our tracking script is installed on
+                a customer&apos;s website, we may set the following first-party
                 cookies:
               </p>
               <ul>
@@ -106,30 +106,31 @@ const CookiePolicy = () => {
                   minutes of inactivity.
                 </li>
                 <li>
-                  <strong>modovisa_original_referrer</strong> — Stores the original
-                  traffic source (e.g., search engine, campaign link). Retained for
-                  up to 13 months.
+                  <strong>modovisa_original_referrer</strong> — Stores the
+                  original traffic source (e.g., search engine, campaign link).
+                  Retained for up to 13 months.
                 </li>
               </ul>
               <p>
-                These cookies are strictly limited to measuring website traffic and
-                user journeys. We do <strong>not</strong> use them for advertising,
-                behavioral profiling, or cross-site tracking.
+                These cookies are strictly limited to measuring website traffic
+                and user journeys. We do <strong>not</strong> use them for
+                advertising, behavioral profiling, or cross-site tracking.
               </p>
 
               <h2>4. Consent</h2>
               <p>
                 For visitors located in the European Economic Area (EEA), United
-                Kingdom (UK), or other regions where consent is required, Modovisa
-                tracking will only start once you explicitly agree to the use of
-                cookies. A banner will be shown asking: &quot;We use a visitor ID
-                cookie to measure website traffic. Do you consent?&quot;
+                Kingdom (UK), or other regions where consent is required,
+                Modovisa tracking will only start once you explicitly agree to the
+                use of cookies. A banner will be shown asking: &quot;We use a
+                visitor ID cookie to measure website traffic. Do you
+                consent?&quot;
               </p>
 
               <h2>5. Managing Cookies</h2>
               <p>
-                You can control and delete cookies at any time through your browser
-                settings. If you choose to disable cookies, some analytics
+                You can control and delete cookies at any time through your
+                browser settings. If you choose to disable cookies, some analytics
                 functionality may not work correctly.
               </p>
 
@@ -142,25 +143,26 @@ const CookiePolicy = () => {
 
               <h2>7. Third-Party Cookies</h2>
               <p>
-                Modovisa does not set third-party advertising cookies. However, our
-                platform may integrate with services such as Cloudflare for security
-                and performance, which may place their own cookies. Please refer to
-                the third party&apos;s cookie policies for details.
+                Modovisa does not set third-party advertising cookies. However,
+                our platform may integrate with services such as Cloudflare for
+                security and performance, which may place their own cookies.
+                Please refer to the third party&apos;s cookie policies for
+                details.
               </p>
 
               <h2>8. Your Rights</h2>
               <p>
                 Depending on your location, you may have rights under laws such as
                 GDPR or CCPA to access, delete, or object to the use of cookies
-                associated with your data. To exercise these rights, please contact
-                us at <strong>we.care@modovisa.com</strong>.
+                associated with your data. To exercise these rights, please
+                contact us at <strong>we.care@modovisa.com</strong>.
               </p>
 
               <h2>9. Updates</h2>
               <p>
-                We may update this Cookie Policy from time to time. We will post the
-                updated version on this page and update the &quot;Last updated&quot;
-                date above.
+                We may update this Cookie Policy from time to time. We will post
+                the updated version on this page and update the &quot;Last
+                updated&quot; date above.
               </p>
             </div>
           </div>

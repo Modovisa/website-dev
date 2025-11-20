@@ -179,7 +179,7 @@ const SiteFooter = () => {
                 className="text-background/80 transition-colors hover:text-background"
               >
                 <svg
-                  viewBox="-143 145 512 512"
+                  viewBox="0 260 260 260"  // cropped in tight so the glyph fills more space
                   xmlns="http://www.w3.org/2000/svg"
                   aria-hidden="true"
                   focusable="false"
