@@ -1277,74 +1277,74 @@ const Index = () => {
             <div className="scroll-track integration-logo flex items-center">
               {/* One full loop of logos */}
               <img
-                src="/img/homepage/intergration-wordpress.webp"
+                src="/assets/img/homepage/intergration-wordpress.webp"
                 alt="WordPress Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-shopify.webp"
+                src="/assets/img/homepage/intergration-shopify.webp"
                 alt="Shopify Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-bigcommerce.webp"
+                src="/assets/img/homepage/intergration-bigcommerce.webp"
                 alt="BigCommerce Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-webflow.webp"
+                src="/assets/img/homepage/intergration-webflow.webp"
                 alt="Webflow Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-framer.webp"
+                src="/assets/img/homepage/intergration-framer.webp"
                 alt="Framer Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-square.webp"
+                src="/assets/img/homepage/intergration-square.webp"
                 alt="Square Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-gtm.webp"
+                src="/assets/img/homepage/intergration-gtm.webp"
                 alt="GTM Integration"
                 loading="lazy"
               />
 
               {/* Repeat logos for seamless loop */}
               <img
-                src="/img/homepage/intergration-wordpress.webp"
+                src="/assets/img/homepage/intergration-wordpress.webp"
                 alt="WordPress Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-shopify.webp"
+                src="/assets/img/homepage/intergration-shopify.webp"
                 alt="Shopify Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-bigcommerce.webp"
+                src="/assets/img/homepage/intergration-bigcommerce.webp"
                 alt="BigCommerce Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-webflow.webp"
+                src="/assets/img/homepage/intergration-webflow.webp"
                 alt="Webflow Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-framer.webp"
+                src="/assets/img/homepage/intergration-framer.webp"
                 alt="Framer Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-square.webp"
+                src="/assets/img/homepage/intergration-square.webp"
                 alt="Square Integration"
                 loading="lazy"
               />
               <img
-                src="/img/homepage/intergration-gtm.webp"
+                src="/assets/img/homepage/intergration-gtm.webp"
                 alt="GTM Integration"
                 loading="lazy"
               />
