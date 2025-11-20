@@ -30,6 +30,7 @@ import {
   Monitor,
   Users,
   User as UserIcon,
+  Feather,
 } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
 import { secureFetch } from "@/lib/auth/auth";
@@ -728,7 +729,7 @@ const LandingLiveDemo = () => {
             Product
           </Badge>
           <h2 className="text-3xl md:text-4xl font-bold mb-2">
-            <span className="relative z-10 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            <span className="relative z-10 gradient-word-subtitle">
               Simple, Intuitive, Powerful
             </span>
           </h2>
@@ -1067,42 +1068,61 @@ const Index = () => {
     }
   };
 
+  // UPDATED: features list to match screenshot
   const features = [
     {
       icon: Eye,
-      title: "Real-Time Tracking",
+      title: "Real-time visitor monitoring",
       description:
-        "Watch visitors navigate your site in real-time with detailed session recordings.",
-    },
-    {
-      icon: BarChart2,
-      title: "Advanced Analytics",
-      description:
-        "Deep insights into user behavior, conversions, and funnel analysis.",
+        "Instantly see who is on your site, where they're from, and what they're doing.",
     },
     {
       icon: Zap,
-      title: "Lightning Fast",
+      title: "Easy to integrate",
       description:
-        "Lightweight script that won't slow down your website performance.",
+        "Set up in minutes with just a single script — no complex configuration needed.",
     },
     {
-      icon: Shield,
-      title: "Privacy First",
+      icon: MapPin,
+      title: "Detailed Page Journey Mapping",
       description:
-        "GDPR compliant with respect for user privacy and data protection.",
+        "Understand the full path each visitor takes — from landing to exit or purchase.",
+    },
+    {
+      icon: Feather,
+      title: "Lightweight",
+      description:
+        "At under 5KB, it's over 90% smaller than the Google Analytics script — for blazing-fast performance.",
+    },
+    {
+      icon: BarChart2,
+      title: "Visual Dashboards",
+      description:
+        "Clean, intuitive interfaces that show heatmaps, line charts, and world maps — in real-time.",
     },
     {
       icon: Globe,
-      title: "Global Coverage",
+      title: "Google Analytics alternative",
       description:
-        "Track visitors from anywhere in the world with accurate geolocation.",
+        "Privacy-friendly, real-time insights without the bloat or tracking baggage.",
     },
     {
       icon: Clock,
-      title: "Session Replay",
+      title: "Custom Event Tracking",
       description:
-        "Replay user sessions to understand exactly how visitors interact.",
+        "Monitor cart additions, abandonments, button clicks, form completions, and more.",
+    },
+    {
+      icon: Package,
+      title: "Free",
+      description:
+        "No credit card required. We have a fair free plan suitable for small businesses. All core features available at zero cost.",
+    },
+    {
+      icon: Shield,
+      title: "Sales attribution and origin mapping",
+      description:
+        "Track which campaigns, geos, and sources result in actual purchases.",
     },
   ];
 
@@ -1166,7 +1186,9 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Tailored pricing plans designed for you
+              <span className="gradient-word-subtitle">
+                Tailored pricing plans designed for you
+              </span>
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Start for free — upgrade as your needs grow.
@@ -1357,7 +1379,9 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">
-              Everything you need to grow
+              <span className="gradient-word-subtitle">
+                Everything you need to know about your visitors in Real-time
+              </span>
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Powerful features designed for teams who want to understand their
@@ -1388,8 +1412,10 @@ const Index = () => {
       <section className="py-24 gradient-primary relative overflow-hidden">
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px] pointer-events-none" />
         <div className="container relative mx-auto px-4 text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            Ready to get started?
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            <span className="gradient-word-subtitle">
+              Ready to get started?
+            </span>
           </h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
             Join thousands of teams already using Modovisa to understand their
@@ -1414,8 +1440,13 @@ const Index = () => {
             <Badge variant="secondary" className="mb-3">
               FAQ
             </Badge>
-            <h2 id="faq-heading" className="text-4xl md:text-5xl font-bold mb-3">
-              Frequently asked questions
+            <h2
+              id="faq-heading"
+              className="text-4xl md:text-5xl font-bold mb-3"
+            >
+              <span className="gradient-word-subtitle">
+                Frequently asked questions
+              </span>
             </h2>
             <p className="text-muted-foreground text-lg">
               Answers to commonly asked questions
