@@ -132,148 +132,140 @@ const ContactUs = () => {
   const supportEmail = `${CONTACT_EMAIL_USER}@${CONTACT_EMAIL_HOST}`;
 
   return (
-    <AnimatedGradientBackground>
-      <div className="w-full max-w-2xl">
-        {/* Main Card (Bootstrap-style auth card) */}
-        <div className="space-y-8 rounded-3xl bg-background/95 p-8 shadow-2xl backdrop-blur md:p-12">
-          {/* Logo and Tagline */}
-          <div className="space-y-3 text-center">
-            <div className="flex flex-col items-center space-y-2 py-4">
-              <Link to="/">
-                <Logo showBeta={false} />
-              </Link>
-              <p className="mb-0 text-lg font-semibold">
-                Intuitive Analytics.
-              </p>
-            </div>
+    <AnimatedGradientBackground layout="full">
+      {/* Main Card (Bootstrap-style auth card, same pattern as Login) */}
+      <div className="w-full max-w-2xl glass-card rounded-3xl p-8 md:p-12 shadow-2xl space-y-8">
+        {/* Logo and Tagline */}
+        <div className="space-y-3 text-center">
+          <div className="flex flex-col items-center space-y-2 py-4">
+            <Link to="/">
+              <Logo showBeta={false} />
+            </Link>
+            <p className="mb-0 text-lg font-semibold">Intuitive Analytics.</p>
           </div>
+        </div>
 
-          {/* Heading */}
-          <div className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold">Contact Us</h1>
-            <p className="text-muted-foreground">
-              Have a question or feedback? We&apos;re here to help.
-            </p>
-          </div>
-
-          {/* Contact Form */}
-          <form onSubmit={handleSubmit} className="space-y-6" id="contactForm">
-            {/* Subject */}
-            <div className="space-y-2">
-              <Label htmlFor="subject" className="text-base font-semibold">
-                Subject <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.subject}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, subject: value }))
-                }
-              >
-                <SelectTrigger className="h-12 border-primary/20 focus:border-primary">
-                  <SelectValue placeholder="— Please choose an option —" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Bug Report">Bug Report</SelectItem>
-                  <SelectItem value="Feature Request">
-                    Feature Request
-                  </SelectItem>
-                  <SelectItem value="Technical Support">
-                    Technical Support
-                  </SelectItem>
-                  <SelectItem value="Billing Support">
-                    Billing Support
-                  </SelectItem>
-                  <SelectItem value="Partnership Inquiry">
-                    Partnership Inquiry
-                  </SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-base font-semibold">
-                Your Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Your name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
-                }
-                className="h-12 border-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-base font-semibold">
-                Your Email <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, email: e.target.value }))
-                }
-                className="h-12 border-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Message */}
-            <div className="space-y-2">
-              <Label htmlFor="message" className="text-base font-semibold">
-                Your Message <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="message"
-                placeholder="Let us know how we can help..."
-                value={formData.message}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, message: e.target.value }))
-                }
-                className="min-h-[120px] resize-none border-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Turnstile */}
-            <div className="mt-2">
-              <div
-                className="cf-turnstile"
-                data-sitekey={TURNSTILE_SITE_KEY}
-                data-callback="onTurnstileSuccess"
-              />
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="h-12 w-full text-base font-semibold"
-              size="lg"
-              disabled={isSubmitting}
-              data-modovisa-event="contact-send-message"
-            >
-              {isSubmitting ? "Sending..." : "Send Message"}
-            </Button>
-          </form>
-
-          {/* Footer Note */}
-          <p className="text-center text-sm text-muted-foreground">
-            Please add{" "}
-            <a
-              href={`mailto:${supportEmail}`}
-              className="font-semibold text-foreground underline-offset-2 hover:underline"
-            >
-              {supportEmail}
-            </a>{" "}
-            to your contacts to avoid missing replies.
+        {/* Heading */}
+        <div className="space-y-2 text-center">
+          <h1 className="text-3xl font-bold">Contact Us</h1>
+          <p className="text-muted-foreground">
+            Have a question or feedback? We&apos;re here to help.
           </p>
         </div>
+
+        {/* Contact Form */}
+        <form onSubmit={handleSubmit} className="space-y-6" id="contactForm">
+          {/* Subject */}
+          <div className="space-y-2">
+            <Label htmlFor="subject" className="text-base font-semibold">
+              Subject <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              value={formData.subject}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, subject: value }))
+              }
+            >
+              <SelectTrigger className="h-12 border-primary/20 focus:border-primary">
+                <SelectValue placeholder="— Please choose an option —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Bug Report">Bug Report</SelectItem>
+                <SelectItem value="Feature Request">Feature Request</SelectItem>
+                <SelectItem value="Technical Support">
+                  Technical Support
+                </SelectItem>
+                <SelectItem value="Billing Support">Billing Support</SelectItem>
+                <SelectItem value="Partnership Inquiry">
+                  Partnership Inquiry
+                </SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Name */}
+          <div className="space-y-2">
+            <Label htmlFor="name" className="text-base font-semibold">
+              Your Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="name"
+              type="text"
+              placeholder="Your name"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
+              className="h-12 border-primary/20 focus:border-primary"
+            />
+          </div>
+
+          {/* Email */}
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-base font-semibold">
+              Your Email <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={formData.email}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, email: e.target.value }))
+              }
+              className="h-12 border-primary/20 focus:border-primary"
+            />
+          </div>
+
+          {/* Message */}
+          <div className="space-y-2">
+            <Label htmlFor="message" className="text-base font-semibold">
+              Your Message <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="message"
+              placeholder="Let us know how we can help..."
+              value={formData.message}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, message: e.target.value }))
+              }
+              className="min-h-[120px] resize-none border-primary/20 focus:border-primary"
+            />
+          </div>
+
+          {/* Turnstile */}
+          <div className="mt-2">
+            <div
+              className="cf-turnstile"
+              data-sitekey={TURNSTILE_SITE_KEY}
+              data-callback="onTurnstileSuccess"
+            />
+          </div>
+
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            className="h-12 w-full text-base font-semibold"
+            size="lg"
+            disabled={isSubmitting}
+            data-modovisa-event="contact-send-message"
+          >
+            {isSubmitting ? "Sending..." : "Send Message"}
+          </Button>
+        </form>
+
+        {/* Footer Note */}
+        <p className="text-center text-sm text-muted-foreground">
+          Please add{" "}
+          <a
+            href={`mailto:${supportEmail}`}
+            className="font-semibold text-foreground underline-offset-2 hover:underline"
+          >
+            {supportEmail}
+          </a>{" "}
+          to your contacts to avoid missing replies.
+        </p>
       </div>
     </AnimatedGradientBackground>
   );
