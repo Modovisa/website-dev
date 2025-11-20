@@ -4,35 +4,33 @@ import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Instagram, Twitter } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const SiteFooter = () => {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="landing-footer footer-text mt-20 bg-background" aria-label="Site footer">
-      {/* Top block */}
-      <div className="footer-top relative z-10 overflow-hidden px-4 pb-10">
-        <div className="container mx-auto">
-          <div className="grid gap-10 md:gap-12 lg:grid-cols-5">
-            {/* Brand + newsletter */}
-            <div className="lg:col-span-2">
-              <div className="mb-6 flex items-center">
+    <footer
+      className="landing-footer bg-muted/40 pt-16 pb-10"
+      aria-label="Site footer"
+    >
+      <div className="container mx-auto px-4">
+        {/* Top: big rounded card like Bootstrap */}
+        <div className="footer-top relative m-4 overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
+          <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-5">
+            {/* Brand + newsletter (col-lg-4) */}
+            <div>
+              <div className="mb-6 flex items-center gap-3">
                 <Logo />
-                <span className="ml-3 text-lg font-semibold tracking-tight">
-                  Modovisa
-                </span>
               </div>
 
-              <p className="mb-6 max-w-xs text-sm text-muted-foreground">
+              <p className="footer-logo-description mb-6 max-w-xs text-sm text-muted-foreground">
                 Real-Time Insights – Intuitive Analytics
               </p>
 
               <form
-                className="footer-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  // TODO: wire up newsletter submit
-                }}
+                className="footer-form max-w-md"
+                onSubmit={(e) => e.preventDefault()}
               >
                 <label
                   htmlFor="footer-email"
@@ -45,11 +43,11 @@ const SiteFooter = () => {
                     id="footer-email"
                     type="email"
                     placeholder="Your email"
-                    className="h-10 rounded-none rounded-l-lg border-r-0"
+                    className="h-10 rounded-r-none border-r-0 text-sm"
                   />
                   <Button
                     type="submit"
-                    className="h-10 rounded-none rounded-r-lg shadow-none"
+                    className="h-10 rounded-l-none px-5 text-sm font-semibold"
                   >
                     Subscribe
                   </Button>
@@ -59,13 +57,12 @@ const SiteFooter = () => {
 
             {/* Product */}
             <div>
-              <h6 className="mb-6 text-sm font-semibold">Product</h6>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-sm font-semibold">Product</h3>
+              <ul className="space-y-4 text-sm text-muted-foreground">
                 <li>
                   <a
                     href="#pricing"
-                    className="transition-colors hover:text-foreground"
-                    title="Pricing | Modovisa"
+                    className="transition-colors hover:text-primary"
                   >
                     Pricing
                   </a>
@@ -73,8 +70,7 @@ const SiteFooter = () => {
                 <li>
                   <a
                     href="#features"
-                    className="transition-colors hover:text-foreground"
-                    title="Features | Modovisa"
+                    className="transition-colors hover:text-primary"
                   >
                     Features
                   </a>
@@ -84,111 +80,105 @@ const SiteFooter = () => {
 
             {/* Resources */}
             <div>
-              <h6 className="mb-6 text-sm font-semibold">Resources</h6>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-sm font-semibold">Resources</h3>
+              <ul className="space-y-4 text-sm text-muted-foreground">
                 <li>
                   <a
                     href="#landingFAQ"
-                    className="transition-colors hover:text-foreground"
-                    title="FAQs | Modovisa"
+                    className="transition-colors hover:text-primary"
                   >
                     FAQs
                   </a>
                 </li>
                 <li>
-                  <a
-                    href="/docs"
-                    className="transition-colors hover:text-foreground"
-                    title="Guides | Modovisa"
+                  <Link
+                    to="/docs"
+                    className="transition-colors hover:text-primary"
                   >
                     Guides
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
 
             {/* Legal */}
             <div>
-              <h6 className="mb-6 text-sm font-semibold">Legal</h6>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-sm font-semibold">Legal</h3>
+              <ul className="space-y-4 text-sm text-muted-foreground">
                 <li>
-                  <a
-                    href="/legal/terms-and-conditions"
-                    className="transition-colors hover:text-foreground"
-                    title="Terms and Conditions | Modovisa"
+                  <Link
+                    to="/legal/terms-and-conditions"
+                    className="transition-colors hover:text-primary"
                   >
                     Terms &amp; Conditions
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
-                    href="/legal/privacy"
-                    className="transition-colors hover:text-foreground"
-                    title="Privacy Policy | Modovisa"
+                  <Link
+                    to="/legal/privacy"
+                    className="transition-colors hover:text-primary"
                   >
                     Privacy
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
 
             {/* Contact */}
             <div>
-              <h6 className="mb-6 text-sm font-semibold">Contact</h6>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-sm font-semibold">Contact</h3>
+              <ul className="space-y-4 text-sm text-muted-foreground">
                 <li>
-                  <a
-                    href="/contact"
-                    className="transition-colors hover:text-foreground"
-                    title="Contact us | Modovisa"
+                  <Link
+                    to="/contact"
+                    className="transition-colors hover:text-primary"
                   >
                     Contact
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
-                    href="/contact"
-                    className="transition-colors hover:text-foreground"
-                    title="Support | Modovisa"
+                  <Link
+                    to="/contact"
+                    className="transition-colors hover:text-primary"
                   >
                     Support
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Bottom bar */}
-      <div className="footer-bottom bg-foreground py-4 text-background md:py-5">
-        <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 text-center text-sm md:flex-row md:text-left">
-          <div>
-            <span className="footer-bottom-text">
-              © {year} <span className="font-semibold">Modovisa</span>{" "}
-              <span>made with ❤️ All Rights Reserved</span>
-            </span>
-          </div>
+        {/* Bottom bar */}
+        <div className="footer-bottom py-3 md:py-5">
+          <div className="flex flex-col items-center justify-between gap-4 text-center text-sm text-muted-foreground md:flex-row md:text-left">
+            <div>
+              <span className="footer-bottom-text">
+                © {year} <span className="font-medium">Modovisa</span>{" "}
+                <span>made with ❤️ All Rights Reserved</span>
+              </span>
+            </div>
 
-          <div className="flex items-center gap-6">
-            <a
-              href="https://x.com/modovisa"
-              title="Modovisa at x.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-background/90 transition-opacity hover:opacity-100"
-            >
-              <Twitter className="h-5 w-5" />
-            </a>
-            <a
-              href="https://www.instagram.com/modovisa/"
-              title="Modovisa at Instagram"
-              target="_blank"
-              rel="noreferrer"
-              className="text-background/90 transition-opacity hover:opacity-100"
-            >
-              <Instagram className="h-5 w-5" />
-            </a>
+            <div className="flex items-center gap-4">
+              <a
+                href="https://x.com/modovisa"
+                title="Modovisa on X"
+                target="_blank"
+                rel="noreferrer"
+                className="text-foreground/80 transition-colors hover:text-primary"
+              >
+                <Twitter className="h-5 w-5" />
+              </a>
+              <a
+                href="https://www.instagram.com/modovisa/"
+                title="Modovisa on Instagram"
+                target="_blank"
+                rel="noreferrer"
+                className="text-foreground/80 transition-colors hover:text-primary"
+              >
+                <Instagram className="h-5 w-5" />
+              </a>
+            </div>
           </div>
         </div>
       </div>
