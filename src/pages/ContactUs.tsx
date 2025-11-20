@@ -16,17 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-
-declare global {
-  interface Window {
-    onTurnstileSuccess?: (token: string) => void;
-    turnstile?: { reset: () => void };
-  }
-}
+import { ensureTurnstileLoaded } from "@/lib/turnstile";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://api.modovisa.com";
 
+const TURNSTILE_SITE_KEY = "0x4AAAAAABZpGqOL1fgh-FTY";
 const CONTACT_EMAIL_USER = "we.care";
 const CONTACT_EMAIL_HOST = "modovisa.com";
 
@@ -49,16 +44,7 @@ const ContactUs = () => {
       setCaptchaToken(token);
     };
 
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[src*="challenges.cloudflare.com/turnstile/v0/api.js"]'
-    );
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
+    ensureTurnstileLoaded();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -119,6 +105,8 @@ const ContactUs = () => {
           message: "",
         });
         setCaptchaToken("");
+
+        // Reset widget if available
         window.turnstile?.reset();
       } else {
         toast({
@@ -257,7 +245,7 @@ const ContactUs = () => {
             <div className="mt-2">
               <div
                 className="cf-turnstile"
-                data-sitekey="0x4AAAAAABZpGqOL1fgh-FTY"
+                data-sitekey={TURNSTILE_SITE_KEY}
                 data-callback="onTurnstileSuccess"
               />
             </div>

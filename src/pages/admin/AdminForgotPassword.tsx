@@ -8,24 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ensureTurnstileLoaded } from "@/lib/turnstile";
 
 const API = "https://api.modovisa.com";
 const TURNSTILE_SITE_KEY = "0x4AAAAAABZpGqOL1fgh-FTY";
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        el: HTMLElement | string,
-        opts: {
-          sitekey: string;
-          callback?: (token: string) => void;
-          "refresh-expired"?: "auto" | "manual";
-        },
-      ) => void;
-    };
-  }
-}
 
 const AdminForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -35,12 +21,13 @@ const AdminForgotPassword = () => {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"" | "success" | "error">("");
 
-  /* ---------------- Turnstile loader + render ---------------- */
+  /* ---------------- Turnstile loader + render (shared helper) ---------------- */
 
   useEffect(() => {
     let cancelled = false;
 
-    const renderTurnstile = () => {
+    const renderTurnstile = async () => {
+      await ensureTurnstileLoaded();
       if (cancelled) return;
       if (!window.turnstile) return;
 
@@ -63,24 +50,7 @@ const AdminForgotPassword = () => {
       (el as any).dataset.rendered = "1";
     };
 
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src*="challenges.cloudflare.com/turnstile"]',
-    );
-
-    if (existing) {
-      if (window.turnstile) {
-        renderTurnstile();
-      } else {
-        existing.addEventListener("load", renderTurnstile, { once: true });
-      }
-    } else {
-      const script = document.createElement("script");
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-      script.async = true;
-      script.defer = true;
-      script.onload = renderTurnstile;
-      document.head.appendChild(script);
-    }
+    renderTurnstile();
 
     return () => {
       cancelled = true;
@@ -140,22 +110,26 @@ const AdminForgotPassword = () => {
 
   return (
     <AnimatedGradientBackground layout="full">
-      <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
+      <div className="glass-card w-full max-w-lg space-y-6 rounded-3xl p-10 shadow-2xl">
         {/* Header / logo */}
         <div className="flex flex-col items-center space-y-2 py-4">
           <Logo showBeta={false} />
-          <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
-          <h1 className="text-2xl font-semibold mt-6">Reset your admin password</h1>
-          <p className="text-sm text-muted-foreground mt-1 text-center">
-            Enter the email address associated with your admin account and we&apos;ll
-            send you a link to reset your password.
+          <p className="mb-0 text-lg font-semibold">Intuitive Analytics.</p>
+          <h1 className="mt-6 text-2xl font-semibold">
+            Reset your admin password
+          </h1>
+          <p className="mt-1 text-center text-sm text-muted-foreground">
+            Enter the email address associated with your admin account and
+            we&apos;ll send you a link to reset your password.
           </p>
         </div>
 
         {isSubmitting && (
-          <div className="text-center py-2">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            <p className="mt-2 text-sm text-muted-foreground">{loadingMessage}</p>
+          <div className="py-2 text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              {loadingMessage}
+            </p>
           </div>
         )}
 
@@ -180,14 +154,16 @@ const AdminForgotPassword = () => {
           </div>
 
           {message && (
-            <Alert variant={messageType === "success" ? "default" : "destructive"}>
+            <Alert
+              variant={messageType === "success" ? "default" : "destructive"}
+            >
               <AlertDescription>{message}</AlertDescription>
             </Alert>
           )}
 
           <Button
             type="submit"
-            className="w-full h-12 text-base"
+            className="h-12 w-full text-base"
             size="lg"
             disabled={isSubmitting}
           >

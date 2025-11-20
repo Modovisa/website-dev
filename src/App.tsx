@@ -55,6 +55,9 @@ import Squarespace from "@/pages/docs/Squarespace";
 import Webflow from "@/pages/docs/Webflow";
 import Ghost from "@/pages/docs/Ghost";
 
+// ⚖️ Legal pages
+import TermsAndConditions from "./pages/legal/TermsAndConditions";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -70,6 +73,10 @@ const App = () => (
           {/* ✅ REAL registration page at /register */}
           <Route path="/register" element={<Register />} />
           <Route path="/contact-us" element={<ContactUs />} />
+          <Route
+            path="/legal/terms-and-conditions"
+            element={<TermsAndConditions />}
+          />
 
           {/* Auth Routes */}
           <Route path="/2fa" element={<TwoFactorAuth />} />
