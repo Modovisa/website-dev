@@ -44,11 +44,11 @@ export const Logo = ({
         className={`h-auto ${sizeClasses[size]}`}
       />
 
-      {/* BETA Badge - only show for full logo variant */}
+      {/* BETA Badge - only show for full logo variant, desktop only */}
       {showBeta && variant === "full" && (
         <Badge
           variant="secondary"
-          className="rounded-sm bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+          className="hidden md:inline-flex rounded-sm bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground"
         >
           BETA
         </Badge>
