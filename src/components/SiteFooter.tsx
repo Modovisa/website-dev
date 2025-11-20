@@ -11,7 +11,7 @@ const SiteFooter = () => {
 
   return (
     <footer
-      className="landing-footer footer-text bg-muted/40 pt-16 pb-10"
+      className="landing-footer footer-text bg-muted/40 pt-16 pb-0"
       aria-label="Site footer"
     >
       {/* Outer container controls overall footer width */}
