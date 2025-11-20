@@ -18,9 +18,9 @@ const SiteFooter = () => {
       <div className="relative w-screen -ml-[50vw] -mr-[50vw] left-1/2 right-1/2 px-4 lg:px-10 2xl:px-16">
         {/* Top: big rounded card like Bootstrap, now much wider */}
         <div className="footer-top relative mx-auto max-w-[1320px] overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
-          <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))]">
             {/* Brand + newsletter */}
-            <div>
+            <div className="lg:pr-16">
               <div className="mb-6 flex items-center gap-3">
                 <Logo />
               </div>
