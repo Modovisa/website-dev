@@ -1566,13 +1566,14 @@ const Index = () => {
       </section>
 
       {/* 6. FAQ Section */}
-      <section className="bg-muted/30 py-24">
+      <section id="landingFAQ" className="bg-background py-24">
         <div className="container mx-auto px-4">
-          <div className="mx-auto mb-12 max-w-3xl text-center">
-            <Badge variant="secondary" className="mb-3">
+          {/* Top heading block */}
+          <div className="mb-12 text-center">
+            <Badge className="mb-3 rounded-full bg-primary/10 text-primary" variant="outline">
               FAQ
             </Badge>
-            <h2 className="mb-4 text-4xl font-bold">
+            <h2 className="mb-2 text-4xl font-bold">
               <span className="gradient-word-subtitle">
                 Frequently asked questions
               </span>
@@ -1582,93 +1583,172 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="mx-auto max-w-3xl">
-            <Accordion type="single" collapsible className="space-y-3">
-              <AccordionItem
-                value="item-1"
-                className="rounded-2xl border bg-card px-6"
-              >
-                <AccordionTrigger className="py-5 text-left">
-                  What is considered an “event”?
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                  An event is any tracked action taken by a visitor on your
-                  website—such as a page view, button click, form submission,
-                  or cart activity. You can define custom events to capture the
-                  interactions that matter most to your business.
-                </AccordionContent>
-              </AccordionItem>
+          {/* Content grid: accordion + illustration */}
+          <div className="mx-auto max-w-6xl">
+            <div className="grid gap-12 items-center lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+              {/* Left: Accordion */}
+              <div>
+                <Accordion type="single" collapsible className="space-y-4">
+                  <AccordionItem
+                    value="item-1"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      What is considered an “event”?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      An event is any tracked action taken by a visitor on your
+                      website—such as a page view, button click, form submission,
+                      or cart activity. You can define custom events to capture the
+                      interactions that matter most to your business.
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem
-                value="item-2"
-                className="rounded-2xl border bg-card px-6"
-              >
-                <AccordionTrigger className="py-5 text-left">
-                  How is this different from Google Analytics?
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                  Modovisa focuses on clarity and actionability with
-                  privacy-first insights, beautiful visualizations, and session
-                  replay—without the complexity of traditional analytics tools.
-                </AccordionContent>
-              </AccordionItem>
+                  <AccordionItem
+                    value="item-2"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      How is this different from Google Analytics?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      Unlike Google Analytics, which offers aggregated or sampled
+                      data, Modovisa gives you real-time, individual visitor
+                      insights. You can follow each person’s journey — across
+                      sessions and pages — as it happens. There’s no data sampling,
+                      no cookie reliance, and no complex setup. Just clear,
+                      privacy-friendly analytics designed to help you truly
+                      understand your users.
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem
-                value="item-3"
-                className="rounded-2xl border bg-card px-6"
-              >
-                <AccordionTrigger className="py-5 text-left">
-                  Do I need to install any code to get started?
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                  Yes, you’ll add a lightweight script to your site. It’s
-                  optimized for performance and won’t slow down your pages.
-                </AccordionContent>
-              </AccordionItem>
+                  <AccordionItem
+                    value="item-3"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      Do I need to install any code to get started?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      Yes, to start tracking visitors, you'll need to install a
+                      lightweight tracking script on your website. We provide a
+                      simple snippet that works with all major platforms and can be
+                      integrated in minutes.
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem
-                value="item-4"
-                className="rounded-2xl border bg-card px-6"
-              >
-                <AccordionTrigger className="py-5 text-left">
-                  Is there a free plan available?
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                  Absolutely. Our free plan includes generous limits so you can
-                  explore the product and get value before upgrading.
-                </AccordionContent>
-              </AccordionItem>
+                  <AccordionItem
+                    value="item-4"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      Is there a free plan available?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      Yes! Our free plan includes up to 3,000 events per month and
+                      access to all core features. You can start for free and
+                      upgrade as your traffic and analytics needs grow.
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem
-                value="item-5"
-                className="rounded-2xl border bg-card px-6"
-              >
-                <AccordionTrigger className="py-5 text-left">
-                  Will using this tool affect my website&apos;s load time?
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                  No—our script is tiny, loads asynchronously, and is designed
-                  to have negligible impact on performance.
-                </AccordionContent>
-              </AccordionItem>
+                  <AccordionItem
+                    value="item-5"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      Will using this tool affect my website&apos;s load time?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      Not at all. Our tracking script is optimized for performance
+                      and adds minimal impact—typically under 1KB compressed, with
+                      asynchronous loading that won’t block your site.
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem
-                value="item-6"
-                className="rounded-2xl border bg-card px-6"
-              >
-                <AccordionTrigger className="py-5 text-left">
-                  Can I track custom events like form submissions or product
-                  clicks?
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                  Yes, you can define and track custom events to measure the
-                  interactions that matter most to your business.
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                  <AccordionItem
+                    value="item-6"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      Can I track custom events like form submissions or product clicks?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      Absolutely. You can define and track any custom event you
+                      want—such as form completions, downloads, or specific user
+                      interactions—using our simple JavaScript API or tag-based
+                      setup.
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem
+                    value="item-7"
+                    className="rounded-2xl border bg-card px-6"
+                  >
+                    <AccordionTrigger className="py-5 text-left text-base font-semibold">
+                      Which platforms is Modovisa compatible with?
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                      Modovisa is designed to work seamlessly with all major
+                      website and eCommerce platforms, including:
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                        <li>WordPress (with or without WooCommerce)</li>
+                        <li>Shopify</li>
+                        <li>Webflow</li>
+                        <li>Framer</li>
+                        <li>BigCommerce</li>
+                        <li>Wix</li>
+                        <li>Squarespace</li>
+                        <li>Custom-built websites (HTML, PHP, React, etc.)</li>
+                      </ul>
+                      <p className="mt-3">
+                        Integration takes just a few minutes using our lightweight
+                        script or platform-specific plugins. No coding required for
+                        most setups!
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+
+              {/* Right: Illustration */}
+              <div className="flex justify-center">
+                <div className="rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-primary/10 p-8">
+                  <svg
+                    width="260"
+                    height="260"
+                    viewBox="0 0 48 48"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="#5f17eb"
+                      d="M15,40h23l6,6V25c0-2.2-1.8-4-4-4H15c-2.2,0-4,1.8-4,4v11C11,38.2,12.8,40,15,40z"
+                    />
+                    <path
+                      fill="#ffffff"
+                      d="M28.8,32.8h-3.6l-0.7,2.1h-2.2l3.7-10h1.9l3.7,10h-2.2L28.8,32.8z M25.7,31.2h2.5L27,27.4L25.7,31.2z"
+                    />
+                    <path
+                      fill="#b7b9ff"
+                      d="M33,25H10l-6,6V8c0-2.2,1.8-4,4-4h25c2.2,0,4,1.8,4,4v13C37,23.2,35.2,25,33,25z"
+                    />
+                    <path
+                      fill="#ffffff"
+                      d="M25.4,14.2c0,1-0.2,1.8-0.5,2.5c-0.3,0.7-0.7,1.3-1.3,1.7l1.7,1.3L24,20.9l-2.2-1.7c-0.2,0-0.5,0.1-0.8,0.1 
+                        c-0.6,0-1.2-0.1-1.8-0.3c-0.5-0.2-1-0.6-1.4-1c-0.4-0.4-0.7-1-0.9-1.6c-0.2-0.6-0.3-1.3-0.3-2.1v-0.4c0-0.8,0.1-1.5,0.3-2.1 
+                        c0.2-0.6,0.5-1.2,0.9-1.6c0.4-0.4,0.8-0.8,1.4-1c0.5-0.2,1.1-0.3,1.8-0.3c0.6,0,1.2,0.1,1.8,0.3c0.5,0.2,1,0.6,1.4,1 
+                        c0.4,0.4,0.7,1,0.9,1.6c0.2,0.6,0.3,1.3,0.3,2.1V14.2z M23.2,13.7c0-1.1-0.2-1.9-0.6-2.4c-0.4-0.6-0.9-0.8-1.6-0.8 
+                        c-0.7,0-1.3,0.3-1.6,0.8c-0.4,0.6-0.6,1.4-0.6,2.4v0.5c0,0.5,0.1,1,0.2,1.4c0.1,0.4,0.2,0.8,0.4,1c0.2,0.3,0.4,0.5,0.7,0.6 
+                        c0.3,0.1,0.6,0.2,0.9,0.2c0.7,0,1.3-0.3,1.6-0.8c0.4-0.6,0.6-1.4,0.6-2.5V13.7z"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
+
 
       <SiteFooter />
 
