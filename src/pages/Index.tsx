@@ -1239,13 +1239,19 @@ const Index = () => {
         </div>
       </section>
 
-      {/* 4. Integrations Section (using old CTA slot) */}
+      {/* 4. Integrations Section */}
       <section
         id="landingIntegrations"
-        className="gradient-primary relative overflow-hidden py-24"
+        className="relative overflow-hidden py-24"
       >
-        <div className="pointer-events-none absolute inset-0 bg-grid-white/[0.05] bg-[size:60px_60px]" />
-        <div className="container relative mx-auto px-4">
+        {/* Gradient background image like Bootstrap version */}
+        <img
+          src="/img/homepage/integrations-bg.webp"
+          alt="Integrations background"
+          className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-40"
+        />
+
+        <div className="container mx-auto px-4">
           {/* Text card */}
           <div className="integrations-text-wrapper mx-auto mb-12 max-w-4xl bg-white px-8 py-10 text-center">
             <h2 className="mb-3 text-3xl font-bold md:text-4xl">
@@ -1258,56 +1264,95 @@ const Index = () => {
             </p>
           </div>
 
-          {/* Logo / icon scroller */}
+          {/* Logo scroller – image based, like Bootstrap */}
           <div
-            className="integration-scroller mx-auto flex items-center justify-center rounded-2xl border bg-white"
+            className="integration-scroller relative mx-auto overflow-hidden py-4 bg-white/80 rounded-2xl"
             style={{
               WebkitMaskImage:
-                "linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)",
+                "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)",
               maskImage:
-                "linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)",
+                "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)",
             }}
           >
-            <div className="integration-scroll-track px-10">
-              {[0, 1].map((loop) =>
-                integrations.map((item, idx) => (
-                  <div
-                    key={`${item.name}-${loop}-${idx}`}
-                    className="flex items-center gap-3"
-                  >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                      <item.Icon className="h-6 w-6 text-primary" />
-                    </div>
-                    <span className="text-sm font-medium text-muted-foreground md:text-base">
-                      {item.label}
-                    </span>
-                  </div>
-                )),
-              )}
-            </div>
-          </div>
+            <div className="scroll-track integration-logo flex items-center">
+              {/* One full loop of logos */}
+              <img
+                src="/img/homepage/integrations/intergration-wordpress.webp"
+                alt="WordPress Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-shopify.webp"
+                alt="Shopify Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-bigcommerce.webp"
+                alt="BigCommerce Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-webflow.webp"
+                alt="Webflow Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-framer.webp"
+                alt="Framer Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-square.webp"
+                alt="Square Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-gtm.webp"
+                alt="GTM Integration"
+                loading="lazy"
+              />
 
-          {/* CTA button under integrations */}
-          <div className="mt-12 text-center">
-            <h3 className="mb-4 text-2xl font-semibold text-white">
-              Ready to get started?
-            </h3>
-            <p className="mx-auto mb-8 max-w-2xl text-white/80">
-              Join teams already using Modovisa on WordPress, Shopify,
-              BigCommerce, Webflow, Framer, and more.
-            </p>
-            <Link to="/register">
-              <Button
-                size="lg"
-                className="h-14 bg-white px-8 text-lg text-primary hover:bg-white/90"
-              >
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
+              {/* Repeat logos for seamless loop */}
+              <img
+                src="/img/homepage/integrations/intergration-wordpress.webp"
+                alt="WordPress Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-shopify.webp"
+                alt="Shopify Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-bigcommerce.webp"
+                alt="BigCommerce Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-webflow.webp"
+                alt="Webflow Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-framer.webp"
+                alt="Framer Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-square.webp"
+                alt="Square Integration"
+                loading="lazy"
+              />
+              <img
+                src="/img/homepage/integrations/intergration-gtm.webp"
+                alt="GTM Integration"
+                loading="lazy"
+              />
+            </div>
           </div>
         </div>
       </section>
+
 
       {/* 5. Pricing Section */}
       <section className="bg-background py-24" id="pricing">
