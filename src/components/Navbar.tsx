@@ -87,6 +87,13 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
                 FAQs
               </Link>
 
+              <Link
+                to="/docs"
+                className="text-lg font-medium hover:text-primary transition-colors"
+              >
+                Docs
+              </Link>
+
               <div className="pt-4 border-t">
                 {isAuthed ? (
                   <>
@@ -159,6 +166,12 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             className="text-base font-medium text-foreground hover:text-primary transition-colors"
           >
             FAQs
+          </Link>
+          <Link
+            to="/docs"
+            className="text-base font-medium text-foreground hover:text-primary transition-colors"
+          >
+            Docs
           </Link>
         </div>
 
