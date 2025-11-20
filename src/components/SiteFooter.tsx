@@ -3,7 +3,7 @@
 import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Instagram, Twitter } from "lucide-react";
+import { Twitter, Reddit } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const SiteFooter = () => {
@@ -116,7 +116,7 @@ const SiteFooter = () => {
                 </li>
                 <li>
                   <Link
-                    to="/legal/privacy"
+                    to="/legal/privacy-policy"
                     className="transition-colors hover:text-primary"
                   >
                     Privacy
@@ -171,13 +171,13 @@ const SiteFooter = () => {
                 <Twitter className="h-5 w-5" />
               </a>
               <a
-                href="https://www.instagram.com/modovisa/"
-                title="Modovisa on Instagram"
+                href="https://www.reddit.com/r/Modovisa/"
+                title="Modovisa on Reddit"
                 target="_blank"
                 rel="noreferrer"
                 className="text-background/80 transition-colors hover:text-background"
               >
-                <Instagram className="h-5 w-5" />
+                <Reddit className="h-5 w-5" />
               </a>
             </div>
           </div>

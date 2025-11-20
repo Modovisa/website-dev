@@ -196,7 +196,10 @@ const PrivacyPolicy = () => {
               <p>
                 We use cookies and similar technologies to facilitate analytics and improve functionality.
                 For more information, please see our{" "}
-                <Link to="/legal/cookie-policy" className="text-primary hover:underline">
+                <Link
+                  to="/legal/cookie-policy"
+                  className="text-primary hover:underline"
+                >
                   Cookie Policy
                 </Link>
                 .
