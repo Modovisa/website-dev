@@ -211,13 +211,26 @@ All colors MUST be HSL.
 
 /* Animated Gradient Canvas Styles */
 .gradient-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Hero banner */
+.gradient-hero {
   --gradient-color-1: #a960ee;
   --gradient-color-2: #ff333d;
   --gradient-color-3: #90e0ff;
   --gradient-color-4: #ffcb57;
-  position: absolute;
-  top: 0;
-  left: 0;
+}
+
+/* Integrations bg */
+.gradient-integrations {
+  --gradient-color-1: #c5b3ff; /* softer lilac */
+  --gradient-color-2: #ff9a9e; /* muted coral/red */
+  --gradient-color-3: #bde7ff; /* softer blue */
+  --gradient-color-4: #ffe6a8; /* pale warm yellow */
+  opacity: 0.7;                /* optional extra softening */
 }
 
 /* Pulse Animation for Live Indicators */
