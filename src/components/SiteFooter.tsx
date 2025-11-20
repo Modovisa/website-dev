@@ -183,7 +183,7 @@ const SiteFooter = () => {
                   xmlns="http://www.w3.org/2000/svg"
                   aria-hidden="true"
                   focusable="false"
-                  className="h-5 w-5 fill-current"
+                  className="h-6 w-6 fill-current"
                 >
                   <g fill="currentColor">
                     <path d="M13.4,379.1c-6.2-2.6-13.8-0.4-18.4,5.1s-5.1,13.8-1.1,19.7C-1.4,394.3,5.3,386.2,13.4,379.1z" />
