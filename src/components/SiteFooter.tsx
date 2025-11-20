@@ -14,11 +14,12 @@ const SiteFooter = () => {
       className="landing-footer bg-muted/40 pt-16 pb-10"
       aria-label="Site footer"
     >
-      <div className="container mx-auto px-4">
-        {/* Top: big rounded card like Bootstrap */}
-        <div className="footer-top relative m-4 overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
+      {/* FULL-WIDTH WRAPPER (no `container`) */}
+      <div className="w-full px-4 lg:px-10 2xl:px-16 mx-auto">
+        {/* Top: big rounded card like Bootstrap, almost full width */}
+        <div className="footer-top relative mx-auto overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
           <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-5">
-            {/* Brand + newsletter (col-lg-4) */}
+            {/* Brand + newsletter */}
             <div>
               <div className="mb-6 flex items-center gap-3">
                 <Logo />
@@ -149,7 +150,7 @@ const SiteFooter = () => {
           </div>
         </div>
 
-        {/* Bottom bar */}
+        {/* Bottom bar (still centered but can be narrower than the card if you prefer later) */}
         <div className="footer-bottom py-3 md:py-5">
           <div className="flex flex-col items-center justify-between gap-4 text-center text-sm text-muted-foreground md:flex-row md:text-left">
             <div>
