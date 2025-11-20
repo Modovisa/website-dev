@@ -7,9 +7,9 @@ import SiteFooter from "@/components/SiteFooter";
 
 const CookiePolicy = () => {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <div className="min-h-screen flex flex-col text-slate">
       {/* Navbar */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+      <header className="border-b backdrop-blur">
         <div className="container mx-auto flex items-center justify-between py-4 px-4 md:px-8">
           <Link to="/" aria-label="Go to homepage" className="flex items-center gap-2">
             <Logo className="h-8 w-auto" />
