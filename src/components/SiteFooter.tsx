@@ -14,12 +14,12 @@ const SiteFooter = () => {
       className="landing-footer footer-text bg-muted/40 pt-16 pb-10"
       aria-label="Site footer"
     >
-      {/* FULL-BLEED WRAPPER: escapes any parent container */}
-      <div className="relative w-screen -ml-[50vw] -mr-[50vw] left-1/2 right-1/2 px-4 lg:px-10 2xl:px-16">
-        {/* Top: big rounded card like Bootstrap, now much wider */}
-        <div className="footer-top relative mx-auto max-w-[1320px] overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
+      {/* Outer container controls overall footer width */}
+      <div className="mx-auto w-full max-w-[1320px] px-4 lg:px-10 2xl:px-16">
+        {/* Top: big rounded card */}
+        <div className="footer-top relative overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
           <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))]">
-            {/* Brand + newsletter */}
+            {/* Brand + newsletter (wider column) */}
             <div className="lg:pr-16">
               <div className="mb-6 flex items-center gap-3">
                 <Logo />
@@ -151,7 +151,7 @@ const SiteFooter = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="footer-bottom mx-auto mt-4 max-w-[1320px] py-3 md:py-5">
+        <div className="footer-bottom mx-auto mt-4 py-3 md:py-5">
           <div className="flex flex-col items-center justify-between gap-4 text-center text-sm text-muted-foreground md:flex-row md:text-left">
             <div>
               <span className="footer-bottom-text">
