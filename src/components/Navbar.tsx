@@ -45,7 +45,6 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
   }, []);
 
   const handleLogout = async () => {
-    // Shared logout helper: clears caches, broadcasts, hits /api/logout, etc.
     await fullLogout("user", { source: "navbar" });
     // fullLogout will redirect (default: /login)
   };
@@ -63,25 +62,25 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
           <SheetContent side="left" className="w-[300px]">
             <div className="flex flex-col gap-4 mt-8">
               <Link
-                to="#product"
+                to="/#product"
                 className="text-lg font-medium hover:text-primary transition-colors"
               >
                 Product
               </Link>
               <Link
-                to="#features"
+                to="/#features"
                 className="text-lg font-medium hover:text-primary transition-colors"
               >
                 Features
               </Link>
               <Link
-                to="#pricing"
+                to="/#pricing"
                 className="text-lg font-medium hover:text-primary transition-colors"
               >
                 Pricing
               </Link>
               <Link
-                to="#faq"
+                to="/#landingFAQ"
                 className="text-lg font-medium hover:text-primary transition-colors"
               >
                 FAQs
@@ -144,25 +143,25 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
         {/* Desktop: Nav Links (centered) */}
         <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2">
           <Link
-            to="#product"
+            to="/#product"
             className="text-base font-medium text-foreground hover:text-primary transition-colors"
           >
             Product
           </Link>
           <Link
-            to="#features"
+            to="/#features"
             className="text-base font-medium text-foreground hover:text-primary transition-colors"
           >
             Features
           </Link>
           <Link
-            to="#pricing"
+            to="/#pricing"
             className="text-base font-medium text-foreground hover:text-primary transition-colors"
           >
             Pricing
           </Link>
           <Link
-            to="#faq"
+            to="/#landingFAQ"
             className="text-base font-medium text-foreground hover:text-primary transition-colors"
           >
             FAQs
@@ -208,7 +207,6 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             </Link>
           )}
         </div>
-
 
         {/* Mobile: Auth icon */}
         <div className="md:hidden">
