@@ -1445,10 +1445,7 @@ const Index = () => {
             <Badge variant="secondary" className="mb-3">
               FAQ
             </Badge>
-            <h2
-              id="faq-heading"
-              className="text-4xl md:text-5xl font-bold mb-3"
-            >
+            <h2 className="text-4xl font-bold mb-4">
               <span className="gradient-word-subtitle">
                 Frequently asked questions
               </span>
