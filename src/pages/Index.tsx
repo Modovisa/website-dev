@@ -1714,7 +1714,7 @@ const Index = () => {
 
               {/* Right: Illustration */}
               <div className="flex justify-center">
-                <div className="rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-primary/10 p-8">
+                <div className="rounded-3xl from-primary/10 via-primary/5 to-primary/10 p-8">
                   <svg
                     width="260"
                     height="260"
@@ -1750,9 +1750,6 @@ const Index = () => {
           </div>
         </div>
       </section>
-
-
-
 
       <SiteFooter />
 
