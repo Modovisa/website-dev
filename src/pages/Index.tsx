@@ -1596,7 +1596,7 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       What is considered an “event”?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                    <AccordionContent className="pt-0 pb-6 text-muted-foreground text-md">
                       An event is any tracked action taken by a visitor on your
                       website—such as a page view, button click, form submission,
                       or cart activity. You can define custom events to capture the
