@@ -721,7 +721,7 @@ const LandingLiveDemo = () => {
     ((selectedVisitor as any).referrer ?? selectedVisitor.ref ?? null);
 
   return (
-    <section id="product" className="py-20 bg-background">
+    <section id="product" className="py-20 bg-muted/30">
       <div className="container mx-auto px-4">
         {/* Top copy block – mirrors Bootstrap text */}
         <div className="flex flex-col items-center text-center mb-10">
@@ -1182,7 +1182,7 @@ const Index = () => {
       <LandingLiveDemo />
 
       {/* Pricing Section */}
-      <section className="py-24 bg-muted/30" id="pricing">
+      <section className="py-24 bg-background" id="pricing">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <Badge className="rounded-full mb-3" variant="outline">
