@@ -131,7 +131,7 @@ const SiteFooter = () => {
               <ul className="space-y-4 text-sm text-muted-foreground">
                 <li>
                   <Link
-                    to="/contact"
+                    to="/contact-us"
                     className="transition-colors hover:text-primary"
                   >
                     Contact
@@ -139,7 +139,7 @@ const SiteFooter = () => {
                 </li>
                 <li>
                   <Link
-                    to="/contact"
+                    to="/contact-us"
                     className="transition-colors hover:text-primary"
                   >
                     Support
