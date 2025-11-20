@@ -351,3 +351,19 @@ All colors MUST be HSL.
   outline-offset: 2px;
 }
 
+/* Homepage sub-title */
+.gradient-word-subtitle {
+  display: inline-block;
+  background: linear-gradient(
+    135deg,
+    #3a0d93 0%,
+    #384551 33%,
+    #3a0d93 66%,
+    #384551 100%  
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% auto;
+  animation: shine 4s ease-in-out infinite alternate;
+}
