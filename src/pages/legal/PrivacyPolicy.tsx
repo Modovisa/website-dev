@@ -29,14 +29,14 @@ const PrivacyPolicy = () => {
           <div className="container mx-auto px-4 md:px-8 max-w-5xl">
             {/* Hero / Heading */}
             <div className="mb-8 md:mb-10">
-              <p className="text-xs font-semibold tracking-[0.25em] text-slate-400 mb-2">
+              <p className="text-xs font-semibold tracking-[0.25em] text-slate mb-2">
                 LEGAL
               </p>
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">
                 Privacy Policy
               </h1>
-              <p className="text-sm text-slate-400">
-                Last updated: <span className="font-medium text-slate-200">23 April 2025</span>
+              <p className="text-sm text-slate">
+                Last updated: <span className="font-medium text-slate">23 April 2025</span>
               </p>
             </div>
 
