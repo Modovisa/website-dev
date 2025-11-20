@@ -1,7 +1,7 @@
 // src/components/Navbar.tsx
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -18,6 +18,7 @@ const API = "https://api.modovisa.com";
 export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => {
   const [isAuthed, setIsAuthed] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const navigate = useNavigate();
 
   // Lightweight auth check: hit /api/me once with cookies
   useEffect(() => {
@@ -49,6 +50,32 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
     // fullLogout will redirect (default: /login)
   };
 
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const offset = 80; // approx navbar height
+    const targetY = rect.top + window.scrollY - offset;
+
+    window.scrollTo({
+      top: targetY,
+      behavior: "smooth",
+    });
+  };
+
+  const handleSectionClick = (id: string) => {
+    if (window.location.pathname !== "/") {
+      // Go to homepage first, then scroll
+      navigate("/#" + id);
+      setTimeout(() => {
+        scrollToSection(id);
+      }, 50);
+    } else {
+      scrollToSection(id);
+    }
+  };
+
   return (
     <nav className={`glass-nav rounded-md px-6 py-4 ${className}`}>
       <div className="flex items-center justify-between">
@@ -60,31 +87,35 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px]">
-            <div className="flex flex-col gap-4 mt-8">
-              <Link
-                to="/#product"
-                className="text-lg font-medium hover:text-primary transition-colors"
+            <div className="mt-8 flex flex-col gap-4">
+              <button
+                type="button"
+                onClick={() => handleSectionClick("product")}
+                className="text-left text-lg font-medium hover:text-primary transition-colors"
               >
                 Product
-              </Link>
-              <Link
-                to="/#features"
-                className="text-lg font-medium hover:text-primary transition-colors"
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSectionClick("features")}
+                className="text-left text-lg font-medium hover:text-primary transition-colors"
               >
                 Features
-              </Link>
-              <Link
-                to="/#pricing"
-                className="text-lg font-medium hover:text-primary transition-colors"
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSectionClick("pricing")}
+                className="text-left text-lg font-medium hover:text-primary transition-colors"
               >
                 Pricing
-              </Link>
-              <Link
-                to="/#landingFAQ"
-                className="text-lg font-medium hover:text-primary transition-colors"
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSectionClick("landingFAQ")}
+                className="text-left text-lg font-medium hover:text-primary transition-colors"
               >
                 FAQs
-              </Link>
+              </button>
 
               <Link
                 to="/docs"
@@ -99,7 +130,7 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
                     <Link to="/app/live-tracking">
                       <Button
                         variant="outline"
-                        className="w-full mb-2 bg-white/50 hover:bg-white/75 border-transparent text-foreground font-semibold transition-colors"
+                        className="mb-2 w-full border-transparent bg-white/50 text-foreground font-semibold transition-colors hover:bg-white/75"
                       >
                         Live Tracking
                       </Button>
@@ -109,21 +140,19 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
                       variant="destructive"
                       onClick={handleLogout}
                     >
-                      <LogOut className="h-4 w-4 mr-2" />
+                      <LogOut className="mr-2 h-4 w-4" />
                       Sign out
                     </Button>
                   </>
                 ) : (
                   <>
                     <Link to="/login">
-                      <Button variant="outline" className="w-full mb-2">
+                      <Button variant="outline" className="mb-2 w-full">
                         Sign In
                       </Button>
                     </Link>
                     <Link to="/register">
-                      <Button className="w-full">
-                        Get Started
-                      </Button>
+                      <Button className="w-full">Get Started</Button>
                     </Link>
                   </>
                 )}
@@ -136,62 +165,66 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
         <div className="hidden md:block">
           <Logo className="text-foreground" />
         </div>
-        <div className="md:hidden flex-1 flex justify-center">
+        <div className="flex flex-1 justify-center md:hidden">
           <Logo className="text-foreground" />
         </div>
 
         {/* Desktop: Nav Links (centered) */}
-        <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2">
-          <Link
-            to="/#product"
-            className="text-base font-medium text-foreground hover:text-primary transition-colors"
+        <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex">
+          <button
+            type="button"
+            onClick={() => handleSectionClick("product")}
+            className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
             Product
-          </Link>
-          <Link
-            to="/#features"
-            className="text-base font-medium text-foreground hover:text-primary transition-colors"
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSectionClick("features")}
+            className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
             Features
-          </Link>
-          <Link
-            to="/#pricing"
-            className="text-base font-medium text-foreground hover:text-primary transition-colors"
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSectionClick("pricing")}
+            className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
             Pricing
-          </Link>
-          <Link
-            to="/#landingFAQ"
-            className="text-base font-medium text-foreground hover:text-primary transition-colors"
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSectionClick("landingFAQ")}
+            className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
             FAQs
-          </Link>
+          </button>
           <Link
             to="/docs"
-            className="text-base font-medium text-foreground hover:text-primary transition-colors"
+            className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
             Docs
           </Link>
         </div>
 
         {/* Desktop: Auth area */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden items-center gap-4 md:flex">
           {isAuthed ? (
             <>
               <Link to="/app/live-tracking">
                 <Button
                   variant="outline"
-                  className="rounded-md px-6 py-2.5 text-base font-semibold bg-white/50 hover:bg-white/75 border-transparent text-foreground hover:text-foreground transition-colors"
+                  className="rounded-md border-transparent bg-white/50 px-6 py-2.5 text-base font-semibold text-foreground transition-colors hover:bg-white/75 hover:text-foreground"
                 >
                   Live Tracking
                 </Button>
               </Link>
               <Button
                 variant="ghost"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-2.5 text-base font-semibold"
+                className="rounded-md bg-primary px-6 py-2.5 text-base font-semibold text-primary-foreground hover:bg-primary/90"
                 onClick={handleLogout}
               >
-                <LogOut className="h-5 w-5 mr-1" />
+                <LogOut className="mr-1 h-5 w-5" />
                 Sign out
               </Button>
             </>
@@ -199,9 +232,9 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             <Link to="/login">
               <Button
                 variant="ghost"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-2.5 text-base font-semibold"
+                className="rounded-md bg-primary px-6 py-2.5 text-base font-semibold text-primary-foreground hover:bg-primary/90"
               >
-                <LogIn className="h-5 w-5 mr-1" />
+                <LogIn className="mr-1 h-5 w-5" />
                 Login/Register
               </Button>
             </Link>
@@ -213,7 +246,7 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
           {isAuthed ? (
             <Button
               size="icon"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md"
+              className="rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleLogout}
               title="Sign out"
             >
@@ -223,7 +256,7 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             <Link to="/login">
               <Button
                 size="icon"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md"
+                className="rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <LogIn className="h-5 w-5" />
               </Button>
