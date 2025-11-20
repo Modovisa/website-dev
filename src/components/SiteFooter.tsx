@@ -15,7 +15,7 @@ const SiteFooter = () => {
       aria-label="Site footer"
     >
       {/* Outer container controls overall footer width */}
-      <div className="mx-auto w-full max-w-[1320px] px-4 lg:px-10 2xl:px-16">
+      <div className="mx-auto w-full max-w-[100%] px-4 lg:px-10 2xl:px-16">
         {/* Top: big rounded card */}
         <div className="footer-top relative overflow-hidden rounded-[32px] bg-background px-6 py-10 shadow-[0_18px_45px_rgba(58,87,135,0.12)] sm:px-8 lg:px-12">
           <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))]">
@@ -150,9 +150,9 @@ const SiteFooter = () => {
           </div>
         </div>
 
-        {/* Bottom bar */}
-        <div className="footer-bottom mx-auto mt-4 py-3 md:py-5">
-          <div className="flex flex-col items-center justify-between gap-4 text-center text-sm text-muted-foreground md:flex-row md:text-left">
+       {/* Bottom bar */}
+        <div className="footer-bottom mt-6 -mx-4 bg-foreground py-3 md:py-5 lg:-mx-10 2xl:-mx-16">
+          <div className="mx-auto flex max-w-[1320px] flex-col items-center justify-between gap-4 px-4 text-center text-sm text-background md:flex-row md:px-0 md:text-left">
             <div>
               <span className="footer-bottom-text">
                 © {year} <span className="font-medium">Modovisa</span>{" "}
@@ -166,7 +166,7 @@ const SiteFooter = () => {
                 title="Modovisa on X"
                 target="_blank"
                 rel="noreferrer"
-                className="text-foreground/80 transition-colors hover:text-primary"
+                className="text-background/80 transition-colors hover:text-background"
               >
                 <Twitter className="h-5 w-5" />
               </a>
@@ -175,13 +175,14 @@ const SiteFooter = () => {
                 title="Modovisa on Instagram"
                 target="_blank"
                 rel="noreferrer"
-                className="text-foreground/80 transition-colors hover:text-primary"
+                className="text-background/80 transition-colors hover:text-background"
               >
                 <Instagram className="h-5 w-5" />
               </a>
             </div>
           </div>
         </div>
+
       </div>
     </footer>
   );
