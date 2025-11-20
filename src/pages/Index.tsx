@@ -926,6 +926,7 @@ const Index = () => {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const integrationsCanvasRef = useRef<HTMLCanvasElement>(null);
   const gradientInitialized = useRef(false);
 
   // Initialize gradient - same behavior as Bootstrap version
@@ -933,12 +934,22 @@ const Index = () => {
     if (gradientInitialized.current) return;
 
     const initGradient = () => {
-      if (typeof window.Gradient !== "undefined" && canvasRef.current) {
+      if (typeof window.Gradient !== "undefined") {
         try {
-          const gradient = new window.Gradient();
-          gradient.initGradient(".gradient-canvas");
+          // Hero background
+          if (canvasRef.current) {
+            const heroGradient = new window.Gradient();
+            heroGradient.initGradient(".gradient-hero");
+          }
+
+          // Integrations background
+          if (integrationsCanvasRef.current) {
+            const integrationsGradient = new window.Gradient();
+            integrationsGradient.initGradient(".gradient-integrations");
+          }
+
           gradientInitialized.current = true;
-          console.log("✅ Gradient initialized");
+          console.log("✅ Gradient initialized on homepage (hero + integrations)");
         } catch (error) {
           console.error("❌ Gradient init error:", error);
         }
@@ -949,6 +960,7 @@ const Index = () => {
 
     initGradient();
   }, []);
+
 
   // Probe auth state (token / cookie via /api/me)
   useEffect(() => {
@@ -1156,7 +1168,7 @@ const Index = () => {
       <section className="relative flex items-center overflow-hidden">
         <canvas
           ref={canvasRef}
-          className="gradient-canvas"
+          className="gradient-canvas gradient-hero"
           style={{ height: "100%", width: "100%" }}
         />
 
@@ -1246,7 +1258,8 @@ const Index = () => {
       >
         {/* Animated gradient background (same engine as hero) */}
         <canvas
-          className="gradient-canvas absolute inset-0 -z-20 h-full w-full"
+          ref={integrationsCanvasRef}
+          className="gradient-canvas gradient-integrations absolute inset-0 -z-20 h-full w-full"
           aria-hidden="true"
         />
         {/* Subtle grid / softener overlay */}
