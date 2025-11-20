@@ -3,20 +3,20 @@
 export {};
 
 declare global {
-  interface TurnstileOptions {
+  interface TurnstileRenderOptions {
     sitekey: string;
     callback?: (token: string) => void;
     "refresh-expired"?: "auto" | "manual";
   }
 
-  interface TurnstileAPI {
-    render: (el: HTMLElement | string, options: TurnstileOptions) => void;
-    reset: (widget?: HTMLElement | string) => void;
-    remove?: (widget?: HTMLElement | string) => void;
-  }
-
   interface Window {
-    turnstile?: TurnstileAPI;
+    // Used by both AdminForgotPassword (render) and ContactUs (reset)
+    turnstile?: {
+      render: (el: HTMLElement | string, opts: TurnstileRenderOptions) => void;
+      reset: () => void;
+    };
+
+    // Used by ContactUs Turnstile data-callback
     onTurnstileSuccess?: (token: string) => void;
   }
 }

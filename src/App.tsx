@@ -57,6 +57,8 @@ import Ghost from "@/pages/docs/Ghost";
 
 // ⚖️ Legal pages
 import TermsAndConditions from "./pages/legal/TermsAndConditions";
+import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
+import CookiePolicy from "./pages/legal/CookiePolicy";
 
 const queryClient = new QueryClient();
 
@@ -73,9 +75,19 @@ const App = () => (
           {/* ✅ REAL registration page at /register */}
           <Route path="/register" element={<Register />} />
           <Route path="/contact-us" element={<ContactUs />} />
+
+          {/* Legal Routes */}
           <Route
             path="/legal/terms-and-conditions"
             element={<TermsAndConditions />}
+          />
+          <Route
+            path="/legal/privacy-policy"
+            element={<PrivacyPolicy />}
+          />
+          <Route
+            path="/legal/cookie-policy"
+            element={<CookiePolicy />}
           />
 
           {/* Auth Routes */}

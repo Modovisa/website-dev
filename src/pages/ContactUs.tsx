@@ -132,7 +132,7 @@ const ContactUs = () => {
   const supportEmail = `${CONTACT_EMAIL_USER}@${CONTACT_EMAIL_HOST}`;
 
   return (
-    <AnimatedGradientBackground layout="full">
+    <AnimatedGradientBackground>
       <div className="w-full max-w-2xl">
         {/* Main Card (Bootstrap-style auth card) */}
         <div className="space-y-8 rounded-3xl bg-background/95 p-8 shadow-2xl backdrop-blur md:p-12">

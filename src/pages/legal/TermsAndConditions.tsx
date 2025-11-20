@@ -21,7 +21,7 @@ const TermsAndConditions = () => {
           </Link>
           <Link
             to="/"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center rounded-full border border-black bg-black px-4 py-2 text-xs md:text-sm font-medium text-white transition-colors hover:bg-white hover:text-black"
           >
             Back to homepage
           </Link>
@@ -182,9 +182,9 @@ const TermsAndConditions = () => {
                 </h2>
                 <p>
                   Your use of our Services is subject to our{" "}
-                  <a href="/privacy" className="text-primary hover:underline">
+                  <Link to="/legal/privacy-policy" className="text-primary hover:underline">
                     Privacy Policy
-                  </a>
+                  </Link>
                   . We process anonymous visitor data on your behalf. Personal account data is
                   handled in accordance with GDPR, CCPA, and other applicable laws.
                 </p>
@@ -301,9 +301,9 @@ const TermsAndConditions = () => {
                 </h2>
                 <p>
                   Our{" "}
-                  <a href="/privacy" className="text-primary hover:underline">
+                  <Link to="/legal/privacy-policy" className="text-primary hover:underline">
                     Privacy Policy
-                  </a>{" "}
+                  </Link>{" "}
                   explains how we collect, use, and protect your personal information.
                 </p>
               </section>
