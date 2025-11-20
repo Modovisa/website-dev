@@ -1570,7 +1570,10 @@ const Index = () => {
         <div className="container mx-auto px-4">
           {/* Top heading block */}
           <div className="mb-12 text-center">
-            <Badge className="mb-3 rounded-full bg-primary/10 text-primary" variant="outline">
+            <Badge
+              className="mb-3 rounded-full bg-primary/10 text-primary"
+              variant="outline"
+            >
               FAQ
             </Badge>
             <h2 className="mb-2 text-4xl font-bold">
@@ -1585,7 +1588,7 @@ const Index = () => {
 
           {/* Content grid: accordion + illustration */}
           <div className="mx-auto max-w-6xl">
-            <div className="grid gap-12 items-center lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+            <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
               {/* Left: Accordion */}
               <div>
                 <Accordion type="single" collapsible className="space-y-4">
@@ -1596,10 +1599,10 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       What is considered an “event”?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground text-md">
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
                       An event is any tracked action taken by a visitor on your
-                      website—such as a page view, button click, form submission,
-                      or cart activity. You can define custom events to capture the
+                      website—such as a page view, button click, form submission, or
+                      cart activity. You can define custom events to capture the
                       interactions that matter most to your business.
                     </AccordionContent>
                   </AccordionItem>
@@ -1611,14 +1614,13 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       How is this different from Google Analytics?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
                       Unlike Google Analytics, which offers aggregated or sampled
-                      data, Modovisa gives you real-time, individual visitor
-                      insights. You can follow each person’s journey — across
-                      sessions and pages — as it happens. There’s no data sampling,
-                      no cookie reliance, and no complex setup. Just clear,
-                      privacy-friendly analytics designed to help you truly
-                      understand your users.
+                      data, Modovisa gives you real-time, individual visitor insights.
+                      You can follow each person’s journey — across sessions and pages
+                      — as it happens. There’s no data sampling, no cookie reliance,
+                      and no complex setup. Just clear, privacy-friendly analytics
+                      designed to help you truly understand your users.
                     </AccordionContent>
                   </AccordionItem>
 
@@ -1629,10 +1631,10 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       Do I need to install any code to get started?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
                       Yes, to start tracking visitors, you'll need to install a
-                      lightweight tracking script on your website. We provide a
-                      simple snippet that works with all major platforms and can be
+                      lightweight tracking script on your website. We provide a simple
+                      snippet that works with all major platforms and can be
                       integrated in minutes.
                     </AccordionContent>
                   </AccordionItem>
@@ -1644,10 +1646,10 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       Is there a free plan available?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
                       Yes! Our free plan includes up to 3,000 events per month and
-                      access to all core features. You can start for free and
-                      upgrade as your traffic and analytics needs grow.
+                      access to all core features. You can start for free and upgrade
+                      as your traffic and analytics needs grow.
                     </AccordionContent>
                   </AccordionItem>
 
@@ -1658,9 +1660,9 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       Will using this tool affect my website&apos;s load time?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                      Not at all. Our tracking script is optimized for performance
-                      and adds minimal impact—typically under 1KB compressed, with
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
+                      Not at all. Our tracking script is optimized for performance and
+                      adds minimal impact—typically under 1KB compressed, with
                       asynchronous loading that won’t block your site.
                     </AccordionContent>
                   </AccordionItem>
@@ -1670,13 +1672,13 @@ const Index = () => {
                     className="rounded-2xl border bg-card px-6"
                   >
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
-                      Can I track custom events like form submissions or product clicks?
+                      Can I track custom events like form submissions or product
+                      clicks?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
                       Absolutely. You can define and track any custom event you
                       want—such as form completions, downloads, or specific user
-                      interactions—using our simple JavaScript API or tag-based
-                      setup.
+                      interactions—using our simple JavaScript API or tag-based setup.
                     </AccordionContent>
                   </AccordionItem>
 
@@ -1687,10 +1689,10 @@ const Index = () => {
                     <AccordionTrigger className="py-5 text-left text-base font-semibold">
                       Which platforms is Modovisa compatible with?
                     </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-6 text-muted-foreground">
-                      Modovisa is designed to work seamlessly with all major
-                      website and eCommerce platforms, including:
-                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                    <AccordionContent className="pt-0 pb-6 text-md text-muted-foreground">
+                      Modovisa is designed to work seamlessly with all major website
+                      and eCommerce platforms, including:
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-md">
                         <li>WordPress (with or without WooCommerce)</li>
                         <li>Shopify</li>
                         <li>Webflow</li>
@@ -1748,6 +1750,7 @@ const Index = () => {
           </div>
         </div>
       </section>
+
 
 
       <SiteFooter />
