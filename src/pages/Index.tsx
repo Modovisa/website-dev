@@ -1185,8 +1185,11 @@ const Index = () => {
       <section className="py-24 bg-muted/30" id="pricing">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              <span className="gradient-word-subtitle">
+            <Badge className="rounded-full mb-3" variant="outline">
+              Pricing Plans
+            </Badge>
+            <h2 className="text-3xl md:text-4xl font-bold mb-2">
+              <span className="relative z-10 gradient-word-subtitle">
                 Tailored pricing plans designed for you
               </span>
             </h2>
@@ -1378,14 +1381,16 @@ const Index = () => {
       <section className="py-24 bg-background">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
+            <Badge className="rounded-full mb-3" variant="outline">
+              Features
+            </Badge>
             <h2 className="text-4xl font-bold mb-4">
               <span className="gradient-word-subtitle">
                 Everything you need to know about your visitors in Real-time
               </span>
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Powerful features designed for teams who want to understand their
-              users better.
+              Clean, Clear, Insightful!
             </p>
           </div>
 
