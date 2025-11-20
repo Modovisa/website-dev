@@ -48,13 +48,13 @@ export const Logo = ({
       {showBeta && variant === "full" && (
         <Badge
           variant="secondary"
-          className="rounded-sm bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground"
+          className="rounded-sm bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground"
         >
           BETA
         </Badge>
       )}
 
-      {/* Optional text block (currently disabled globally) */}
+      {/* Optional text block (kept off for now) */}
       {/* {showText && variant === "full" && (
         <div className="flex flex-col">
           <span className="text-xl font-bold tracking-tight">MODOVISA</span>
