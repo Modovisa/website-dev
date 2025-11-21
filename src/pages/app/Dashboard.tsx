@@ -212,10 +212,9 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <header className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight">Installation</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-sm text-muted-foreground">
-              Add the Modovisa tracking script to your site, then follow the
-              platform-specific steps below.
+              Your traffic at a glance.
             </p>
           </header>
           <div className="flex gap-3 items-center">
