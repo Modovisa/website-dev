@@ -32,7 +32,7 @@ export const DocsLayout = ({ children }: DocsLayoutProps) => {
   return (
     <div className="flex min-h-screen bg-muted/30">
       {/* Desktop sidebar */}
-      <div className="hidden w-64 shrink-0 border-r bg-card lg:block">
+      <div className="hidden shrink-0 border-r bg-card lg:block">
         <DocsSidebar />
       </div>
 
