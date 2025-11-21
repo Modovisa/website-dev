@@ -1474,7 +1474,7 @@ const Index = () => {
                 {/* Price Slider */}
                 <div className="mb-8 w-full">
                   <div className="relative mb-4">
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2">
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2">
                       <div className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background">
                         {eventsLabel}
                       </div>
