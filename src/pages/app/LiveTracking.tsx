@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -69,7 +73,7 @@ interface Visitor {
 }
 
 interface Website {
-  id: string;
+  id: string | number;
   website_name: string;
   domain: string;
 }
@@ -103,7 +107,9 @@ const SidebarLoadingSkeleton = () => (
 const InlineNoVisitors = () => (
   <div className="text-center py-12">
     <Users className="h-16 w-16 text-muted-foreground/70 mx-auto mb-4" />
-    <p className="text-base text-muted-foreground">No visitors yet. Waiting for traffic to arrive...</p>
+    <p className="text-base text-muted-foreground">
+      No visitors yet. Waiting for traffic to arrive...
+    </p>
   </div>
 );
 
@@ -480,6 +486,7 @@ const LiveTracking = () => {
     }
   }, [currentWebsite, selectedVisitorId, navigate, setupWebSocket, userStatus]);
 
+  /* ------------------------- rebucket timer --------------------------- */
   useEffect(() => {
     if (!currentWebsite) return;
 
@@ -501,6 +508,7 @@ const LiveTracking = () => {
     };
   }, [currentWebsite, refreshVisitorList]);
 
+  /* --------------------------- load websites -------------------------- */
   useEffect(() => {
     const loadWebsites = async () => {
       try {
@@ -523,8 +531,19 @@ const LiveTracking = () => {
           return;
         }
 
-        setWebsites(result.projects);
-        const firstSite = result.projects[0];
+        // 🔒 Force stable ordering: oldest first by id (matches original feel)
+        const ordered: Website[] = [...result.projects].sort((a, b) => {
+          const aid = Number(a.id);
+          const bid = Number(b.id);
+          if (Number.isNaN(aid) || Number.isNaN(bid)) {
+            return String(a.id).localeCompare(String(b.id));
+          }
+          return aid - bid;
+        });
+
+        setWebsites(ordered);
+
+        const firstSite = ordered[0];
         setIsLoading(true);
         setCurrentWebsite(firstSite);
         currentSiteIdRef.current = firstSite.id;
@@ -538,6 +557,7 @@ const LiveTracking = () => {
     loadWebsites();
   }, [navigate]);
 
+  /* ------------------- reset on site switch + WS hook ----------------- */
   useEffect(() => {
     if (!currentWebsite) return;
     // reset caps & toggles on site switch
@@ -577,7 +597,6 @@ const LiveTracking = () => {
 
   /* ---------------------- live/recent open/close UX ------------------- */
 
-  // If actives appear and you haven't manually toggled, auto-open Live once
   useEffect(() => {
     if (isLoading) return;
     if (activeVisitors.length > 0 && !userToggledLive) {
@@ -585,15 +604,12 @@ const LiveTracking = () => {
     }
   }, [isLoading, activeVisitors.length, userToggledLive]);
 
-  // Do NOT clear selection when there are no actives; allow selecting a recent.
-  // Only clear if the selected visitor no longer exists at all (pruned or site switch).
   useEffect(() => {
     if (selectedVisitorId && !visitorDataMap[selectedVisitorId]) {
       setSelectedVisitorId(null);
     }
   }, [selectedVisitorId, visitorDataMap]);
 
-  // If the auth hook says user is definitely not authenticated, don't render page
   if (!isAuthenticated) return null;
 
   /* ----------------------------- sidebar ------------------------------ */
@@ -672,7 +688,6 @@ const LiveTracking = () => {
                 onOpenChange={(open) => {
                   setLiveVisitorsOpen(open);
                   setUserToggledLive(true);
-                  // don't auto-collapse "Recently left" here; let the user control both
                 }}
               >
                 <CollapsibleTrigger className="w-full shadow-[0_2px_4px_rgba(0,0,0,0.06)] mb-2">
@@ -765,7 +780,6 @@ const LiveTracking = () => {
                 </CollapsibleContent>
               </Collapsible>
             ) : (
-              // No active visitors ➜ red header, collapsed, count 0
               <div className="shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
                 <div className="p-4 border-b bg-[#f9f9f9]">
                   <div className="flex items-center justify-between">
@@ -893,7 +907,7 @@ const LiveTracking = () => {
   /* ------------------------------ content ----------------------------- */
   return (
     <AppLayout>
-      {/* Shared inner wrapper: same as Dashboard / Installation */}
+      {/* New unified layout: padded container, desktop flex, mobile stacked */}
       <div className="px-4 py-6 md:px-12 md:py-8 max-w-8xl mx-auto lg:flex lg:gap-6 lg:items-start space-y-6 lg:space-y-0">
         {/* Left column: sidebar */}
         <div className="hidden lg:block w-96">
@@ -983,7 +997,9 @@ const LiveTracking = () => {
                           return (
                             <li
                               key={idx}
-                              className={`jt-item ${page.is_active ? "is-active" : "is-left"} flex items-center m-2 ${
+                              className={`jt-item ${
+                                page.is_active ? "is-active" : "is-left"
+                              } flex items-center m-2 ${
                                 page.is_active ? "shadow-sm" : ""
                               } rounded-md border p-3 ${
                                 !page.is_active ? "bg-muted/30" : "bg-card"
