@@ -164,7 +164,7 @@ export default function AppNavbar({
   };
 
   return (
-    <header className="h-16 border-b bg-card flex items-center px-4 lg:px-6">
+    <header className="h-16 border-b bg-card flex items-center px-4 lg:px-12 shadow-sm">
       {/* Mobile menu button */}
       <Button
         variant="ghost"
