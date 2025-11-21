@@ -1,7 +1,7 @@
 // src/pages/Login.tsx
 
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
@@ -24,6 +24,7 @@ const GOOGLE_CLIENT_ID =
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Form state
   const [emailOrUsername, setEmailOrUsername] = useState("");
@@ -38,6 +39,9 @@ const Login = () => {
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+
+  // Email verification banner
+  const [verifiedMessage, setVerifiedMessage] = useState("");
 
   // JIT Consent Modal (for new Google users)
   const [showJitConsent, setShowJitConsent] = useState(false);
@@ -55,6 +59,62 @@ const Login = () => {
       "User"
     );
   };
+
+  // After email verification: show message and, if already logged in, auto-redirect
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const verified = params.get("verified");
+
+    if (verified === "1") {
+      setVerifiedMessage("Your email has been verified. You’re good to go.");
+
+      // Fire-and-forget: if user is already logged in (valid cookies),
+      // jump them straight into the app instead of forcing a manual login.
+      (async () => {
+        try {
+          const meRes = await fetch("https://api.modovisa.com/api/me", {
+            credentials: "include",
+            cache: "no-store",
+          });
+
+          if (!meRes.ok) {
+            // Not logged in – just show the banner and keep the login form.
+            return;
+          }
+
+          await meRes.json().catch(() => ({}));
+
+          // Now check if they already have any tracking websites
+          const sitesRes = await fetch(
+            "https://api.modovisa.com/api/tracking-websites",
+            {
+              credentials: "include",
+              cache: "no-store",
+            },
+          );
+
+          if (!sitesRes.ok) {
+            // Fallback: they’re logged in but something weird with the sites endpoint → send them to live tracking
+            navigate("/app/live-tracking");
+            return;
+          }
+
+          const sites = await sitesRes.json().catch(() => []);
+          const hasSites = Array.isArray(sites) && sites.length > 0;
+
+          if (hasSites) {
+            navigate("/app/dashboard");
+          } else {
+            navigate("/app/tracking-setup");
+          }
+        } catch (e) {
+          console.warn("Email verification redirect check failed:", e);
+        }
+      })();
+    } else {
+      setVerifiedMessage("");
+    }
+  }, [location.search, navigate]);
 
   // Handle manual login (email/password)
   const handleSubmit = async (e: React.FormEvent) => {
@@ -391,6 +451,13 @@ const Login = () => {
             Sign in to your account
           </h1>
         </div>
+
+        {/* Email verified banner */}
+        {verifiedMessage && (
+          <Alert>
+            <AlertDescription>{verifiedMessage}</AlertDescription>
+          </Alert>
+        )}
 
         {isLoading && (
           <div className="text-center py-4">

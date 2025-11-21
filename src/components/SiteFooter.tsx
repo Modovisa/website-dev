@@ -58,8 +58,8 @@ const SiteFooter = () => {
 
             {/* Product */}
             <div>
-              <h3 className="mb-6 text-sm font-semibold">Product</h3>
-              <ul className="space-y-4 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-lg font-semibold">Product</h3>
+              <ul className="space-y-4 text-md text-muted-foreground">
                 <li>
                   <a
                     href="#pricing"
@@ -81,8 +81,8 @@ const SiteFooter = () => {
 
             {/* Resources */}
             <div>
-              <h3 className="mb-6 text-sm font-semibold">Resources</h3>
-              <ul className="space-y-4 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-lg font-semibold">Resources</h3>
+              <ul className="space-y-4 text-md text-muted-foreground">
                 <li>
                   <a
                     href="#landingFAQ"
@@ -104,8 +104,8 @@ const SiteFooter = () => {
 
             {/* Legal */}
             <div>
-              <h3 className="mb-6 text-sm font-semibold">Legal</h3>
-              <ul className="space-y-4 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-lg font-semibold">Legal</h3>
+              <ul className="space-y-4 text-md text-muted-foreground">
                 <li>
                   <Link
                     to="/legal/terms-and-conditions"
@@ -127,8 +127,8 @@ const SiteFooter = () => {
 
             {/* Contact */}
             <div>
-              <h3 className="mb-6 text-sm font-semibold">Contact</h3>
-              <ul className="space-y-4 text-sm text-muted-foreground">
+              <h3 className="mb-6 text-lg font-semibold">Contact</h3>
+              <ul className="space-y-4 text-mb text-muted-foreground">
                 <li>
                   <Link
                     to="/contact-us"

@@ -116,6 +116,10 @@ const TrackingSetup = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Email verification banner state
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+
   // Initialise timezone list + default selection (like moment.tz.guess())
   useEffect(() => {
     const options = buildTimezoneOptions();
@@ -132,6 +136,32 @@ const TrackingSetup = () => {
       if (options.length) setTimezone(options[0].value);
     }
   }, []);
+
+  // Fetch current user to know email + verification status
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+
+    (async () => {
+      try {
+        const res = await secureFetch(`${apiBase()}/api/me`, {
+          method: "GET",
+        });
+
+        if (!res.ok) return;
+
+        const me = await res.json().catch(() => ({} as any));
+        const email = me?.email || null;
+        const verifiedRaw = me?.email_verified;
+
+        setUserEmail(email);
+        setEmailVerified(
+          verifiedRaw === 1 || verifiedRaw === true ? true : false,
+        );
+      } catch (e) {
+        console.error("Failed to load /api/me for verification banner:", e);
+      }
+    })();
+  }, [isLoading, isAuthenticated]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -208,7 +238,9 @@ const TrackingSetup = () => {
                 <Logo showBeta={false} />
               </Link>
               <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
-              <h1 className="text-2xl font-semibold mt-6">Track your website</h1>
+              <h1 className="text-2xl font-semibold mt-6">
+                Track your website
+              </h1>
             </div>
             <p className="text-center text-muted-foreground text-sm">
               Provide some details about the website you&apos;d like to track.
@@ -216,6 +248,15 @@ const TrackingSetup = () => {
               We&apos;ll use this to generate your personalized tracking script.
             </p>
           </div>
+
+          {/* Email verification banner */}
+          {emailVerified === false && userEmail && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground">
+              We&apos;ve sent a verification link to{" "}
+              <span className="font-semibold">{userEmail}</span>. Please verify
+              your email to enable account emails and password resets.
+            </div>
+          )}
 
           {formError && (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
