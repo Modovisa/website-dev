@@ -10,13 +10,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const year = new Date().getFullYear();
 
   return (
-    <div className="flex h-screen bg-muted/30">
+    <div className="flex min-h-screen bg-muted/30">
       {/* Desktop sidebar */}
-      <div className="hidden lg:block">
+      <div className="hidden shrink-0 lg:block">
         <AppSidebar />
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main column */}
+      <div className="flex flex-1 flex-col">
         {/* Navbar (passes opener to trigger the mobile drawer) */}
         <AppNavbar onOpenMobileMenu={() => setMobileMenuOpen(true)} />
 
@@ -27,19 +28,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </SheetContent>
         </Sheet>
 
-        {/* Main content + footer */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
+        {/* Main content (page scrolls naturally) */}
+        <main className="flex-1">
+          {children}
+        </main>
 
-          <footer className="shrink-0 px-4 py-4 md:px-6 text-md text-muted-foreground flex items-center justify-center">
-            <span className="footer-bottom-text">
-              © {year} <span className="font-medium">Modovisa</span>{" "}
-              <span>made with ❤️ All Rights Reserved</span>
-            </span>
-          </footer>
-        </div>
+        {/* Footer – sits at bottom when short, pushed down when content grows */}
+        <footer className="shrink-0 border-t bg-background/80 px-4 py-4 md:px-6 text-sm text-muted-foreground flex items-center justify-center backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <span className="footer-bottom-text">
+            © {year} <span className="font-medium">Modovisa</span>{" "}
+            <span>made with ❤️ All Rights Reserved</span>
+          </span>
+        </footer>
       </div>
     </div>
   );
