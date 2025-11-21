@@ -1,13 +1,13 @@
-// src/pages/docs/Wix.tsx
+// src/pages/guides/Squarespace.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import { useTrackingScriptToken } from "@/hooks/useTrackingScriptToken";
 
-const Wix = () => {
+const Squarespace = () => {
   const { trackingToken } = useTrackingScriptToken();
   const tokenPlaceholder = trackingToken || "YOUR_TRACKING_TOKEN";
 
@@ -30,16 +30,16 @@ const Wix = () => {
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Install on Wix
+            Install on Squarespace
           </h1>
           <Badge className="bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold">
-            Add the Modovisa tracking script via Wix Custom Code to start
-            real-time analytics.
+            Add the Modovisa tracking script via Code Injection for site-wide
+            analytics (recommended), or per page.
           </Badge>
         </div>
 
@@ -48,50 +48,39 @@ const Wix = () => {
           {/* Introduction */}
           <div className="mb-8">
             <p className="text-lg text-muted-foreground mb-4">
-              The recommended way to add Modovisa to Wix is via{" "}
-              <span className="font-semibold text-foreground">Custom Code</span>{" "}
-              in your site's dashboard. Paste your{" "}
+              The easiest way to track every page is Squarespace&apos;s{" "}
+              <span className="font-semibold text-foreground">
+                Code Injection
+              </span>{" "}
+              (site-wide). Paste your{" "}
               <span className="font-semibold text-foreground">
                 Tracking Token
               </span>{" "}
-              and load it on all pages in the{" "}
-              <span className="font-semibold text-foreground">Head</span>.
+              in the{" "}
+              <span className="font-semibold text-foreground">HEADER</span>{" "}
+              field and save. You can also add the snippet only to specific
+              pages if you prefer.
             </p>
 
             <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
               <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-blue-900 dark:text-blue-100">
-                <span className="font-semibold">Before you begin:</span> Make
-                sure your site is{" "}
-                <a
-                  href="https://support.wix.com/en/article/wix-editor-publishing-your-site"
-                  target="_blank"
-                  rel="noopener"
-                  className="underline font-semibold"
-                >
-                  published
-                </a>{" "}
-                and has a{" "}
-                <a
-                  href="https://support.wix.com/en/article/connecting-a-domain-to-your-site-195136"
-                  target="_blank"
-                  rel="noopener"
-                  className="underline font-semibold"
-                >
-                  connected domain
-                </a>
-                .
+                Make sure you&apos;re editing the correct site and it&apos;s{" "}
+                <span className="font-semibold">published</span>. Some
+                templates/CDNs may require a quick refresh after saving.
               </p>
             </div>
           </div>
 
           <hr className="my-8 border-border" />
 
-          {/* Installation Steps */}
+          {/* Site-wide Tracking */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-6">Step-by-step</h2>
+            <h2 className="text-2xl font-bold mb-6">
+              Site-wide tracking — Recommended
+            </h2>
 
-            <ol className="space-y-3 list-decimal list-inside text-muted-foreground">
+            <ol className="space-y-3 list-decimal list-inside text-muted-foreground mb-6">
               <li>
                 Sign up at{" "}
                 <a
@@ -129,69 +118,39 @@ const Wix = () => {
                 )}
               </li>
               <li>
-                <a
-                  href="https://www.wix.com/my-account/site-selector/?buttonText=Open%20Settings&title=Select%20a%20Site&autoSelectOnSingleSite=true&actionUrl=https://www.wix.com/dashboard/{{metaSiteId}}/settings"
-                  target="_blank"
-                  rel="noopener"
-                  className="text-primary hover:underline"
-                >
-                  Go to{" "}
-                  <span className="font-semibold text-foreground">Settings</span>
-                </a>{" "}
-                in your site's dashboard.
+                Log in to your{" "}
+                <span className="font-semibold text-foreground">
+                  Squarespace
+                </span>{" "}
+                admin.
               </li>
               <li>
-                In the{" "}
-                <span className="font-semibold text-foreground">Advanced</span>{" "}
-                section, click{" "}
+                Go to{" "}
                 <span className="font-semibold text-foreground">
-                  Custom Code
+                  Website → Pages
                 </span>
                 .
               </li>
               <li>
-                Click{" "}
+                In the left sidebar, open{" "}
                 <span className="font-semibold text-foreground">
-                  + Add Custom Code
-                </span>{" "}
-                (top right).
-              </li>
-              <li>Paste the Modovisa script below.</li>
-              <li>
-                Give it a recognizable name (e.g.,{" "}
-                <em>Modovisa Analytics</em>).
-              </li>
-              <li>
-                Under{" "}
-                <span className="font-semibold text-foreground">
-                  Add Code to Pages
+                  Custom Code → Code Injection
                 </span>
-                , choose{" "}
-                <span className="font-semibold text-foreground">All pages</span>{" "}
-                and (recommended) "<em>Load code once</em>".
+                .
               </li>
               <li>
-                Under{" "}
-                <span className="font-semibold text-foreground">
-                  Place Code in
-                </span>
-                , select{" "}
-                <span className="font-semibold text-foreground">Head</span>.
+                Paste the Modovisa snippet into the{" "}
+                <span className="font-semibold text-foreground">HEADER</span>{" "}
+                field (see snippet below).
               </li>
               <li>
                 Click{" "}
-                <span className="font-semibold text-foreground">Apply</span>,
-                then{" "}
-                <span className="font-semibold text-foreground">Publish</span>{" "}
-                your site.
+                <span className="font-semibold text-foreground">Save</span>.
               </li>
             </ol>
-          </div>
 
-          {/* Code Snippet */}
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4">Tracking Script</h2>
-            <div className="bg-slate-900 rounded-lg overflow-hidden">
+            {/* Code Snippet */}
+            <div className="bg-slate-900 rounded-lg overflow-hidden mb-6">
               <div className="flex items-center justify-between px-4 py-3 bg-slate-800">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-500" />
@@ -225,16 +184,95 @@ const Wix = () => {
                 </code>
               </pre>
             </div>
-          </div>
 
-          {/* Video Tutorial */}
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4">Video Tutorial</h2>
+            {/* Video Tutorial – Site-wide */}
             <div className="border border-border rounded-lg overflow-hidden shadow-lg">
               <div className="relative" style={{ paddingBottom: "56.25%" }}>
                 <iframe
-                  src="https://www.youtube.com/embed/NypdehiSXIU"
-                  title="Install Modovisa on Wix"
+                  src="https://www.youtube.com/embed/NFdnnGeP6Tk?si=1ns5UVwQTwp2HrzA"
+                  title="Install Modovisa on Squarespace (site-wide)"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  className="absolute top-0 left-0 w-full h-full"
+                />
+              </div>
+            </div>
+          </div>
+
+          <hr className="my-8 border-border" />
+
+          {/* Alternative Single Page */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-6">
+              Alternative — Track a single page
+            </h2>
+
+            <ol className="space-y-3 list-decimal list-inside text-muted-foreground mb-6">
+              <li>
+                Sign up at{" "}
+                <a
+                  href="https://modovisa.com"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-primary hover:underline"
+                >
+                  modovisa.com
+                </a>
+                .
+              </li>
+              <li>
+                Set up tracking for your website to get your{" "}
+                <span className="font-semibold text-foreground">
+                  Tracking Token
+                </span>
+                .
+              </li>
+              <li>
+                Log in to your{" "}
+                <span className="font-semibold text-foreground">
+                  Squarespace
+                </span>{" "}
+                admin.
+              </li>
+              <li>
+                Go to{" "}
+                <span className="font-semibold text-foreground">
+                  Website → Pages
+                </span>
+                .
+              </li>
+              <li>
+                Hover the page you want to track and click the{" "}
+                <span className="font-semibold text-foreground">
+                  Settings
+                </span>{" "}
+                (⚙️) icon.
+              </li>
+              <li>
+                Open{" "}
+                <span className="font-semibold text-foreground">Advanced</span>.
+              </li>
+              <li>
+                Paste the Modovisa snippet into{" "}
+                <span className="font-semibold text-foreground">
+                  Page Header Code Injection
+                </span>
+                .
+              </li>
+              <li>
+                Click{" "}
+                <span className="font-semibold text-foreground">Save</span>.
+              </li>
+            </ol>
+
+            {/* Video Tutorial – Single page */}
+            <div className="border border-border rounded-lg overflow-hidden shadow-lg">
+              <div className="relative" style={{ paddingBottom: "56.25%" }}>
+                <iframe
+                  src="https://www.youtube.com/embed/q_VOo9Sv7I0?si=dok00GWXDJUnnQ4D"
+                  title="Install Modovisa on Squarespace (single page)"
                   loading="lazy"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   referrerPolicy="strict-origin-when-cross-origin"
@@ -252,8 +290,8 @@ const Wix = () => {
             <h2 className="text-2xl font-bold mb-4">Verify the installation</h2>
             <ul className="space-y-2 list-disc list-inside text-muted-foreground mb-6">
               <li>
-                Open your live site (not the editor preview) → DevTools →{" "}
-                <span className="font-mono text-foreground">Network</span>,
+                Open the published site/page → DevTools →{" "}
+                <span className="font-mono text-foreground">Network</span> →
                 search for{" "}
                 <code className="px-2 py-1 bg-muted rounded text-foreground">
                   modovisa.min.js
@@ -263,21 +301,21 @@ const Wix = () => {
               <li>
                 Enable{" "}
                 <span className="font-mono text-foreground">Preserve log</span>{" "}
-                and refresh—confirm the script loads on public pages.
+                and refresh—confirm the script loads.
               </li>
               <li>
-                In your Modovisa dashboard, open{" "}
+                Check Modovisa{" "}
                 <span className="font-semibold text-foreground">Live</span> to
-                see your own visit in real time.
+                see your visit in real time.
               </li>
             </ul>
 
             <div className="flex items-start gap-3 p-4 bg-muted rounded-lg">
               <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
               <p className="text-sm text-muted-foreground">
-                Using Wix caching or a custom CDN? After adding the code, wait a
-                minute and refresh the live site. If still not visible,
-                republish the site and clear CDN cache.
+                Using a CDN or caching? After saving, wait a minute or clear
+                cache and refresh the live site. Some templates may take a short
+                time to propagate changes.
               </p>
             </div>
           </div>
@@ -285,8 +323,12 @@ const Wix = () => {
 
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
-          <Button variant="outline" asChild>
-            <a href="/docs">← Back to Docs</a>
+          <Button
+            variant="outline"
+            asChild
+            className="border border-black bg-black text-white hover:bg-white hover:text-black"
+          >
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a
@@ -299,8 +341,8 @@ const Wix = () => {
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 
-export default Wix;
+export default Squarespace;

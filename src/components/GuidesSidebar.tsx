@@ -1,4 +1,4 @@
-// src/components/DocsSidebar.tsx
+// src/components/GuidesSidebar.tsx
 // @ts-nocheck
 
 import { useState } from "react";
@@ -15,9 +15,9 @@ import { Button } from "./ui/button";
 import { Logo } from "./Logo";
 
 export const gettingStartedItems = [
-  { name: "Welcome", href: "/docs" },
-  { name: "Register for an account", href: "/docs/register" },
-  { name: "Setup Tracking for your s...", href: "/docs/setup" },
+  { name: "Welcome", href: "/guides" },
+  { name: "Register for an account", href: "/guides/register" },
+  { name: "Setup Tracking for your s...", href: "/guides/setup" },
 ];
 
 export const platforms = [
@@ -34,7 +34,7 @@ export const platforms = [
   "Ghost",
 ];
 
-export const DocsSidebar = () => {
+export const GuidesSidebar = () => {
   const location = useLocation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -197,7 +197,7 @@ export const DocsSidebar = () => {
           {isInstallationOpen && isExpanded && (
             <div className="ml-3 space-y-1 border-l pl-3">
               {platforms.map((platform) => {
-                const href = `/docs/install/${platform.toLowerCase()}`;
+                const href = `/guides/install/${platform.toLowerCase()}`;
                 const active = isActive(href);
                 return (
                   <Link

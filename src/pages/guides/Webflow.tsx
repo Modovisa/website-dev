@@ -1,6 +1,6 @@
-// src/pages/docs/Webflow.tsx
+// src/pages/guides/Webflow.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ const Webflow = () => {
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -225,7 +225,7 @@ const Webflow = () => {
             asChild
             className="border border-black bg-black text-white hover:bg-white hover:text-black"
           >
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a
@@ -238,7 +238,7 @@ const Webflow = () => {
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

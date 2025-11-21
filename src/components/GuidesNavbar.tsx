@@ -1,4 +1,4 @@
-// src/components/DocsNavbar.tsx
+// src/components/GuidesNavbar.tsx
 // @ts-nocheck
 
 import { useEffect, useState } from "react";
@@ -7,11 +7,11 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu, LogIn, LogOut, ChevronDown } from "lucide-react";
 import { fullLogout } from "@/lib/auth/logout";
-import { gettingStartedItems, platforms } from "./DocsSidebar";
+import { gettingStartedItems, platforms } from "./GuidesSidebar";
 
 const API = "https://api.modovisa.com";
 
-export const DocsNavbar = () => {
+export const GuidesNavbar = () => {
   const [isAuthed, setIsAuthed] = useState(false);
   const navigate = useNavigate();
 
@@ -43,7 +43,7 @@ export const DocsNavbar = () => {
   }, []);
 
   const handleLogout = async () => {
-    await fullLogout("user", { source: "docs-navbar" });
+    await fullLogout("user", { source: "guides-navbar" });
   };
 
   const scrollToSection = (id: string) => {
@@ -71,7 +71,7 @@ export const DocsNavbar = () => {
       <div className="flex items-center justify-between gap-4">
         {/* Left cluster: mobile hamburger (no logo) */}
         <div className="flex items-center gap-2">
-          {/* Mobile: unified hamburger (site + docs nav) */}
+          {/* Mobile: unified hamburger (site + guides nav) */}
           <div className="md:hidden">
             <Sheet>
               <SheetTrigger asChild>
@@ -127,10 +127,10 @@ export const DocsNavbar = () => {
                           FAQs
                         </button>
                         <Link
-                          to="/docs"
+                          to="/guides"
                           className="text-base font-medium transition-colors hover:text-primary"
                         >
-                          Docs home
+                          Guides home
                         </Link>
                       </div>
                     )}
@@ -139,7 +139,7 @@ export const DocsNavbar = () => {
                   {/* Divider */}
                   <div className="border-t pt-4" />
 
-                  {/* Docs navigation */}
+                  {/* Guides navigation */}
                   <div className="space-y-4">
                     {/* Getting Started - collapsible */}
                     <div>
@@ -193,7 +193,7 @@ export const DocsNavbar = () => {
                       {installationOpen && (
                         <div className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
                           {platforms.map((platform) => {
-                            const href = `/docs/install/${platform.toLowerCase()}`;
+                            const href = `/guides/install/${platform.toLowerCase()}`;
                             return (
                               <Link
                                 key={platform}
@@ -280,10 +280,10 @@ export const DocsNavbar = () => {
             FAQs
           </button>
           <Link
-            to="/docs"
+            to="/guides"
             className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
-            Docs
+            Guides
           </Link>
         </div>
 

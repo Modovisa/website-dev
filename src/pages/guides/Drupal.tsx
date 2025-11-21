@@ -1,6 +1,6 @@
-// src/pages/docs/Drupal.tsx
+// src/pages/guides/Drupal.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ const Drupal = () => {
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -364,7 +364,7 @@ const Drupal = () => {
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a
@@ -377,7 +377,7 @@ const Drupal = () => {
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

@@ -1,6 +1,6 @@
-// src/pages/docs/Shopify.tsx
+// src/pages/guides/Shopify.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ const Shopify = () => {
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -232,7 +232,7 @@ const Shopify = () => {
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a href="https://support.modovisa.com" target="_blank" rel="noopener">
@@ -241,7 +241,7 @@ const Shopify = () => {
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

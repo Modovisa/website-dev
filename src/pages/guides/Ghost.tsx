@@ -1,6 +1,6 @@
-// src/pages/docs/Ghost.tsx
+// src/pages/guides/Ghost.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ const Ghost = () => {
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -78,7 +78,7 @@ const Ghost = () => {
 
             <div className="border border-border rounded-lg overflow-hidden mb-4">
               <img
-                src="/assets/img/docs/1-ghost-workspace.webp"
+                src="/assets/img/guides/1-ghost-workspace.webp"
                 alt="Ghost workspace settings icon"
                 className="w-full"
                 loading="lazy"
@@ -104,7 +104,7 @@ const Ghost = () => {
 
             <div className="border border-border rounded-lg overflow-hidden mb-4">
               <img
-                src="/assets/img/docs/2-code-injection-menu.webp"
+                src="/assets/img/guides/2-code-injection-menu.webp"
                 alt="Ghost Code Injection menu location"
                 className="w-full"
                 loading="lazy"
@@ -126,7 +126,7 @@ const Ghost = () => {
 
             <div className="border border-border rounded-lg overflow-hidden mb-6">
               <img
-                src="/assets/img/docs/3-code-injection.webp"
+                src="/assets/img/guides/3-code-injection.webp"
                 alt="Ghost Code Injection panel"
                 className="w-full"
                 loading="lazy"
@@ -275,7 +275,7 @@ const Ghost = () => {
             asChild
             className="border border-black bg-black text-white hover:bg-white hover:text-black"
           >
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a
@@ -288,7 +288,7 @@ const Ghost = () => {
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

@@ -1,11 +1,11 @@
-// src/components/DocsLayout.tsx
+// src/components/GuidesLayout.tsx
 // @ts-nocheck
 
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home } from "lucide-react";
-import { DocsSidebar } from "./DocsSidebar";
-import { DocsNavbar } from "./DocsNavbar";
+import { GuidesSidebar } from "./GuidesSidebar";
+import { GuidesNavbar } from "./GuidesNavbar";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -15,11 +15,11 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-interface DocsLayoutProps {
+interface GuidesLayoutProps {
   children: ReactNode;
 }
 
-export const DocsLayout = ({ children }: DocsLayoutProps) => {
+export const GuidesLayout = ({ children }: GuidesLayoutProps) => {
   const location = useLocation();
   const pathSegments = location.pathname.split("/").filter(Boolean);
 
@@ -33,14 +33,14 @@ export const DocsLayout = ({ children }: DocsLayoutProps) => {
     <div className="flex min-h-screen bg-muted/30">
       {/* Desktop sidebar */}
       <div className="hidden shrink-0 border-r bg-card lg:block">
-        <DocsSidebar />
+        <GuidesSidebar />
       </div>
 
       {/* Main column */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top docs navbar (owns ALL hamburgers on docs pages) */}
+        {/* Top guides navbar (owns ALL hamburgers on guides pages) */}
         <div className="shrink-0 border-b bg-background/95 px-4 py-3 md:px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <DocsNavbar />
+          <GuidesNavbar />
         </div>
 
         {/* Breadcrumb header */}

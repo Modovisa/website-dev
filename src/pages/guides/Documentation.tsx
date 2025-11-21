@@ -1,6 +1,6 @@
-// src/pages/docs/Documentation.tsx
+// src/pages/guides/Documentation.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Eye, Zap, Shield } from "lucide-react";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 const Documentation = () => {
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-16">
@@ -280,7 +280,7 @@ const Documentation = () => {
           </p>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

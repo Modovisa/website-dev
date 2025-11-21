@@ -1,6 +1,6 @@
-// src/pages/docs/Magento.tsx
+// src/pages/guides/Magento.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ const Magento = () => {
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -76,7 +76,7 @@ const Magento = () => {
                 </p>
                 <div className="border border-border rounded-lg overflow-hidden mb-6">
                   <img
-                    src="/assets/img/docs/magento-content-configuration.webp"
+                    src="/assets/img/guides/magento-content-configuration.webp"
                     alt="Magento Design Configuration"
                     className="w-full"
                     loading="lazy"
@@ -91,7 +91,7 @@ const Magento = () => {
                 </p>
                 <div className="border border-border rounded-lg overflow-hidden mb-6">
                   <img
-                    src="/assets/img/docs/magento-design-configuration.webp"
+                    src="/assets/img/guides/magento-design-configuration.webp"
                     alt="Magento Store View Configuration"
                     className="w-full"
                     loading="lazy"
@@ -106,7 +106,7 @@ const Magento = () => {
                 </p>
                 <div className="border border-border rounded-lg overflow-hidden mb-6">
                   <img
-                    src="/assets/img/docs/magento-scripts-and-style-sheets.webp"
+                    src="/assets/img/guides/magento-scripts-and-style-sheets.webp"
                     alt="Magento HTML Head section"
                     className="w-full"
                     loading="lazy"
@@ -206,7 +206,7 @@ const Magento = () => {
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a href="https://support.modovisa.com" target="_blank" rel="noopener">
@@ -215,7 +215,7 @@ const Magento = () => {
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

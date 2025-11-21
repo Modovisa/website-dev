@@ -1,6 +1,6 @@
-// src/pages/docs/SetupTracking.tsx
+// src/pages/guides/SetupTracking.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { AlertCircle, Zap, ArrowRight } from "lucide-react";
 
 const SetupTracking = () => {
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -43,7 +43,7 @@ const SetupTracking = () => {
           <div className="mb-8">
             <div className="border border-border rounded-lg overflow-hidden shadow-lg">
               <img 
-                src="/assets/img/docs/tracking-setup.webp" 
+                src="/assets/img/guides/tracking-setup.webp" 
                 alt="Modovisa tracking setup form" 
                 className="w-full"
                 loading="lazy"
@@ -101,15 +101,15 @@ const SetupTracking = () => {
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {[
-                { name: "WordPress", icon: "📝", path: "/docs/wordpress" },
-                { name: "Shopify", icon: "🛍️", path: "/docs/shopify" },
-                { name: "Wix", icon: "🎨", path: "/docs/wix" },
-                { name: "Squarespace", icon: "⬜", path: "/docs/squarespace" },
-                { name: "Webflow", icon: "🌊", path: "/docs/webflow" },
-                { name: "Magento", icon: "🔷", path: "/docs/magento" },
-                { name: "Drupal", icon: "💧", path: "/docs/drupal" },
-                { name: "Joomla", icon: "🌟", path: "/docs/joomla" },
-                { name: "PrestaShop", icon: "🛒", path: "/docs/prestashop" },
+                { name: "WordPress", icon: "📝", path: "/guides/wordpress" },
+                { name: "Shopify", icon: "🛍️", path: "/guides/shopify" },
+                { name: "Wix", icon: "🎨", path: "/guides/wix" },
+                { name: "Squarespace", icon: "⬜", path: "/guides/squarespace" },
+                { name: "Webflow", icon: "🌊", path: "/guides/webflow" },
+                { name: "Magento", icon: "🔷", path: "/guides/magento" },
+                { name: "Drupal", icon: "💧", path: "/guides/drupal" },
+                { name: "Joomla", icon: "🌟", path: "/guides/joomla" },
+                { name: "PrestaShop", icon: "🛒", path: "/guides/prestashop" },
               ].map((platform) => (
                 <Button
                   key={platform.name}
@@ -130,17 +130,17 @@ const SetupTracking = () => {
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/docs/register">← Back to Register</a>
+            <a href="/guides/register">← Back to Register</a>
           </Button>
           <Button asChild>
-            <a href="/docs/install" className="gap-2">
+            <a href="/guides/install" className="gap-2">
               Next: Installation
               <ArrowRight className="h-4 w-4" />
             </a>
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

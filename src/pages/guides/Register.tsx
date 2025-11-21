@@ -1,6 +1,6 @@
-// src/pages/docs/Register.tsx
+// src/pages/guides/Register.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Clock, ArrowRight } from "lucide-react";
 
 const Register = () => {
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -66,7 +66,7 @@ const Register = () => {
 
             <div className="border border-border rounded-lg overflow-hidden shadow-lg">
               <img 
-                src="/assets/img/docs/register-register-page.webp" 
+                src="/assets/img/guides/register-register-page.webp" 
                 alt="Modovisa registration form" 
                 className="w-full"
                 loading="lazy"
@@ -95,7 +95,7 @@ const Register = () => {
 
             <div className="border border-border rounded-lg overflow-hidden shadow-lg">
               <img 
-                src="/assets/img/docs/register-pricing-plans.webp" 
+                src="/assets/img/guides/register-pricing-plans.webp" 
                 alt="Register via pricing plans" 
                 className="w-full"
                 loading="lazy"
@@ -127,17 +127,17 @@ const Register = () => {
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button asChild>
-            <a href="/docs/setup-tracking" className="gap-2">
+            <a href="/guides/setup-tracking" className="gap-2">
               Next: Set up tracking
               <ArrowRight className="h-4 w-4" />
             </a>
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

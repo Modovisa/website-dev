@@ -1,6 +1,6 @@
-// src/pages/docs/WordPress.tsx
+// src/pages/guides/WordPress.tsx
 
-import { DocsLayout } from "@/components/DocsLayout";
+import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
   };
 
   return (
-    <DocsLayout>
+    <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
         {/* Hero Section */}
         <div className="text-center mb-12">
@@ -251,7 +251,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`}
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/docs">← Back to Docs</a>
+            <a href="/guides">← Back to Docs</a>
           </Button>
           <Button variant="link" asChild>
             <a href="https://support.modovisa.com" target="_blank" rel="noopener">
@@ -260,7 +260,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`}
           </Button>
         </div>
       </div>
-    </DocsLayout>
+    </GuidesLayout>
   );
 };
 

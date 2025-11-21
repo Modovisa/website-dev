@@ -39,21 +39,21 @@ import AdminTwoFactorAuth from "./pages/admin/AdminTwoFactorAuth";
 import AdminForgotPassword from "./pages/admin/AdminForgotPassword";
 import { RequireAdminAuth } from "./components/admin/RequireAdminAuth";
 
-// 📚 Docs pages
-import Documentation from "@/pages/docs/Documentation";
-import DocsRegister from "@/pages/docs/Register"; // ⬅️ renamed to avoid clash
-import SetupTracking from "@/pages/docs/SetupTracking";
-import WordPress from "@/pages/docs/WordPress";
-import Shopify from "@/pages/docs/Shopify";
-import Magento from "@/pages/docs/Magento";
-import PrestaShop from "@/pages/docs/PrestaShop";
-import BigCommerce from "@/pages/docs/BigCommerce";
-import Joomla from "@/pages/docs/Joomla";
-import Drupal from "@/pages/docs/Drupal";
-import Wix from "@/pages/docs/Wix";
-import Squarespace from "@/pages/docs/Squarespace";
-import Webflow from "@/pages/docs/Webflow";
-import Ghost from "@/pages/docs/Ghost";
+// 📚 Guides pages
+import Documentation from "@/pages/guides/Documentation";
+import GuidesRegister from "@/pages/guides/Register"; // ⬅️ renamed to avoid clash
+import SetupTracking from "@/pages/guides/SetupTracking";
+import WordPress from "@/pages/guides/WordPress";
+import Shopify from "@/pages/guides/Shopify";
+import Magento from "@/pages/guides/Magento";
+import PrestaShop from "@/pages/guides/PrestaShop";
+import BigCommerce from "@/pages/guides/BigCommerce";
+import Joomla from "@/pages/guides/Joomla";
+import Drupal from "@/pages/guides/Drupal";
+import Wix from "@/pages/guides/Wix";
+import Squarespace from "@/pages/guides/Squarespace";
+import Webflow from "@/pages/guides/Webflow";
+import Ghost from "@/pages/guides/Ghost";
 
 // ⚖️ Legal pages
 import TermsAndConditions from "./pages/legal/TermsAndConditions";
@@ -102,24 +102,24 @@ const App = () => (
           <Route path="/app/tracking-setup" element={<TrackingSetup />} />
           <Route path="/app/profile" element={<Profile />} />
 
-          {/* Docs Routes */}
-          <Route path="/docs" element={<Documentation />} />
-          {/* 📚 docs/register stays as the documentation page */}
-          <Route path="/docs/register" element={<DocsRegister />} />
-          <Route path="/docs/setup" element={<SetupTracking />} />
+          {/* Guides Routes */}
+          <Route path="/guides" element={<Documentation />} />
+          {/* 📚 guides/register stays as the documentation page */}
+          <Route path="/guides/register" element={<GuidesRegister />} />
+          <Route path="/guides/setup" element={<SetupTracking />} />
 
           {/* Installation Guides */}
-          <Route path="/docs/install/wordpress" element={<WordPress />} />
-          <Route path="/docs/install/shopify" element={<Shopify />} />
-          <Route path="/docs/install/magento" element={<Magento />} />
-          <Route path="/docs/install/prestashop" element={<PrestaShop />} />
-          <Route path="/docs/install/bigcommerce" element={<BigCommerce />} />
-          <Route path="/docs/install/joomla" element={<Joomla />} />
-          <Route path="/docs/install/drupal" element={<Drupal />} />
-          <Route path="/docs/install/wix" element={<Wix />} />
-          <Route path="/docs/install/squarespace" element={<Squarespace />} />
-          <Route path="/docs/install/webflow" element={<Webflow />} />
-          <Route path="/docs/install/ghost" element={<Ghost />} />
+          <Route path="/guides/install/wordpress" element={<WordPress />} />
+          <Route path="/guides/install/shopify" element={<Shopify />} />
+          <Route path="/guides/install/magento" element={<Magento />} />
+          <Route path="/guides/install/prestashop" element={<PrestaShop />} />
+          <Route path="/guides/install/bigcommerce" element={<BigCommerce />} />
+          <Route path="/guides/install/joomla" element={<Joomla />} />
+          <Route path="/guides/install/drupal" element={<Drupal />} />
+          <Route path="/guides/install/wix" element={<Wix />} />
+          <Route path="/guides/install/squarespace" element={<Squarespace />} />
+          <Route path="/guides/install/webflow" element={<Webflow />} />
+          <Route path="/guides/install/ghost" element={<Ghost />} />
 
           {/* Admin Login + 2FA (public) */}
           <Route path="/mv-admin/login" element={<AdminLogin />} />
