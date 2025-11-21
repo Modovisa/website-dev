@@ -34,7 +34,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Footer – sits at bottom when short, pushed down when content grows */}
-        <footer className="shrink-0 border-t bg-background/80 px-4 py-4 md:px-6 text-sm text-muted-foreground flex items-center justify-center backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <footer className="shrink-0 px-4 py-4 md:px-6 text-sm text-muted-foreground flex items-center justify-center backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <span className="footer-bottom-text">
             © {year} <span className="font-medium">Modovisa</span>{" "}
             <span>made with ❤️ All Rights Reserved</span>
