@@ -1,12 +1,26 @@
 // src/pages/app/Dashboard.tsx
+
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import AppLayout from "@/components/AppLayout";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, RefreshCcw, Clock } from "lucide-react";
+import {
+  Users,
+  Eye,
+  MousePointerClick,
+  TrendingUp,
+  AlertTriangle,
+  RefreshCcw,
+  Clock,
+} from "lucide-react";
 import type { RangeKey } from "@/types/dashboard";
 
 import { KpiCard } from "@/components/dashboard/KpiCard";
@@ -22,7 +36,7 @@ import ReferrersTable from "@/components/dashboard/ReferrersTable";
 import WorldMap from "@/components/dashboard/WorldMap";
 import VisitorsHeatmap from "@/components/dashboard/VisitorsHeatmap";
 import CountryVisits from "@/components/dashboard/CountryVisits";
-import { InfoTip, SectionHeader } from "@/components/dashboard/ChartKit";
+import { SectionHeader } from "@/components/dashboard/ChartKit";
 
 import {
   useDashboard,
@@ -35,25 +49,27 @@ import {
   getTrackingWebsites,
 } from "@/services/dashboard.store";
 
-
-import { nf } from "@/lib/format";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 
 type Website = { id: number; website_name: string; domain: string };
 
 // FE supports only BE ranges: 24h | 7d | 30d | 12mo
-const ALLOWED_RANGES = ["24h","7d","30d","12mo"] as const;
+const ALLOWED_RANGES = ["24h", "7d", "30d", "12mo"] as const;
 const normalizeRange = (r: RangeKey): RangeKey =>
-  (ALLOWED_RANGES as readonly string[]).includes(String(r)) ? r : ("30d" as RangeKey);
+  (ALLOWED_RANGES as readonly string[]).includes(String(r))
+    ? r
+    : ("30d" as RangeKey);
 
 export default function Dashboard() {
-  const { isAuthenticated, isLoading: authLoading } = useAuthGuard();
+  const { isAuthenticated } = useAuthGuard();
 
   const [siteId, setSiteId] = useState<number | null>(() => {
     const saved = localStorage.getItem("current_website_id");
     return saved ? Number(saved) : null;
   });
-  const [range, setRange] = useState<RangeKey>(normalizeRange("24h" as RangeKey));
+  const [range, setRange] = useState<RangeKey>(
+    normalizeRange("24h" as RangeKey),
+  );
 
   // Boot the store exactly once after auth
   useEffect(() => {
@@ -62,7 +78,10 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  const { data: websitesRaw = [], isLoading: sitesLoading } = useQuery({
+  const {
+    data: websitesRaw = [],
+    isLoading: sitesLoading,
+  } = useQuery({
     queryKey: ["tracking-websites"],
     queryFn: getTrackingWebsites,
     staleTime: 5 * 60 * 1000,
@@ -81,7 +100,9 @@ export default function Dashboard() {
     if (!websites || websites.length === 0) return;
 
     const saved = Number(localStorage.getItem("current_website_id") || 0);
-    const picked = websites.some((w) => w.id === saved) ? saved : websites[0].id;
+    const picked = websites.some((w) => w.id === saved)
+      ? saved
+      : websites[0].id;
 
     if (siteId !== picked) {
       setSiteId(picked);
@@ -183,18 +204,18 @@ export default function Dashboard() {
     },
   ];
 
-
-
   if (!isAuthenticated) return null;
 
   return (
-    <DashboardLayout>
+    <AppLayout>
       <div className="p-6 md:p-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Your traffic at a glance.</p>
+            <p className="text-muted-foreground mt-1">
+              Your traffic at a glance.
+            </p>
           </div>
           <div className="flex gap-3 items-center">
             <Select
@@ -207,11 +228,15 @@ export default function Dashboard() {
               disabled={sitesLoading || websites.length === 0}
             >
               <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder={sitesLoading ? "Loading..." : "Choose Website"} />
+                <SelectValue
+                  placeholder={sitesLoading ? "Loading..." : "Choose Website"}
+                />
               </SelectTrigger>
               <SelectContent>
                 {websites.length === 0 && !sitesLoading ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">No websites found</div>
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No websites found
+                  </div>
                 ) : (
                   websites.map((w) => (
                     <SelectItem key={w.id} value={String(w.id)}>
@@ -222,7 +247,10 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={normalizeRange(range)} onValueChange={(v: RangeKey) => setRange(v)}>
+            <Select
+              value={normalizeRange(range)}
+              onValueChange={(v: RangeKey) => setRange(v)}
+            >
               <SelectTrigger className="w-[160px]">
                 <SelectValue />
               </SelectTrigger>
@@ -253,7 +281,9 @@ export default function Dashboard() {
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
             <div className="text-sm">
-              <div className="font-semibold text-destructive">Live stream error.</div>
+              <div className="font-semibold text-destructive">
+                Live stream error.
+              </div>
               <div className="text-muted-foreground mt-1">{error}</div>
               <div className="mt-2 flex gap-2">
                 <Button
@@ -476,7 +506,9 @@ export default function Dashboard() {
               title="All Visitors"
               info="Number of unique visitors per time bucket."
               current={(data as any)?.unique_visitors_timeline ?? []}
-              previous={(data as any)?.previous_unique_visitors_timeline ?? []}
+              previous={
+                (data as any)?.previous_unique_visitors_timeline ?? []
+              }
               color="#0ea5e9"
               filled
               loading={showPageSkeleton}
@@ -543,6 +575,6 @@ export default function Dashboard() {
           </div>
         </>
       </div>
-    </DashboardLayout>
+    </AppLayout>
   );
 }
