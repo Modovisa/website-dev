@@ -598,7 +598,7 @@ const LiveTracking = () => {
 
   /* ----------------------------- sidebar ------------------------------ */
   const VisitorSidebar = () => (
-    <div className="w-full h-full bg-background flex flex-col border rounded-md">
+    <div className="w-full bg-background flex flex-col border rounded-md min-h-[calc(100vh-160px)]">
       <div className="p-6 space-y-4 pt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Visitors</h2>
@@ -893,14 +893,17 @@ const LiveTracking = () => {
   /* ------------------------------ content ----------------------------- */
   return (
     <AppLayout>
-      <div className="flex h-full overflow-hidden gap-6 pl-12">
-        <div className="hidden lg:block w-96 mt-8">
+      {/* Shared inner wrapper: same as Dashboard / Installation */}
+      <div className="px-4 py-6 md:px-12 md:py-8 max-w-8xl mx-auto lg:flex lg:gap-6 lg:items-start space-y-6 lg:space-y-0">
+        {/* Left column: sidebar */}
+        <div className="hidden lg:block w-96">
           <VisitorSidebar />
         </div>
 
-        <div className="flex-1 overflow-auto pr-6">
-          {/* mobile sidebar */}
-          <div className="lg:hidden p-4 border-b bg-card sticky top-0 z-10">
+        {/* Right column: main panel */}
+        <div className="flex-1 min-w-0">
+          {/* Mobile sidebar trigger */}
+          <div className="lg:hidden mb-4">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -914,7 +917,7 @@ const LiveTracking = () => {
             </Sheet>
           </div>
 
-          <div className="p-6 lg:p-8 space-y-6 pt-8">
+          <div className="space-y-6">
             {selectedVisitor ? (
               <>
                 <div className="flex items-center gap-3 mb-2">
