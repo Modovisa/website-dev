@@ -631,7 +631,7 @@ function modovisa_page_attachments(array &$attachments) {
 
   return (
     <AppLayout>
-      <div className="px-4 py-6 md:px-10 md:py-8 max-w-8xl mx-auto space-y-10">
+      <div className="px-4 py-6 md:px-12 md:py-8 max-w-8xl mx-auto space-y-10">
         {/* Page header */}
         <header className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Installation</h1>

@@ -208,7 +208,7 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-8">
+      <div className="px-4 py-6 md:px-12 md:py-8 max-w-8xl mx-auto space-y-10">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
