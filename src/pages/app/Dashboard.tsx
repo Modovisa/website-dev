@@ -208,14 +208,16 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-        <header className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Your traffic at a glance.
-          </p>
-        </header>
+      <div className="px-4 py-6 md:px-12 md:py-8 max-w-8xl mx-auto space-y-10">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <header className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight">Installation</h1>
+            <p className="text-sm text-muted-foreground">
+              Add the Modovisa tracking script to your site, then follow the
+              platform-specific steps below.
+            </p>
+          </header>
           <div className="flex gap-3 items-center">
             <Select
               value={siteId != null ? String(siteId) : undefined}
@@ -573,6 +575,7 @@ export default function Dashboard() {
             </Card>
           </div>
         </>
+      </div>
     </AppLayout>
   );
 }
