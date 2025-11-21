@@ -44,7 +44,7 @@ const Joomla = () => {
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
             Install on Joomla
           </h1>
-          <Badge className="bg-primary/10 text-primary px-6 py-2 text-sm">
+          <Badge className="bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold">
             Install the Modovisa extension and paste your Tracking Token to start
             real-time analytics.
           </Badge>

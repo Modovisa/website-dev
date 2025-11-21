@@ -51,7 +51,7 @@ add_action('wp_head', 'add_modovisa_script_to_head');`;
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
             Install on WordPress
           </h1>
-          <Badge className="bg-primary/10 text-primary px-6 py-2 text-sm">
+          <Badge className="bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold">
             Use the Modovisa plugin or add the snippet manually to start tracking in real time.
           </Badge>
         </div>
