@@ -893,8 +893,8 @@ const LiveTracking = () => {
   /* ------------------------------ content ----------------------------- */
   return (
     <AppLayout>
-      <div className="flex h-full overflow-hidden gap-6 pl-12"> 
-        <div className="hidden lg:block w-86 mt-8">
+      <div className="flex h-full overflow-hidden gap-6 pl-12">
+        <div className="hidden lg:block w-96 mt-8">
           <VisitorSidebar />
         </div>
 
