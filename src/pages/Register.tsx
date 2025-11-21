@@ -10,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ensureTurnstileLoaded } from "@/lib/turnstile";
 
 const GOOGLE_CLIENT_ID =
   "1057403058678-pak64aj4vthcedsnr81r30qbo6pia6d3.apps.googleusercontent.com";
+
+const TURNSTILE_SITE_KEY = "0x4AAAAAABZpGqOL1fgh-FTY";
 
 type Feedback = { message: string; type: "success" | "error" | "" };
 
@@ -30,6 +33,9 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // Turnstile state
+  const [captchaToken, setCaptchaToken] = useState("");
 
   // Validation feedback
   const [usernameFeedback, setUsernameFeedback] = useState<Feedback>({
@@ -76,13 +82,16 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
     if (!username.trim()) return;
 
     try {
-      const response = await fetch("https://api.modovisa.com/api/check-username", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim() }),
-      });
+      const response = await fetch(
+        "https://api.modovisa.com/api/check-username",
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: username.trim() }),
+        },
+      );
 
       const result = await response.json();
       setUsernameFeedback({
@@ -117,12 +126,27 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
     }
   };
 
+  // Load Turnstile + expose callback
+  useEffect(() => {
+    // callback that Turnstile will call
+    (window as any).onTurnstileSuccess = (token: string) => {
+      setCaptchaToken(token);
+    };
+
+    ensureTurnstileLoaded();
+  }, []);
+
   // Handle manual registration
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!termsAccepted) {
       alert("You must agree to the Privacy Policy & Terms.");
+      return;
+    }
+
+    if (!captchaToken) {
+      alert("Please complete the CAPTCHA before continuing.");
       return;
     }
 
@@ -150,6 +174,7 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
           password,
           consent: true,
           consent_at: new Date().toISOString(),
+          captcha_token: captchaToken,
         }),
       });
 
@@ -206,7 +231,10 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
         return;
       }
 
-      if (result?.temp_token && result?.redirect?.includes("two-step-verification")) {
+      if (
+        result?.temp_token &&
+        result?.redirect?.includes("two-step-verification")
+      ) {
         sessionStorage.setItem("twofa_temp_token", result.temp_token);
         sessionStorage.setItem("pending_2fa_user_id", result.user_id);
         window.location.href = result.redirect;
@@ -288,8 +316,8 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
               <div>
                 <h3 className="font-semibold text-lg mb-1">Set up in minutes</h3>
                 <p className="text-muted-foreground text-sm">
-                  Use our lightweight script or integrate via API. No complex setup
-                  required.
+                  Use our lightweight script or integrate via API. No complex
+                  setup required.
                 </p>
               </div>
             </div>
@@ -303,8 +331,8 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
               <div>
                 <h3 className="font-semibold text-lg mb-1">Fits any stack</h3>
                 <p className="text-muted-foreground text-sm">
-                  Whether you're on WordPress, Shopify, Webflow, or custom code, we've
-                  got you covered.
+                  Whether you're on WordPress, Shopify, Webflow, or custom code,
+                  we've got you covered.
                 </p>
               </div>
             </div>
@@ -316,10 +344,12 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
                 </div>
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">Built for growing teams</h3>
+                <h3 className="font-semibold text-lg mb-1">
+                  Built for growing teams
+                </h3>
                 <p className="text-muted-foreground text-sm">
-                  Track visitors across sessions, analyze funnels, and collaborate with
-                  your team in real-time.
+                  Track visitors across sessions, analyze funnels, and
+                  collaborate with your team in real-time.
                 </p>
               </div>
             </div>
@@ -340,8 +370,10 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
 
           {isLoading && (
             <div className="mb-6 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-              <p className="mt-2 text-sm text-muted-foreground">{loadingMessage}</p>
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {loadingMessage}
+              </p>
             </div>
           )}
 
@@ -386,7 +418,9 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
               {emailFeedback.message && (
                 <p
                   className={`text-sm ${
-                    emailFeedback.type === "success" ? "text-green-600" : "text-red-600"
+                    emailFeedback.type === "success"
+                      ? "text-green-600"
+                      : "text-red-600"
                   }`}
                 >
                   {emailFeedback.message}
@@ -409,10 +443,14 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                   disabled={isLoading}
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
               {passwordFeedback && (
@@ -425,7 +463,9 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
                 id="terms"
                 className="mt-1"
                 checked={termsAccepted}
-                onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                onCheckedChange={(checked) =>
+                  setTermsAccepted(checked === true)
+                }
                 disabled={isLoading}
               />
               <label htmlFor="terms" className="text-sm leading-relaxed">
@@ -440,8 +480,17 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
               </label>
             </div>
 
+            {/* Turnstile CAPTCHA */}
+            <div className="mt-2">
+              <div
+                className="cf-turnstile"
+                data-sitekey={TURNSTILE_SITE_KEY}
+                data-callback="onTurnstileSuccess"
+              />
+            </div>
+
             <Button
-              className="w-full h-12 text-base"
+              className="h-12 w-full text-base"
               size="lg"
               disabled={!termsAccepted || isLoading}
               type="submit"
@@ -451,7 +500,10 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
 
             <div className="text-center text-sm">
               Already have an account?{" "}
-              <Link to="/login" className="text-primary hover:underline font-medium">
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
                 Sign in
               </Link>
             </div>
@@ -471,11 +523,11 @@ const RegisterInner = ({ mode = "page" }: RegisterProps) => {
               </Alert>
             )}
 
-            <div className="w-full flex justify-center">
+            <div className="flex w-full justify-center">
               <div
                 id="google-signin-button"
                 className={`w-full max-w-xs ${
-                  !termsAccepted ? "opacity-50 pointer-events-none" : ""
+                  !termsAccepted ? "pointer-events-none opacity-50" : ""
                 }`}
                 title={
                   !termsAccepted
@@ -496,7 +548,7 @@ const Register = (props: RegisterProps) => {
 
   if (mode === "modal") {
     return (
-      <div className="w-full max-w-6xl mx-auto">
+      <div className="mx-auto w-full max-w-6xl">
         <RegisterInner mode="modal" />
       </div>
     );
