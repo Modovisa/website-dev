@@ -7,6 +7,7 @@ import { Sheet, SheetContent } from "./ui/sheet";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const year = new Date().getFullYear();
 
   return (
     <div className="flex h-screen bg-muted/30">
@@ -33,8 +34,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </main>
 
           <footer className="shrink-0 border-t bg-background/80 px-4 py-3 md:px-6 text-xs text-muted-foreground flex items-center justify-center">
-            <span>
-              © 2025 Modovisa. made with ❤️ all rights Reserved.
+            <span className="footer-bottom-text">
+              © {year} <span className="font-medium">Modovisa</span>{" "}
+              <span>made with ❤️ All Rights Reserved</span>
             </span>
           </footer>
         </div>
