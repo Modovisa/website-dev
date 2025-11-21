@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { Menu, LogIn, LogOut } from "lucide-react";
+import { Menu, LogIn, LogOut, ChevronDown } from "lucide-react";
 import { fullLogout } from "@/lib/auth/logout";
 import { gettingStartedItems, platforms } from "./DocsSidebar";
 
@@ -15,6 +15,11 @@ const API = "https://api.modovisa.com";
 export const DocsNavbar = () => {
   const [isAuthed, setIsAuthed] = useState(false);
   const navigate = useNavigate();
+
+  // collapsible state inside mobile sheet
+  const [siteOpen, setSiteOpen] = useState(true);
+  const [gettingStartedOpen, setGettingStartedOpen] = useState(true);
+  const [installationOpen, setInstallationOpen] = useState(true);
 
   // Lightweight auth check
   useEffect(() => {
@@ -74,48 +79,60 @@ export const DocsNavbar = () => {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[320px] p-4">
-              <div className="flex flex-col gap-4 mt-4">
-                {/* Site navigation */}
+              <div className="mt-4 flex flex-col gap-4">
+                {/* Site navigation - collapsible */}
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Site
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSectionClick("product")}
-                      className="text-left text-base font-medium hover:text-primary transition-colors"
-                    >
-                      Product
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSectionClick("features")}
-                      className="text-left text-base font-medium hover:text-primary transition-colors"
-                    >
-                      Features
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSectionClick("pricing")}
-                      className="text-left text-base font-medium hover:text-primary transition-colors"
-                    >
-                      Pricing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSectionClick("landingFAQ")}
-                      className="text-left text-base font-medium hover:text-primary transition-colors"
-                    >
-                      FAQs
-                    </button>
-                    <Link
-                      to="/docs"
-                      className="text-base font-medium hover:text-primary transition-colors"
-                    >
-                      Docs home
-                    </Link>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSiteOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between rounded-md px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    <span>Site</span>
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${
+                        siteOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {siteOpen && (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSectionClick("product")}
+                        className="text-left text-base font-medium transition-colors hover:text-primary"
+                      >
+                        Product
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSectionClick("features")}
+                        className="text-left text-base font-medium transition-colors hover:text-primary"
+                      >
+                        Features
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSectionClick("pricing")}
+                        className="text-left text-base font-medium transition-colors hover:text-primary"
+                      >
+                        Pricing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSectionClick("landingFAQ")}
+                        className="text-left text-base font-medium transition-colors hover:text-primary"
+                      >
+                        FAQs
+                      </button>
+                      <Link
+                        to="/docs"
+                        className="text-base font-medium transition-colors hover:text-primary"
+                      >
+                        Docs home
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
                 {/* Divider */}
@@ -123,52 +140,82 @@ export const DocsNavbar = () => {
 
                 {/* Docs navigation */}
                 <div className="space-y-4">
+                  {/* Getting Started - collapsible */}
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Getting Started
-                    </p>
-                    <div className="space-y-1">
-                      {gettingStartedItems.map((item) => (
-                        <Link
-                          key={item.name}
-                          to={item.href}
-                          className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                        >
-                          {item.name}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGettingStartedOpen((prev) => !prev)
+                      }
+                      className="flex w-full items-center justify-between rounded-md px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      <span>Getting Started</span>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          gettingStartedOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
 
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Installation Guides
-                    </p>
-                    <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                      {platforms.map((platform) => {
-                        const href = `/docs/install/${platform.toLowerCase()}`;
-                        return (
+                    {gettingStartedOpen && (
+                      <div className="mt-2 space-y-1">
+                        {gettingStartedItems.map((item) => (
                           <Link
-                            key={platform}
-                            to={href}
+                            key={item.name}
+                            to={item.href}
                             className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                           >
-                            {platform}
+                            {item.name}
                           </Link>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Installation Guides - collapsible */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInstallationOpen((prev) => !prev)
+                      }
+                      className="flex w-full items-center justify-between rounded-md px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      <span>Installation Guides</span>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          installationOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    {installationOpen && (
+                      <div className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
+                        {platforms.map((platform) => {
+                          const href = `/docs/install/${platform.toLowerCase()}`;
+                          return (
+                            <Link
+                              key={platform}
+                              to={href}
+                              className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              {platform}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Auth actions */}
-                <div className="pt-4 border-t">
+                <div className="border-t pt-4">
                   {isAuthed ? (
                     <>
                       <Link to="/app/live-tracking">
                         <Button
                           variant="outline"
-                          className="mb-2 w-full border-transparent bg-white/50 text-foreground font-semibold hover:bg-white/75"
+                          className="mb-2 w-full border-transparent bg-white/50 font-semibold text-foreground hover:bg-white/75"
                         >
                           Live Tracking
                         </Button>
@@ -212,7 +259,7 @@ export const DocsNavbar = () => {
               <Link to="/app/live-tracking">
                 <Button
                   variant="outline"
-                  className="rounded-md border-transparent bg-white/50 px-6 py-2.5 text-base font-semibold text-foreground hover:bg-white/75"
+                  className="rounded-md border-transparent bg-white/50 px-6 py-2.5 text-base font-semibold text-foreground hover:bgWHITE/75 hover:text-foreground"
                 >
                   Live Tracking
                 </Button>
@@ -239,7 +286,7 @@ export const DocsNavbar = () => {
           )}
         </div>
 
-        {/* Mobile auth icon */}
+        {/* Mobile: auth icon */}
         <div className="md:hidden">
           {isAuthed ? (
             <Button
