@@ -600,7 +600,7 @@ const LiveTracking = () => {
 
   /* ----------------------------- sidebar ------------------------------ */
   const VisitorSidebar = () => (
-    <div className="w-full h-full bg-background flex flex-col border rounded-md">
+    <div className="w-full bg-background flex flex-col border rounded-md min-h-[calc(100vh-160px)]">
       <div className="p-6 space-y-4 pt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Visitors</h2>
