@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/Logo";
 import { Menu, LogIn, LogOut, ChevronDown } from "lucide-react";
 import { fullLogout } from "@/lib/auth/logout";
 import { gettingStartedItems, platforms } from "./DocsSidebar";
@@ -70,7 +69,7 @@ export const DocsNavbar = () => {
   return (
     <nav className="glass-nav rounded-md px-4 py-3">
       <div className="flex items-center justify-between gap-4">
-        {/* Left cluster: mobile hamburger + logo */}
+        {/* Left cluster: mobile hamburger (no logo) */}
         <div className="flex items-center gap-2">
           {/* Mobile: unified hamburger (site + docs nav) */}
           <div className="md:hidden">
@@ -248,9 +247,6 @@ export const DocsNavbar = () => {
               </SheetContent>
             </Sheet>
           </div>
-
-          {/* Logo */}
-          <Logo className="text-foreground" />
         </div>
 
         {/* Center: desktop nav links (hidden on mobile) */}

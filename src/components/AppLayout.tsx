@@ -33,7 +33,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {children}
           </main>
 
-          <footer className="shrink-0 px-4 py-4 md:px-6 text-xs text-muted-foreground flex items-center justify-center">
+          <footer className="shrink-0 px-4 py-4 md:px-6 text-md text-muted-foreground flex items-center justify-center">
             <span className="footer-bottom-text">
               © {year} <span className="font-medium">Modovisa</span>{" "}
               <span>made with ❤️ All Rights Reserved</span>
