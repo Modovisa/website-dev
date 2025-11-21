@@ -2,7 +2,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { DashboardLayout } from "@/components/DashboardLayout";
+import AdminLayout from "@/components/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -490,13 +490,13 @@ const AdminUserProfilePage = () => {
 
   if (!userId) {
     return (
-      <DashboardLayout>
+      <AdminLayout>
         <div className="p-8">
           <p className="text-sm text-destructive">
             No user_id provided in URL.
           </p>
         </div>
-      </DashboardLayout>
+      </AdminLayout>
     );
   }
 
@@ -512,7 +512,7 @@ const AdminUserProfilePage = () => {
       : "bg-secondary";
 
   return (
-    <DashboardLayout>
+    <AdminLayout>
       <div className="flex flex-col lg:flex-row h-full">
         {/* Left sidebar */}
         <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r bg-card p-4 md:p-6">
@@ -1107,7 +1107,7 @@ const AdminUserProfilePage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </AdminLayout>
   );
 };
 
