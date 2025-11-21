@@ -93,7 +93,7 @@ const SiteFooter = () => {
                 </li>
                 <li>
                   <Link
-                    to="/docs"
+                    to="/guides"
                     className="transition-colors hover:text-primary"
                   >
                     Guides
