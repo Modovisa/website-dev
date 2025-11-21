@@ -26,8 +26,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </SheetContent>
         </Sheet>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">{children}</main>
+        {/* Main content + footer */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+
+          <footer className="shrink-0 border-t bg-background/80 px-4 py-3 md:px-6 text-xs text-muted-foreground flex items-center justify-center">
+            <span>
+              © 2025 Modovisa. made with ❤️ all rights Reserved.
+            </span>
+          </footer>
+        </div>
       </div>
     </div>
   );
