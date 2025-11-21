@@ -12,8 +12,8 @@ const navigation = [
   { name: "Dashboard", href: "/app/dashboard", icon: BarChart3 },
   { name: "Installation", href: "/app/installation", icon: Plug },
   { name: "Tracking Setup", href: "/app/tracking-setup", icon: UserPlus },
-  { name: "Support", href: "/app/help", icon: HelpCircle },
-  { name: "Contact", href: "/app/feedback", icon: MessageSquare },
+  { name: "Guides", href: "/docs", icon: HelpCircle },
+  { name: "Contact", href: "/contact-us", icon: MessageSquare },
 ];
 
 export const AppSidebar = () => {
