@@ -118,10 +118,10 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
               </button>
 
               <Link
-                to="/docs"
+                to="/guides"
                 className="text-lg font-medium hover:text-primary transition-colors"
               >
-                Docs
+                Guides
               </Link>
 
               <div className="pt-4 border-t">
@@ -200,10 +200,10 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
             FAQs
           </button>
           <Link
-            to="/docs"
+            to="/guides"
             className="text-base font-medium text-foreground transition-colors hover:text-primary"
           >
-            Docs
+            Guides
           </Link>
         </div>
 
