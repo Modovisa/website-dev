@@ -205,6 +205,16 @@ const TrackingSetup = () => {
 
       const result = await res.json().catch(() => ({} as any));
 
+      // 🔐 Handle duplicate domain gracefully
+      if (res.status === 409 && result?.code === "DUPLICATE_DOMAIN") {
+        setFormError(
+          result?.error ||
+            "You already have tracking set up for this domain. Please use the existing site in your dashboard.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
       if (!res.ok) {
         setFormError(result?.error || "Failed to create tracking setup.");
         setIsSubmitting(false);
