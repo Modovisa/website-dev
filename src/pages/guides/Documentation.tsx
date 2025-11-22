@@ -6,8 +6,27 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Eye, Zap, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LandingLiveDemo } from "@/pages/Index";
+import { useTrackingScriptToken } from "@/hooks/useTrackingScriptToken";
 
 const Documentation = () => {
+  const { trackingToken } = useTrackingScriptToken();
+  const tokenPlaceholder = trackingToken || "YOUR_TRACKING_TOKEN";
+
+  const copyQuickStartScript = () => {
+    const code = `<script>
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://cdn.modovisa.com/modovisa.min.js';
+    s.async=1;
+    s.dataset.token='${tokenPlaceholder}';
+    document.head.appendChild(s);
+  })();
+</script>`;
+    navigator.clipboard.writeText(code).catch((err) => {
+      console.error("Failed to copy quick start script:", err);
+    });
+  };
+
   return (
     <GuidesLayout>
       <div className="container max-w-8xl mx-auto py-12 px-6">
@@ -24,9 +43,15 @@ const Documentation = () => {
         {/* Description */}
         <div className="mb-12 text-center max-w-3xl mx-auto">
           <p className="text-lg text-muted-foreground">
-            Modovisa shows you <span className="font-semibold text-foreground">who's on your site right now</span>, which pages they're viewing, and the{" "}
-            <span className="font-semibold text-foreground">exact journey</span> they take—updated live. No next-day delay. Use it to catch broken funnels,
-            measure campaign spikes as they happen, and help customers in the moment.
+            Modovisa shows you{" "}
+            <span className="font-semibold text-foreground">
+              who's on your site right now
+            </span>
+            , which pages they're viewing, and the{" "}
+            <span className="font-semibold text-foreground">exact journey</span>{" "}
+            they take—updated live. No next-day delay. Use it to catch broken
+            funnels, measure campaign spikes as they happen, and help customers
+            in the moment.
           </p>
         </div>
 
@@ -38,9 +63,12 @@ const Documentation = () => {
                 <Activity className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-2">Real-time visitor tracking</h3>
+                <h3 className="font-semibold text-lg mb-2">
+                  Real-time visitor tracking
+                </h3>
                 <p className="text-muted-foreground text-sm">
-                  Watch active visitors, page transitions, referrers, devices, and countries update every second!
+                  Watch active visitors, page transitions, referrers, devices,
+                  and countries update every second!
                 </p>
               </div>
             </div>
@@ -52,9 +80,12 @@ const Documentation = () => {
                 <Eye className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-2">Per-visitor journeys</h3>
+                <h3 className="font-semibold text-lg mb-2">
+                  Per-visitor journeys
+                </h3>
                 <p className="text-muted-foreground text-sm">
-                  Click any visitor to see their path: landing → product → cart → checkout with dwell times per step.
+                  Click any visitor to see their path: landing → product → cart
+                  → checkout with dwell times per step.
                 </p>
               </div>
             </div>
@@ -66,9 +97,12 @@ const Documentation = () => {
                 <Zap className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-2">Instant analytics</h3>
+                <h3 className="font-semibold text-lg mb-2">
+                  Instant analytics
+                </h3>
                 <p className="text-muted-foreground text-sm">
-                  Top pages, UTM sources, sessions, referrers, devices, and countries—no sampling, no lag.
+                  Top pages, UTM sources, sessions, referrers, devices, and
+                  countries—no sampling, no lag.
                 </p>
               </div>
             </div>
@@ -105,13 +139,19 @@ const Documentation = () => {
             <ol className="space-y-3 list-decimal list-inside text-muted-foreground">
               <li>Register or sign in at modovisa.com</li>
               <li>
-                Add your website and copy your <span className="font-mono text-foreground">8ce Token</span>.
+                Add your website and copy your{" "}
+                <span className="font-mono text-foreground">Tracking Token</span>.
               </li>
               <li>
-                Paste this snippet into your site's <span className="font-mono text-foreground">&lt;head&gt;</span> (or install a platform plug-in below).
+                Paste this snippet into your site's{" "}
+                <span className="font-mono text-foreground">&lt;head&gt;</span>{" "}
+                (or install a platform plug-in below).
               </li>
               <li>
-                <span className="font-semibold text-foreground">Open Live Tracking</span> to watch visitors and journeys roll in—instantly.
+                <span className="font-semibold text-foreground">
+                  Open Live Tracking
+                </span>{" "}
+                to watch visitors and journeys roll in—instantly.
               </li>
             </ol>
 
@@ -119,18 +159,27 @@ const Documentation = () => {
               <pre>{`<script>
   (function(){
     var s=document.createElement('script');
-    s.src='https://cdn.modovisa.com/modovisa.js';
+    s.src='https://cdn.modovisa.com/modovisa.min.js';
     s.async=1;
-    s.dataset.token='YOUR_8CE_TOKEN';
+    s.dataset.token='${tokenPlaceholder}';
     document.head.appendChild(s);
   })();
 </script>`}</pre>
             </div>
 
             <div className="mt-4 flex items-center gap-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={copyQuickStartScript}>
                 Copy Code
               </Button>
+              {!trackingToken && (
+                <span className="text-xs text-muted-foreground">
+                  You&apos;re not logged in — using{" "}
+                  <span className="font-mono text-foreground">
+                    YOUR_TRACKING_TOKEN
+                  </span>{" "}
+                  as a placeholder.
+                </span>
+              )}
             </div>
           </Card>
         </div>
@@ -139,9 +188,10 @@ const Documentation = () => {
         <div>
           <h2 className="text-3xl font-bold mb-6">Install on your platform</h2>
           <p className="text-muted-foreground mb-6">
-            Prefer a native install? Follow a step-by-step guide for your CMS or storefront:
+            Prefer a native install? Follow a step-by-step guide for your CMS or
+            storefront:
           </p>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {[
               { name: "WordPress", icon: "📝" },
