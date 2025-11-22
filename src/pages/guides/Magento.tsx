@@ -206,7 +206,7 @@ const Magento = () => {
         {/* Footer Navigation */}
         <div className="flex items-center justify-between mt-8">
           <Button variant="outline" asChild>
-            <a href="/guides">← Back to Docs</a>
+            <a href="/guides">← Back to Guides</a>
           </Button>
           <Button variant="link" asChild>
             <a href="https://support.modovisa.com" target="_blank" rel="noopener">

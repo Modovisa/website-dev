@@ -328,7 +328,7 @@ const Squarespace = () => {
             asChild
             className="border border-black bg-black text-white hover:bg-white hover:text-black"
           >
-            <a href="/guides">← Back to Docs</a>
+            <a href="/guides">← Back to Guides</a>
           </Button>
           <Button variant="link" asChild>
             <a
