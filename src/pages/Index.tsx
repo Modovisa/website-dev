@@ -274,7 +274,7 @@ const formatPageTime = (seconds: number) => {
 /*                       LANDING LIVE DEMO COMPONENT                   */
 /* ------------------------------------------------------------------ */
 
-const LandingLiveDemo = () => {
+export const LandingLiveDemo = () => {
   const {
     visitors,
     // store has these, but we drive selection locally

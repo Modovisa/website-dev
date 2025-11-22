@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Eye, Zap, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LandingLiveDemo } from "@/pages/Index";
 
 const Documentation = () => {
   return (
@@ -90,103 +91,16 @@ const Documentation = () => {
 
         {/* Interactive Simulation Section */}
         <div className="mb-16">
-          <h2 className="text-3xl font-bold mb-8 text-center">
-            Real Time Visitor Journey Tracking - Interactive Simulation
+          <h2 className="text-3xl font-bold mb-4 text-center">
+            Real Time Visitor Journey Tracking – Interactive Simulation
           </h2>
-          
-          <div className="bg-muted/30 rounded-lg p-8 border border-border">
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Visitors Panel */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-xl mb-4">Visitors</h3>
-                <div className="bg-card rounded-lg border border-border p-4">
-                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
-                    <span className="text-sm font-medium text-muted-foreground">demomode.com</span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-primary/5 rounded-md border border-primary/20">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <div>
-                          <p className="font-medium text-sm">Crown Backpack | demomode.com</p>
-                          <p className="text-xs text-green-600">New Visitor</p>
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="text-xs">Session: 5m</Badge>
-                    </div>
+          <p className="text-center text-muted-foreground mb-8 max-w-3xl mx-auto">
+            This is the same live simulation from the homepage, embedded here so you can
+            see how Modovisa tracks visitors, journeys, and live sessions without installing
+            anything yet.
+          </p>
 
-                    <div className="p-3 bg-muted/50 rounded-md border border-border">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-orange-500" />
-                        <div>
-                          <p className="font-medium text-sm">Thank You | demomode.com</p>
-                          <p className="text-xs text-orange-600">Returning Visitor</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <p className="text-sm font-medium flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                      Recently left
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Who's this Panel */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-xl mb-4">
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    Who's this?
-                  </div>
-                </h3>
-                
-                <div className="bg-card rounded-lg border border-border p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Location:</p>
-                      <p className="font-medium">Rio de Janeiro, Brazil</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Referrer:</p>
-                      <p className="font-medium">Facebook</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Device:</p>
-                      <p className="font-medium">Mobile</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Browser:</p>
-                      <p className="font-medium">Edge</p>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-border">
-                    <p className="font-semibold mb-3">What pages have they seen?</p>
-                    <div className="space-y-2">
-                      {[
-                        { page: "Clothing | demomode.com", time: "11s", url: "https://demomode.com/clothing/hi..." },
-                        { page: "Terms & Conditions | demomode.com", time: "4s", url: "https://demomode.com/terms-conditions" },
-                        { page: "Shipping Info | demomode.com", time: "59s", url: "https://demomode.com/shipping" },
-                      ].map((item, i) => (
-                        <div key={i} className="flex items-start gap-3 p-2 rounded bg-muted/30">
-                          <Badge variant="outline" className="text-xs font-mono">{item.time}</Badge>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{item.page}</p>
-                            <p className="text-xs text-muted-foreground truncate">{item.url}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <LandingLiveDemo />
         </div>
 
         {/* Quick Start Section */}
