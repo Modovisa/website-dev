@@ -3,10 +3,22 @@
 import { GuidesLayout } from "@/components/GuidesLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Eye, Zap, Shield } from "lucide-react";
+import { Activity, Eye, Zap, Shield, ArrowRight, Globe2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LandingLiveDemo } from "@/pages/Index";
 import { useTrackingScriptToken } from "@/hooks/useTrackingScriptToken";
+
+const platforms = [
+  { name: "WordPress", slug: "wordpress" },
+  { name: "Shopify", slug: "shopify" },
+  { name: "Wix", slug: "wix" },
+  { name: "Squarespace", slug: "squarespace" },
+  { name: "Webflow", slug: "webflow" },
+  { name: "Magento", slug: "magento" },
+  { name: "Drupal", slug: "drupal" },
+  { name: "Joomla", slug: "joomla" },
+  { name: "PrestaShop", slug: "prestashop" },
+];
 
 const Documentation = () => {
   const { trackingToken } = useTrackingScriptToken();
@@ -45,9 +57,9 @@ const Documentation = () => {
           <p className="text-lg text-muted-foreground">
             Modovisa shows you{" "}
             <span className="font-semibold text-foreground">
-              who's on your site right now
+              who&apos;s on your site right now
             </span>
-            , which pages they're viewing, and the{" "}
+            , which pages they&apos;re viewing, and the{" "}
             <span className="font-semibold text-foreground">exact journey</span>{" "}
             they take—updated live. No next-day delay. Use it to catch broken
             funnels, measure campaign spikes as they happen, and help customers
@@ -59,8 +71,8 @@ const Documentation = () => {
         <div className="grid md:grid-cols-2 gap-6 mb-16">
           <Card className="p-6 border-border hover:border-primary/50 transition-colors">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Activity className="h-6 w-6 text-primary" />
+              <div className="p-3 rounded-lg bg-muted">
+                <Activity className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-semibold text-lg mb-2">
@@ -68,7 +80,7 @@ const Documentation = () => {
                 </h3>
                 <p className="text-muted-foreground text-sm">
                   Watch active visitors, page transitions, referrers, devices,
-                  and countries update every second!
+                  and countries update every second.
                 </p>
               </div>
             </div>
@@ -76,8 +88,8 @@ const Documentation = () => {
 
           <Card className="p-6 border-border hover:border-primary/50 transition-colors">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Eye className="h-6 w-6 text-primary" />
+              <div className="p-3 rounded-lg bg-muted">
+                <Eye className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-semibold text-lg mb-2">
@@ -93,8 +105,8 @@ const Documentation = () => {
 
           <Card className="p-6 border-border hover:border-primary/50 transition-colors">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Zap className="h-6 w-6 text-primary" />
+              <div className="p-3 rounded-lg bg-muted">
+                <Zap className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-semibold text-lg mb-2">
@@ -110,8 +122,8 @@ const Documentation = () => {
 
           <Card className="p-6 border-border hover:border-primary/50 transition-colors">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Shield className="h-6 w-6 text-primary" />
+              <div className="p-3 rounded-lg bg-muted">
+                <Shield className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-semibold text-lg mb-2">Privacy-first</h3>
@@ -137,13 +149,13 @@ const Documentation = () => {
           <h2 className="text-3xl font-bold mb-6">Quick start (~60 seconds)</h2>
           <Card className="p-6 border-border">
             <ol className="space-y-3 list-decimal list-inside text-muted-foreground">
-              <li>Register or sign in at modovisa.com</li>
+              <li>Register or sign in at modovisa.com.</li>
               <li>
                 Add your website and copy your{" "}
                 <span className="font-mono text-foreground">Tracking Token</span>.
               </li>
               <li>
-                Paste this snippet into your site's{" "}
+                Paste this snippet into your site&apos;s{" "}
                 <span className="font-mono text-foreground">&lt;head&gt;</span>{" "}
                 (or install a platform plug-in below).
               </li>
@@ -167,8 +179,12 @@ const Documentation = () => {
 </script>`}</pre>
             </div>
 
-            <div className="mt-4 flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={copyQuickStartScript}>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyQuickStartScript}
+              >
                 Copy Code
               </Button>
               {!trackingToken && (
@@ -193,31 +209,29 @@ const Documentation = () => {
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {[
-              { name: "WordPress", icon: "📝" },
-              { name: "Shopify", icon: "🛍️" },
-              { name: "Wix", icon: "🎨" },
-              { name: "Squarespace", icon: "⬜" },
-              { name: "Webflow", icon: "🌊" },
-              { name: "Magento", icon: "🔷" },
-              { name: "Drupal", icon: "💧" },
-              { name: "Joomla", icon: "🌟" },
-              { name: "PrestaShop", icon: "🛒" },
-            ].map((platform) => (
+            {platforms.map((platform) => (
               <Button
                 key={platform.name}
                 variant="outline"
-                className="justify-start gap-2 h-auto py-3"
+                className="justify-start gap-3 h-auto py-3"
+                asChild
               >
-                <span className="text-xl">{platform.icon}</span>
-                <span>{platform.name}</span>
+                <a href={`/guides/install/${platform.slug}`}>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted">
+                    <Globe2 className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <span>{platform.name}</span>
+                </a>
               </Button>
             ))}
           </div>
 
-          <div className="mt-6">
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Next: Register for an account →
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild className="gap-2">
+              <a href="/guides/register">
+                Next: Register for an account
+                <ArrowRight className="h-4 w-4" />
+              </a>
             </Button>
           </div>
         </div>

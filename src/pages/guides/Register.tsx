@@ -130,7 +130,7 @@ const Register = () => {
             <a href="/guides">← Back to Docs</a>
           </Button>
           <Button asChild>
-            <a href="/guides/setup-tracking" className="gap-2">
+            <a href="/guides/setup" className="gap-2">
               Next: Set up tracking
               <ArrowRight className="h-4 w-4" />
             </a>

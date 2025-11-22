@@ -54,6 +54,7 @@ import Wix from "@/pages/guides/Wix";
 import Squarespace from "@/pages/guides/Squarespace";
 import Webflow from "@/pages/guides/Webflow";
 import Ghost from "@/pages/guides/Ghost";
+import InstallGuides from "@/pages/guides/InstallGuides";
 
 // ⚖️ Legal pages
 import TermsAndConditions from "./pages/legal/TermsAndConditions";
@@ -81,14 +82,8 @@ const App = () => (
             path="/legal/terms-and-conditions"
             element={<TermsAndConditions />}
           />
-          <Route
-            path="/legal/privacy-policy"
-            element={<PrivacyPolicy />}
-          />
-          <Route
-            path="/legal/cookie-policy"
-            element={<CookiePolicy />}
-          />
+          <Route path="/legal/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/legal/cookie-policy" element={<CookiePolicy />} />
 
           {/* Auth Routes */}
           <Route path="/2fa" element={<TwoFactorAuth />} />
@@ -104,11 +99,13 @@ const App = () => (
 
           {/* Guides Routes */}
           <Route path="/guides" element={<Documentation />} />
-          {/* 📚 guides/register stays as the documentation page */}
           <Route path="/guides/register" element={<GuidesRegister />} />
           <Route path="/guides/setup" element={<SetupTracking />} />
 
-          {/* Installation Guides */}
+          {/* Installation Guides index (default) */}
+          <Route path="/guides/install" element={<InstallGuides />} />
+
+          {/* Individual Installation Guides */}
           <Route path="/guides/install/wordpress" element={<WordPress />} />
           <Route path="/guides/install/shopify" element={<Shopify />} />
           <Route path="/guides/install/magento" element={<Magento />} />
