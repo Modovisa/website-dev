@@ -1190,7 +1190,7 @@ const Index = () => {
               beautiful, actionable insights.
             </p>
             <div className="flex flex-col justify-center gap-4 pt-8 sm:flex-row">
-              <Link to="/register">
+             {/*  <Link to="/register">
                 <Button
                   size="lg"
                   className="h-14 bg-white px-8 text-lg text-primary hover:bg-white/90"
@@ -1198,15 +1198,15 @@ const Index = () => {
                   Start Free Trial
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
-              </Link>
+              </Link> */}
 
-              <Link to="/app/dashboard">
+              <Link to="/register">
                 <Button
                   size="lg"
                   variant="hero"
                   className="h-14 px-8 text-lg"
                 >
-                  View Demo
+                  Join for Free
                 </Button>
               </Link>
             </div>
