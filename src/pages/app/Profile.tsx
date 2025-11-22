@@ -440,7 +440,7 @@ const Profile = () => {
                 <CardContent className="pt-6 space-y-6">
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-semibold">Two-factor Authentication</h2>
-                    <Badge className={profile?.twofa_enabled ? "bg-success" : "bg-secondary"}>
+                    <Badge className={profile?.twofa_enabled ? "bg-success" : "bg-warning"}>
                       {profile?.twofa_enabled ? "Enabled" : "Disabled"}
                     </Badge>
                   </div>
@@ -449,9 +449,21 @@ const Profile = () => {
 
                   {show2FASetup && qrCode && (
                     <div className="space-y-4 p-4 border rounded-lg">
-                      <div className="text-center">
-                        <div dangerouslySetInnerHTML={{ __html: qrCode }} />
-                        <p className="mt-2 text-sm">Secret: <code>{otpSecret}</code></p>
+                      <div className="text-center space-y-3">
+                        <div
+                          className="
+                            mx-auto
+                            max-w-[220px]            /* 👈 control QR size here */
+                            [&>img]:w-full
+                            [&>img]:h-auto
+                            [&>svg]:w-full
+                            [&>svg]:h-auto
+                          "
+                          dangerouslySetInnerHTML={{ __html: qrCode }}
+                        />
+                        <p className="mt-2 text-sm break-all">
+                          Secret: <code>{otpSecret}</code>
+                        </p>
                       </div>
                     </div>
                   )}
