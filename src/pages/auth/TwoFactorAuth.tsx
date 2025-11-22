@@ -1,6 +1,6 @@
 // src/pages/auth/TwoFactorAuth.tsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo } from "@/components/Logo";
 import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
@@ -16,32 +16,32 @@ const TwoFactorAuth = () => {
 
   // Token guard - redirect to login if no temp token
   useEffect(() => {
-    const tempToken = sessionStorage.getItem('twofa_temp_token');
+    const tempToken = sessionStorage.getItem("twofa_temp_token");
     if (!tempToken) {
-      navigate('/login', { replace: true });
+      navigate("/login", { replace: true });
     }
 
     // Clean up any lingering query params
     try {
-      window.history.replaceState(null, '', window.location.pathname);
+      window.history.replaceState(null, "", window.location.pathname);
     } catch (err) {
-      console.error('Failed to clean URL:', err);
+      console.error("Failed to clean URL:", err);
     }
   }, [navigate]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (value.length !== 6) {
-      setError('Enter a valid 6-digit code');
+      setError("Enter a valid 6-digit code");
       return;
     }
 
-    const user_id = sessionStorage.getItem('pending_2fa_user_id');
+    const user_id = sessionStorage.getItem("pending_2fa_user_id");
     if (!user_id) {
-      setError('Session expired. Please log in again.');
-      setTimeout(() => navigate('/login', { replace: true }), 2000);
+      setError("Session expired. Please log in again.");
+      setTimeout(() => navigate("/login", { replace: true }), 2000);
       return;
     }
 
@@ -49,71 +49,74 @@ const TwoFactorAuth = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('https://api.modovisa.com/api/verify-2fa-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          user_id, 
-          code: value 
-        })
+      const res = await fetch("https://api.modovisa.com/api/verify-2fa-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          user_id,
+          code: value,
+        }),
       });
 
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setIsLoading(false);
-        setError(result.error || 'Invalid or expired code.');
+        setError(result.error || "Invalid or expired code.");
         return;
       }
 
       // Cache display name for UI (non-fatal)
       try {
-        const displayName = result.username || 
-                           result.name || 
-                           (result.email ? result.email.split('@')[0] : 'User');
-        localStorage.setItem('username', displayName);
+        const displayName =
+          result.username ||
+          result.name ||
+          (result.email ? result.email.split("@")[0] : "User");
+        localStorage.setItem("username", displayName);
       } catch (err) {
-        console.error('Failed to cache username:', err);
+        console.error("Failed to cache username:", err);
       }
 
       // Clean up session storage
-      sessionStorage.removeItem('twofa_temp_token');
-      sessionStorage.removeItem('pending_2fa_user_id');
+      sessionStorage.removeItem("twofa_temp_token");
+      sessionStorage.removeItem("pending_2fa_user_id");
 
       // Redirect to dashboard
-      navigate('/app/live-tracking', { replace: true });
-
+      navigate("/app/live-tracking", { replace: true });
     } catch (err) {
-      console.error('❌ 2FA verification error:', err);
+      console.error("❌ 2FA verification error:", err);
       setIsLoading(false);
-      setError('Unexpected error during verification.');
+      setError("Unexpected error during verification.");
     }
   };
 
   // Auto-submit when 6 digits entered
   useEffect(() => {
     if (value.length === 6 && !isLoading) {
-      handleSubmit(new Event('submit') as any);
+      // mimic form submit (same pattern as admin)
+      handleSubmit({ preventDefault() {} } as React.FormEvent);
     }
-  }, [value]);
+  }, [value, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AnimatedGradientBackground layout="full">
-      <div className="w-full max-w-md glass-card rounded-3xl shadow-2xl p-8 space-y-6">
-        <div className="flex flex-col items-center space-y-2">
+      <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
+        <div className="flex flex-col items-center space-y-2 py-4">
           <Logo showBeta={false} />
-          <p className="text-lg font-semibold">Intuitive Analytics.</p>
+          <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
           <h1 className="text-2xl font-semibold mt-6">Two Step Verification</h1>
-          <p className="text-center text-muted-foreground text-sm">
-            Enter the code generated by your authenticator app.
+          <p className="text-sm text-muted-foreground mt-1 text-center">
+            Enter the 6-digit code generated by your authenticator app.
           </p>
         </div>
 
         {isLoading && (
-          <div className="text-center py-4">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <p className="mt-2 text-sm text-muted-foreground">Verifying your code...</p>
+          <div className="text-center py-2">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              Verifying your code...
+            </p>
           </div>
         )}
 
@@ -122,21 +125,23 @@ const TwoFactorAuth = () => {
             <label className="text-sm font-medium text-center block">
               Type your 6 digit authentication code
             </label>
-            
-            <div className="flex justify-center">
-              <InputOTP 
-                maxLength={6} 
+
+            <div className="flex justify-between gap-2">
+              {/* InputOTP already supports pasting full 6-digit codes */}
+              <InputOTP
+                maxLength={6}
                 value={value}
-                onChange={(value) => setValue(value)}
+                onChange={(val) => setValue(val)}
                 disabled={isLoading}
               >
                 <InputOTPGroup>
-                  <InputOTPSlot index={0} className="h-14 w-14 text-lg" />
-                  <InputOTPSlot index={1} className="h-14 w-14 text-lg" />
-                  <InputOTPSlot index={2} className="h-14 w-14 text-lg" />
-                  <InputOTPSlot index={3} className="h-14 w-14 text-lg" />
-                  <InputOTPSlot index={4} className="h-14 w-14 text-lg" />
-                  <InputOTPSlot index={5} className="h-14 w-14 text-lg" />
+                  {[0, 1, 2, 3, 4, 5].map((idx) => (
+                    <InputOTPSlot
+                      key={idx}
+                      index={idx}
+                      className="w-10 h-12 md:w-12 md:h-14 text-lg md:text-xl text-center border rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    />
+                  ))}
                 </InputOTPGroup>
               </InputOTP>
             </div>
@@ -148,13 +153,13 @@ const TwoFactorAuth = () => {
             </Alert>
           )}
 
-          <Button 
-            className="w-full h-12 text-base" 
+          <Button
+            className="w-full h-12 text-base"
             size="lg"
             type="submit"
             disabled={isLoading || value.length !== 6}
           >
-            {isLoading ? 'Verifying...' : 'Verify my account'}
+            {isLoading ? "Verifying..." : "Verify my account"}
           </Button>
         </form>
       </div>

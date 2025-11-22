@@ -1,3 +1,5 @@
+// src/pages/admin/AdminTwoFactorAuth.tsx
+
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
@@ -23,7 +25,7 @@ const AdminTwoFactorAuth = () => {
       navigate("/mv-admin/login", { replace: true });
     }
 
-    // Strip any ?otp=XXXX from URL (like the Bootstrap history.replaceState)
+    // Strip any ?otp=XXXX from URL
     try {
       const url = new URL(window.location.href);
       if (url.search) {
@@ -34,7 +36,31 @@ const AdminTwoFactorAuth = () => {
     }
   }, [navigate]);
 
+  const applyOtpToDigits = (otp: string) => {
+    const cleaned = otp.replace(/\D/g, "").slice(0, 6);
+    if (!cleaned) return;
+
+    const next = [...digits];
+    for (let i = 0; i < 6; i++) {
+      next[i] = cleaned[i] ?? "";
+    }
+    setDigits(next);
+
+    // Move focus to last filled box
+    const lastIndex = Math.min(cleaned.length - 1, 5);
+    if (lastIndex >= 0) {
+      inputsRef.current[lastIndex]?.focus();
+    }
+  };
+
   const handleChange = (index: number, value: string) => {
+    // If user pasted or auto-filled multiple chars into a single box,
+    // treat it as a full OTP and spread across inputs.
+    if (value.length > 1) {
+      applyOtpToDigits(value);
+      return;
+    }
+
     // Only allow a single digit per box
     if (!/^\d?$/.test(value)) return;
 
@@ -45,6 +71,12 @@ const AdminTwoFactorAuth = () => {
     if (value && inputsRef.current[index + 1]) {
       inputsRef.current[index + 1]!.focus();
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text") || "";
+    applyOtpToDigits(text);
   };
 
   const handleKeyDown = (
@@ -123,6 +155,14 @@ const AdminTwoFactorAuth = () => {
     }
   };
 
+  // Auto-submit when all 6 digits are filled (same behaviour as app 2FA)
+  useEffect(() => {
+    const otp = digits.join("");
+    if (otp.length === 6 && !isSubmitting) {
+      handleSubmit({ preventDefault() {} } as React.FormEvent);
+    }
+  }, [digits, isSubmitting]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
@@ -156,6 +196,7 @@ const AdminTwoFactorAuth = () => {
                 className="w-10 h-12 md:w-12 md:h-14 text-center border rounded-md text-lg md:text-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary bg-background"
                 value={d}
                 onChange={(e) => handleChange(idx, e.target.value)}
+                onPaste={handlePaste}
                 onKeyDown={(e) => handleKeyDown(idx, e)}
               />
             ))}
