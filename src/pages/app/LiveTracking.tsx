@@ -999,41 +999,53 @@ const LiveTracking = () => {
                               key={idx}
                               className={`jt-item ${
                                 page.is_active ? "is-active" : "is-left"
-                              } flex items-center m-2 ${
-                                page.is_active ? "shadow-sm" : ""
-                              } rounded-md border p-3 ${
-                                !page.is_active ? "bg-muted/30" : "bg-card"
-                              }`}
+                              } m-2 rounded-md border ${
+                                page.is_active ? "bg-card shadow-sm" : "bg-muted/30"
+                              } p-3`}
                             >
-                              <span className="jt-dot"></span>
-                              <div className="flex items-center w-full">
-                                <span className="me-4">
-                                  <meta.Icon className={`h-[55px] w-[55px] ${meta.className}`} />
-                                </span>
-                                <div className="flex-1 min-w-0 me-2">
-                                  <span className="font-medium text-base text-foreground">
-                                    {page.title || "(No title)"}
+                              <span className="jt-dot" />
+
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
+                                {/* Left: icon + title + link */}
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                  <span className="mt-1 sm:mt-0 flex-shrink-0">
+                                    <meta.Icon className={`h-[44px] w-[44px] sm:h-[55px] sm:w-[55px] ${meta.className}`} />
                                   </span>
-                                  <small className="text-sm text-muted-foreground block mt-2">
-                                    View this page by clicking on the following link:
-                                  </small>
-                                  <small className="block mt-2">
-                                    <a
-                                      href={safeURL(page.url)}
-                                      className="text-sm text-[#ff3e1d] hover:underline break-all"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      {page.url}
-                                    </a>
-                                  </small>
+
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-medium text-base text-foreground block">
+                                      {page.title || "(No title)"}
+                                    </span>
+                                    {meta.label && (
+                                      <small className="text-xs text-muted-foreground block mt-1">
+                                        {meta.label}
+                                      </small>
+                                    )}
+                                    <small className="text-xs text-muted-foreground block mt-2">
+                                      View this page by clicking on the following link:
+                                    </small>
+                                    <small className="block mt-1">
+                                      <a
+                                        href={safeURL(page.url)}
+                                        className="text-sm text-[#ff3e1d] hover:underline break-all"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {page.url}
+                                      </a>
+                                    </small>
+                                  </div>
                                 </div>
-                                <div className="ms-auto flex items-center gap-2">
-                                  {page.is_active && (
-                                    <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
-                                      Active now
-                                    </Badge>
-                                  )}
+
+                                {/* Right: status + time – stacks under content on mobile */}
+                                <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-1 w-full sm:w-auto justify-between sm:justify-end">
+                                  <div className="flex items-center gap-2">
+                                    {page.is_active && (
+                                      <Badge className="text-xs bg-[#e7f8e9] text-[#56ca00] hover:bg-[#e7f8e9] font-medium border-0 rounded-full">
+                                        Active now
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <Badge
                                     variant="secondary"
                                     className="text-xs bg-muted text-muted-foreground font-medium border-0 rounded-full px-3"

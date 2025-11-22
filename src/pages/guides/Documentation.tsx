@@ -13,7 +13,7 @@ const Documentation = () => {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Welcome to Modovisa Docs
+            Welcome to Modovisa Guides
           </h1>
           <Badge className="bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold">
             Real-time visitor journeys & live analytics—privacy-first, and easy to install.
