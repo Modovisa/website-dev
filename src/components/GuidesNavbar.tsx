@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, LogIn, LogOut, ChevronDown } from "lucide-react";
 import { fullLogout } from "@/lib/auth/logout";
 import { gettingStartedItems, platforms } from "./GuidesSidebar";
+import { Logo } from "@/components/Logo";
 
 const API = "https://api.modovisa.com";
 
@@ -69,7 +70,7 @@ export const GuidesNavbar = () => {
   return (
     <nav className="glass-nav rounded-md px-4 py-3">
       <div className="flex items-center justify-between gap-4">
-        {/* Left cluster: mobile hamburger (no logo) */}
+        {/* Left cluster: mobile hamburger + mobile logo */}
         <div className="flex items-center gap-2">
           {/* Mobile: unified hamburger (site + guides nav) */}
           <div className="md:hidden">
@@ -247,6 +248,11 @@ export const GuidesNavbar = () => {
               </SheetContent>
             </Sheet>
           </div>
+
+          {/* Mobile-only logo */}
+          <Link to="/" className="md:hidden">
+            <Logo className="text-foreground" />
+          </Link>
         </div>
 
         {/* Center: desktop nav links (hidden on mobile) */}
