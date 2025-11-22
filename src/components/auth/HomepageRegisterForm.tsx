@@ -9,9 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ensureTurnstileLoaded } from "@/lib/turnstile";
 
 const GOOGLE_CLIENT_ID =
   "1057403058678-pak64aj4vthcedsnr81r30qbo6pia6d3.apps.googleusercontent.com";
+
+const TURNSTILE_SITE_KEY =
+  import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "0x4AAAAAABZpGqOL1fgh-FTY";
 
 type Feedback = { message: string; type: "success" | "error" | "" };
 
@@ -42,6 +46,9 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
   useEffect(() => {
     termsAcceptedRef.current = termsAccepted;
   }, [termsAccepted]);
+
+  // Turnstile state
+  const [captchaToken, setCaptchaToken] = useState("");
 
   // Validation feedback
   const [usernameFeedback, setUsernameFeedback] = useState<Feedback>({
@@ -113,6 +120,16 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
     }
   };
 
+  /* ---------------- Turnstile init (same pattern as Register.tsx) --------- */
+
+  useEffect(() => {
+    (window as any).onTurnstileSuccess = (token: string) => {
+      setCaptchaToken(token);
+    };
+
+    ensureTurnstileLoaded();
+  }, []);
+
   /* ---------------- Manual registration (subscription flow) ---------------- */
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,6 +137,11 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
 
     if (!termsAccepted) {
       alert("You must agree to the Privacy Policy & Terms.");
+      return;
+    }
+
+    if (!captchaToken) {
+      alert("Please complete the CAPTCHA before continuing.");
       return;
     }
 
@@ -147,6 +169,7 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
           password,
           consent: true,
           consent_at: new Date().toISOString(),
+          captcha_token: captchaToken, // 🔐 Turnstile token
         }),
       });
 
@@ -442,6 +465,15 @@ export function HomepageRegisterForm({ onSuccess }: HomepageRegisterFormProps) {
                 Terms of Service
               </Link>
             </label>
+          </div>
+
+          {/* Turnstile CAPTCHA */}
+          <div className="mt-2">
+            <div
+              className="cf-turnstile"
+              data-sitekey={TURNSTILE_SITE_KEY}
+              data-callback="onTurnstileSuccess"
+            />
           </div>
 
           {/* Submit */}
