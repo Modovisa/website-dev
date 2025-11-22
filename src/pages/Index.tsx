@@ -727,7 +727,7 @@ const LandingLiveDemo = () => {
       <div className="container mx-auto px-4">
         {/* Top copy block – mirrors Bootstrap text */}
         <div className="mb-10 flex flex-col items-center text-center">
-          <Badge className="mb-3 rounded-full" variant="outline">
+          <Badge className="mb-3 rounded-full bg-primary/10 text-primary" variant="outline">
             Product
           </Badge>
           <h2 className="mb-2 text-3xl font-bold md:text-4xl">
@@ -1181,16 +1181,23 @@ const Index = () => {
             <h1 className="text-5xl font-bold tracking-tight md:text-7xl">
               Intuitive Analytics
               <br />
-              <span className="bg-gradient-to-r from-white to_white/60 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-white to_white/60 bg-clip-text">
                 in Real Time
               </span>
             </h1>
-            <p className="mx-auto max-w-2xl text-xl text-white/80 md:text-2xl">
-              Track visitors, analyze behavior, and grow your business with
-              beautiful, actionable insights.
+
+            <p className="mx-auto max-w-2xl text-base md:text-lg">
+              <span
+                className="inline-block rounded-2xl bg-white/80 px-6 py-3 text-slate-900
+                          shadow-lg backdrop-blur-md ring-1 ring-white/40"
+              >
+                Track visitors, analyze behavior, and grow your business with beautiful,
+                actionable insights.
+              </span>
             </p>
+
             <div className="flex flex-col justify-center gap-4 pt-8 sm:flex-row">
-             {/*  <Link to="/register">
+              {/*  <Link to="/register">
                 <Button
                   size="lg"
                   className="h-14 bg-white px-8 text-lg text-primary hover:bg-white/90"
@@ -1204,7 +1211,11 @@ const Index = () => {
                 <Button
                   size="lg"
                   variant="hero"
-                  className="h-14 px-8 text-lg"
+                  className="h-14 px-10 text-lg font-semibold
+                            shadow-[0_18px_40px_rgba(0,0,0,0.35)]
+                            hover:shadow-[0_22px_55px_rgba(0,0,0,0.45)]
+                            hover:-translate-y-[1px] active:translate-y-0
+                            transition-transform duration-150"
                 >
                   Join for Free
                 </Button>
@@ -1221,7 +1232,7 @@ const Index = () => {
       <section id="features" className="bg-background py-24">
         <div className="container mx-auto px-4">
           <div className="mb-16 text-center">
-            <Badge className="mb-3 rounded-full" variant="outline">
+            <Badge className="mb-3 rounded-full bg-primary/10 text-primary" variant="outline">
               Features
             </Badge>
             <h2 className="mb-4 text-4xl font-bold">
@@ -1373,7 +1384,7 @@ const Index = () => {
       <section className="bg-background py-24" id="pricing">
         <div className="container mx-auto px-4">
           <div className="mb-16 text-center">
-            <Badge className="mb-3 rounded-full" variant="outline">
+            <Badge className="mb-3 rounded-full bg-primary/10 text-primary" variant="outline">
               Pricing Plans
             </Badge>
             <h2 className="mb-2 text-3xl font-bold md:text-4xl">
