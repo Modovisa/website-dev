@@ -174,34 +174,34 @@ export const Navbar = ({ className = "", variant = "default" }: NavbarProps) => 
           <button
             type="button"
             onClick={() => handleSectionClick("product")}
-            className="text-base font-medium text-foreground transition-colors hover:text-primary"
+            className="text-base font-medium text-foreground transition-colors hover:text-background"
           >
             Product
           </button>
           <button
             type="button"
             onClick={() => handleSectionClick("features")}
-            className="text-base font-medium text-foreground transition-colors hover:text-primary"
+            className="text-base font-medium text-foreground transition-colors hover:text-background"
           >
             Features
           </button>
           <button
             type="button"
             onClick={() => handleSectionClick("pricing")}
-            className="text-base font-medium text-foreground transition-colors hover:text-primary"
+            className="text-base font-medium text-foreground transition-colors hover:text-background"
           >
             Pricing
           </button>
           <button
             type="button"
             onClick={() => handleSectionClick("landingFAQ")}
-            className="text-base font-medium text-foreground transition-colors hover:text-primary"
+            className="text-base font-medium text-foreground transition-colors hover:text-background"
           >
             FAQs
           </button>
           <Link
             to="/guides"
-            className="text-base font-medium text-foreground transition-colors hover:text-primary"
+            className="text-base font-medium text-foreground transition-colors hover:text-background"
           >
             Guides
           </Link>
