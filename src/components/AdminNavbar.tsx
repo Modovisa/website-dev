@@ -12,73 +12,11 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { Bell, Menu, User, Settings, LogOut } from "lucide-react";
+import { Bell, Menu, User, LogOut } from "lucide-react";
+import { fullLogout } from "@/lib/auth/logout";
 
 /** ── API + helpers (mirrors AppNavbar, admin-flavoured) ──────────────────── */
 const API = "https://api.modovisa.com";
-const DEFAULT_LOGIN_URL = "/login";
-const AUDIENCE = "admin";
-
-async function serverLogout(source = "admin-navbar") {
-  const url = `${API}/api/logout?aud=${AUDIENCE}&src=${encodeURIComponent(
-    source,
-  )}`;
-  try {
-    await fetch(url, {
-      method: "POST",
-      credentials: "include",
-      keepalive: true,
-      cache: "no-store",
-    });
-  } catch (e) {
-    console.warn(
-      "[logout:admin] server logout failed, continuing client cleanup:",
-      e,
-    );
-  }
-}
-
-function clearUiCaches() {
-  try {
-    localStorage.removeItem("username");
-  } catch {}
-  try {
-    localStorage.removeItem("active_website_domain");
-  } catch {}
-  try {
-    localStorage.removeItem("tracking_token");
-  } catch {}
-  try {
-    localStorage.removeItem("mv_new_signup");
-  } catch {}
-  try {
-    sessionStorage.clear();
-  } catch {}
-  try {
-    (window as any).__mvAccess = null;
-  } catch {}
-  try {
-    const w: any = window as any;
-    if (w.ws && typeof w.ws.close === "function") w.ws.close();
-  } catch {}
-  try {
-    const w: any = window as any;
-    if (w._mvBucketTimer) clearInterval(w._mvBucketTimer);
-  } catch {}
-}
-
-function broadcastLogout(source = "admin-navbar") {
-  try {
-    const bc = new BroadcastChannel("mv-auth");
-    bc.postMessage({
-      type: "logout",
-      source,
-      ts: Date.now(),
-    });
-  } catch {
-    // ignore
-  }
-}
 
 function nameToInitials(s: string) {
   const caps = (s.match(/\b\w/g) || []).map((c) => c.toUpperCase()).join("");
@@ -156,14 +94,13 @@ export default function AdminNavbar({
   const initials = useMemo(() => nameToInitials(name), [name]);
 
   const onLogout = async () => {
-    const source = "admin-navbar";
-    try {
-      await serverLogout(source);
-    } finally {
-      clearUiCaches();
-      broadcastLogout(source);
-      window.location.replace(DEFAULT_LOGIN_URL);
-    }
+    // Use shared logout helper; this will:
+    //  - hit /api/logout?aud=admin
+    //  - clear UI caches
+    //  - revoke Google
+    //  - broadcast logout
+    //  - redirect to /mv-admin/login by default for admin
+    await fullLogout("admin", { source: "admin-navbar" });
   };
 
   return (
@@ -234,13 +171,6 @@ export default function AdminNavbar({
                 <span>Profile</span>
               </Link>
             </DropdownMenuItem>
-            {/* 🔐 Admin settings route 
-            <DropdownMenuItem asChild>
-              <Link to="/mv-admin/profile" className="cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </Link>
-            </DropdownMenuItem> */}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="cursor-pointer" onClick={onLogout}>
               <LogOut className="mr-2 h-4 w-4" />
