@@ -31,6 +31,16 @@ type AdminProfile = {
   twofa_enabled?: boolean;
 };
 
+type AdminDevice = {
+  id: number;
+  browser: string | null;
+  device: string | null;
+  location: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  created_at?: string | null;
+};
+
 type MessageState =
   | {
       type: "success" | "error";
@@ -62,6 +72,11 @@ export default function AdminUserProfile() {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Recent devices state
+  const [recentDevices, setRecentDevices] = useState<AdminDevice[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const [devicesError, setDevicesError] = useState<string | null>(null);
 
   // Change password state
   const [oldPassword, setOldPassword] = useState("");
@@ -112,7 +127,7 @@ export default function AdminUserProfile() {
         const data = await res.json();
 
         const p: AdminProfile = {
-          id: data.id,
+          id: data.id ?? data.admin_id,
           username: data.username || data.name || "Admin",
           email: data.email || "",
           role: data.role || "admin",
@@ -133,6 +148,54 @@ export default function AdminUserProfile() {
         }
       } finally {
         if (!cancelled) setLoadingProfile(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load recent devices
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setLoadingDevices(true);
+      setDevicesError(null);
+      try {
+        const res = await secureAdminFetch(`${API}/api/admin-devices`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (res.status === 401) {
+          // If they’re not logged in, let the profile redirect handle it.
+          if (!cancelled) {
+            setDevicesError("Unauthorized");
+          }
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(`admin-devices failed with ${res.status}`);
+        }
+
+        const json = await res.json().catch(() => ({} as any));
+        const devices: AdminDevice[] = Array.isArray(json.devices)
+          ? json.devices
+          : [];
+
+        if (!cancelled) {
+          setRecentDevices(devices);
+        }
+      } catch (err) {
+        console.error("Failed to load admin devices:", err);
+        if (!cancelled) {
+          setDevicesError("Unable to load recent devices.");
+        }
+      } finally {
+        if (!cancelled) setLoadingDevices(false);
       }
     })();
 
@@ -717,7 +780,7 @@ export default function AdminUserProfile() {
                 </CardContent>
               </Card>
 
-              {/* Recent Devices (static demo, same as before) */}
+              {/* Recent Devices – now driven by /api/admin-devices */}
               <Card>
                 <CardHeader>
                   <CardTitle>Recent Devices</CardTitle>
@@ -733,30 +796,61 @@ export default function AdminUserProfile() {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="border-b last:border-0">
-                        <td className="py-2 pr-4">Chrome on Windows</td>
-                        <td className="py-2 pr-4">HP Spectre 360</td>
-                        <td className="py-2 pr-4">Switzerland</td>
-                        <td className="py-2">10 July 2021, 20:07</td>
-                      </tr>
-                      <tr className="border-b last:border-0">
-                        <td className="py-2 pr-4">Chrome on iPhone</td>
-                        <td className="py-2 pr-4">iPhone 12x</td>
-                        <td className="py-2 pr-4">Australia</td>
-                        <td className="py-2">13 July 2021, 10:10</td>
-                      </tr>
-                      <tr className="border-b last:border-0">
-                        <td className="py-2 pr-4">Chrome on Android</td>
-                        <td className="py-2 pr-4">OnePlus 9 Pro</td>
-                        <td className="py-2 pr-4">Dubai</td>
-                        <td className="py-2">14 July 2021, 15:15</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 pr-4">Chrome on macOS</td>
-                        <td className="py-2 pr-4">iMac</td>
-                        <td className="py-2 pr-4">India</td>
-                        <td className="py-2">16 July 2021, 16:17</td>
-                      </tr>
+                      {loadingDevices ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-4 text-muted-foreground text-center"
+                          >
+                            Loading recent devices…
+                          </td>
+                        </tr>
+                      ) : devicesError ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-4 text-red-500 text-center"
+                          >
+                            {devicesError}
+                          </td>
+                        </tr>
+                      ) : recentDevices.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-4 text-muted-foreground text-center"
+                          >
+                            No recent device activity found.
+                          </td>
+                        </tr>
+                      ) : (
+                        recentDevices.map((d) => (
+                          <tr
+                            key={d.id}
+                            className="border-b last:border-0"
+                          >
+                            <td className="py-2 pr-4">
+                              {d.browser || "Unknown"}
+                            </td>
+                            <td className="py-2 pr-4">
+                              {d.device || "Unknown"}
+                            </td>
+                            <td
+                              className="py-2 pr-4"
+                              title={
+                                d.ip
+                                  ? `${d.location || "Unknown"} · ${d.ip}`
+                                  : d.location || ""
+                              }
+                            >
+                              {d.location || "—"}
+                            </td>
+                            <td className="py-2">
+                              {formatDate(d.created_at)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </CardContent>
