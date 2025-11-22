@@ -68,9 +68,9 @@ export const GuidesNavbar = () => {
   };
 
   return (
-    <nav className="glass-nav rounded-md px-4 py-3">
+    <nav className="glass-nav relative rounded-md px-4 py-3">
       <div className="flex items-center justify-between gap-4">
-        {/* Left cluster: mobile hamburger + mobile logo */}
+        {/* Left cluster: mobile hamburger only */}
         <div className="flex items-center gap-2">
           {/* Mobile: unified hamburger (site + guides nav) */}
           <div className="md:hidden">
@@ -248,11 +248,6 @@ export const GuidesNavbar = () => {
               </SheetContent>
             </Sheet>
           </div>
-
-          {/* Mobile-only logo */}
-          <Link to="/" className="md:hidden">
-            <Logo className="text-foreground" />
-          </Link>
         </div>
 
         {/* Center: desktop nav links (hidden on mobile) */}
@@ -353,6 +348,14 @@ export const GuidesNavbar = () => {
           </div>
         </div>
       </div>
+
+      {/* Centered mobile logo */}
+      <Link
+        to="/"
+        className="md:hidden absolute inset-y-0 left-1/2 flex items-center -translate-x-1/2"
+      >
+        <Logo className="text-foreground" />
+      </Link>
     </nav>
   );
 };
