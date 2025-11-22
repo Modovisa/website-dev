@@ -94,11 +94,6 @@ const Documentation = () => {
           <h2 className="text-3xl font-bold mb-4 text-center">
             Real Time Visitor Journey Tracking – Interactive Simulation
           </h2>
-          <p className="text-center text-muted-foreground mb-8 max-w-3xl mx-auto">
-            This is the same live simulation from the homepage, embedded here so you can
-            see how Modovisa tracks visitors, journeys, and live sessions without installing
-            anything yet.
-          </p>
 
           <LandingLiveDemo />
         </div>
