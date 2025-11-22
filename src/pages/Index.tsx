@@ -1182,7 +1182,7 @@ const Index = () => {
               Intuitive Analytics
               <br />
               <span className="bg-gradient-to-r from-white to_white/60 bg-clip-text text-transparent">
-                for Modern Teams
+                in Real Time
               </span>
             </h1>
             <p className="mx-auto max-w-2xl text-xl text-white/80 md:text-2xl">
