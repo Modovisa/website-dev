@@ -89,7 +89,7 @@ export async function fullLogout(
   opts?: { redirectTo?: string; source?: string },
 ) {
   const redirectTo =
-    opts?.redirectTo ?? (aud === "admin" ? "/admin/login" : "/login");
+    opts?.redirectTo ?? (aud === "admin" ? "/mv-admin/login" : "/login");
   const source = opts?.source ?? "menu";
 
   await serverLogout(aud, source);
