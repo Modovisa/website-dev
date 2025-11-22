@@ -6,11 +6,6 @@ import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackgro
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
 
 const API = "https://api.modovisa.com";
 
@@ -22,6 +17,7 @@ const AdminTwoFactorAuth = () => {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [lastSubmittedOtp, setLastSubmittedOtp] = useState<string | null>(null);
 
   // Guard: if no temp token, bounce back to admin login
   useEffect(() => {
@@ -45,10 +41,10 @@ const AdminTwoFactorAuth = () => {
     const cleaned = otp.replace(/\D/g, "").slice(0, 6);
     if (!cleaned) return;
 
-    const next = [...digits];
-    for (let i = 0; i < 6; i++) {
-      next[i] = cleaned[i] ?? "";
-    }
+    const next = Array(6)
+      .fill("")
+      .map((_, i) => cleaned[i] ?? "");
+
     setDigits(next);
 
     // Move focus to last filled box
@@ -69,9 +65,11 @@ const AdminTwoFactorAuth = () => {
     // Only allow a single digit per box
     if (!/^\d?$/.test(value)) return;
 
-    const next = [...digits];
-    next[index] = value;
-    setDigits(next);
+    setDigits((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
 
     if (value && inputsRef.current[index + 1]) {
       inputsRef.current[index + 1]!.focus();
@@ -113,6 +111,7 @@ const AdminTwoFactorAuth = () => {
 
     setIsSubmitting(true);
     setLoadingMessage("Verifying your code...");
+    setLastSubmittedOtp(otp); // remember this OTP so we don't auto-resubmit the same one
 
     try {
       const res = await fetch(`${API}/api/verify-admin-2fa-login`, {
@@ -160,13 +159,13 @@ const AdminTwoFactorAuth = () => {
     }
   };
 
-  // Auto-submit when all 6 digits are filled (same behaviour as app 2FA)
+  // Auto-submit when all 6 digits are filled, but only once per OTP value
   useEffect(() => {
     const otp = digits.join("");
-    if (otp.length === 6 && !isSubmitting) {
+    if (otp.length === 6 && !isSubmitting && otp && otp !== lastSubmittedOtp) {
       handleSubmit({ preventDefault() {} } as React.FormEvent);
     }
-  }, [digits, isSubmitting]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [digits, isSubmitting, lastSubmittedOtp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AnimatedGradientBackground layout="full">
