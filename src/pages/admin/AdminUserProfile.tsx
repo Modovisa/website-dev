@@ -618,7 +618,7 @@ export default function AdminUserProfile() {
                     </h2>
                     <Badge
                       className={
-                        twofaEnabled ? "bg-success" : "bg-secondary"
+                        twofaEnabled ? "bg-success" : "bg-warning"
                       }
                     >
                       {twofaEnabled ? "Enabled" : "Disabled"}
@@ -631,12 +631,20 @@ export default function AdminUserProfile() {
 
                   {show2FASetup && qrSvg && (
                     <div className="space-y-4 p-4 border rounded-lg">
-                      <div className="text-center">
+                      <div className="text-center space-y-3">
                         <div
+                          className="
+                            mx-auto
+                            max-w-[220px]
+                            [&>img]:w-full
+                            [&>img]:h-auto
+                            [&>svg]:w-full
+                            [&>svg]:h-auto
+                          "
                           dangerouslySetInnerHTML={{ __html: qrSvg }}
                         />
                         {otpSecret && (
-                          <p className="mt-2 text-sm">
+                          <p className="mt-2 text-sm break-all">
                             Secret: <code>{otpSecret}</code>
                           </p>
                         )}

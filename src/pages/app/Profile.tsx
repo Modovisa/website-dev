@@ -453,7 +453,7 @@ const Profile = () => {
                         <div
                           className="
                             mx-auto
-                            max-w-[220px]            /* 👈 control QR size here */
+                            max-w-[220px]
                             [&>img]:w-full
                             [&>img]:h-auto
                             [&>svg]:w-full
