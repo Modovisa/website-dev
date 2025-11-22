@@ -1204,7 +1204,7 @@ const Index = () => {
                 <Button
                   size="lg"
                   variant="hero"
-                  className="h-14 px-8 text-lg bg-primary-foreground/30 font-semibold"
+                  className="h-14 px-8 text-lg bg-primary-foreground/30 text-slate-800 font-semibold"
                 >
                   Join for Free
                 </Button>
