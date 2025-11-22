@@ -6,7 +6,11 @@ import { Logo } from "@/components/Logo";
 import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 
 const TwoFactorAuth = () => {
   const navigate = useNavigate();
@@ -34,7 +38,7 @@ const TwoFactorAuth = () => {
     e.preventDefault();
 
     if (value.length !== 6) {
-      setError("Enter a valid 6-digit code");
+      setError("Enter a valid 6-digit code.");
       return;
     }
 
@@ -102,6 +106,7 @@ const TwoFactorAuth = () => {
   return (
     <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
+        {/* Header block – matches admin 2FA */}
         <div className="flex flex-col items-center space-y-2 py-4">
           <Logo showBeta={false} />
           <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
@@ -111,6 +116,7 @@ const TwoFactorAuth = () => {
           </p>
         </div>
 
+        {/* Loading indicator – same style as admin */}
         {isLoading && (
           <div className="text-center py-2">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -121,30 +127,24 @@ const TwoFactorAuth = () => {
         )}
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <label className="text-sm font-medium text-center block">
-              Type your 6 digit authentication code
-            </label>
-
-            <div className="flex justify-between gap-2">
-              {/* InputOTP already supports pasting full 6-digit codes */}
-              <InputOTP
-                maxLength={6}
-                value={value}
-                onChange={(val) => setValue(val)}
-                disabled={isLoading}
-              >
-                <InputOTPGroup>
-                  {[0, 1, 2, 3, 4, 5].map((idx) => (
-                    <InputOTPSlot
-                      key={idx}
-                      index={idx}
-                      className="w-10 h-12 md:w-12 md:h-14 text-lg md:text-xl text-center border rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    />
-                  ))}
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
+          {/* OTP boxes – styled like admin but using InputOTP */}
+          <div className="flex justify-between gap-2">
+            <InputOTP
+              maxLength={6}
+              value={value}
+              onChange={(val) => setValue(val)}
+              disabled={isLoading}
+            >
+              <InputOTPGroup>
+                {[0, 1, 2, 3, 4, 5].map((idx) => (
+                  <InputOTPSlot
+                    key={idx}
+                    index={idx}
+                    className="w-10 h-12 md:w-12 md:h-14 text-lg md:text-xl text-center border rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
           </div>
 
           {error && (
@@ -161,6 +161,17 @@ const TwoFactorAuth = () => {
           >
             {isLoading ? "Verifying..." : "Verify my account"}
           </Button>
+
+          {/* Helper text – matches admin copy but for app routes */}
+          <div className="text-center text-sm text-muted-foreground">
+            Having trouble?{" "}
+            <a
+              href="/forgot-password"
+              className="text-primary hover:underline"
+            >
+              Try resetting your password
+            </a>
+          </div>
         </form>
       </div>
     </AnimatedGradientBackground>
