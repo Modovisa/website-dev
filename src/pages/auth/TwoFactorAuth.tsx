@@ -1,72 +1,134 @@
 // src/pages/auth/TwoFactorAuth.tsx
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Logo } from "@/components/Logo";
 import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackground";
+import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
+
+const API = "https://api.modovisa.com";
 
 const TwoFactorAuth = () => {
   const navigate = useNavigate();
-  const [value, setValue] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Token guard - redirect to login if no temp token
+  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+
+  // Guard: if no temp token, bounce back to login
   useEffect(() => {
     const tempToken = sessionStorage.getItem("twofa_temp_token");
     if (!tempToken) {
       navigate("/login", { replace: true });
     }
 
-    // Clean up any lingering query params
+    // Strip any ?otp=XXXX from URL (or other query cruft)
     try {
-      window.history.replaceState(null, "", window.location.pathname);
-    } catch (err) {
-      console.error("Failed to clean URL:", err);
+      const url = new URL(window.location.href);
+      if (url.search) {
+        window.history.replaceState(null, "", url.pathname);
+      }
+    } catch {
+      // ignore
     }
   }, [navigate]);
 
-  // Handle form submission
+  const applyOtpToDigits = (otp: string) => {
+    const cleaned = otp.replace(/\D/g, "").slice(0, 6);
+    if (!cleaned) return;
+
+    const next = [...digits];
+    for (let i = 0; i < 6; i++) {
+      next[i] = cleaned[i] ?? "";
+    }
+    setDigits(next);
+
+    // Move focus to last filled box
+    const lastIndex = Math.min(cleaned.length - 1, 5);
+    if (lastIndex >= 0) {
+      inputsRef.current[lastIndex]?.focus();
+    }
+  };
+
+  const handleChange = (index: number, value: string) => {
+    // If user pasted or auto-filled multiple chars into a single box,
+    // treat it as a full OTP and spread across inputs.
+    if (value.length > 1) {
+      applyOtpToDigits(value);
+      return;
+    }
+
+    // Only allow a single digit per box
+    if (!/^\d?$/.test(value)) return;
+
+    const next = [...digits];
+    next[index] = value;
+    setDigits(next);
+
+    if (value && inputsRef.current[index + 1]) {
+      inputsRef.current[index + 1]!.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text") || "";
+    applyOtpToDigits(text);
+  };
+
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
+      inputsRef.current[index - 1]?.focus();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
 
-    if (value.length !== 6) {
+    const otp = digits.join("");
+    if (otp.length !== 6) {
       setError("Enter a valid 6-digit code.");
       return;
     }
 
-    const user_id = sessionStorage.getItem("pending_2fa_user_id");
-    if (!user_id) {
+    const tempToken = sessionStorage.getItem("twofa_temp_token");
+    const userId = sessionStorage.getItem("pending_2fa_user_id");
+    if (!tempToken || !userId) {
       setError("Session expired. Please log in again.");
-      setTimeout(() => navigate("/login", { replace: true }), 2000);
+      navigate("/login", { replace: true });
       return;
     }
 
-    setError("");
-    setIsLoading(true);
+    setIsSubmitting(true);
+    setLoadingMessage("Verifying your code...");
 
     try {
-      const res = await fetch("https://api.modovisa.com/api/verify-2fa-login", {
+      const res = await fetch(`${API}/api/verify-2fa-login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // tempToken is currently not used on the BE for app 2FA,
+          // but we keep it in case you wire it later.
+        },
         credentials: "include",
         body: JSON.stringify({
-          user_id,
-          code: value,
+          user_id: userId,
+          code: otp,
         }),
       });
 
-      const result = await res.json().catch(() => ({}));
+      const result = await res.json().catch(() => ({} as any));
 
       if (!res.ok) {
-        setIsLoading(false);
+        setIsSubmitting(false);
+        setLoadingMessage("");
         setError(result.error || "Invalid or expired code.");
         return;
       }
@@ -82,31 +144,34 @@ const TwoFactorAuth = () => {
         console.error("Failed to cache username:", err);
       }
 
-      // Clean up session storage
+      // Clean temp session values
       sessionStorage.removeItem("twofa_temp_token");
       sessionStorage.removeItem("pending_2fa_user_id");
 
-      // Redirect to dashboard
-      navigate("/app/live-tracking", { replace: true });
+      setLoadingMessage("Signing you in...");
+
+      setTimeout(() => {
+        navigate("/app/live-tracking", { replace: true });
+      }, 150);
     } catch (err) {
-      console.error("❌ 2FA verification error:", err);
-      setIsLoading(false);
-      setError("Unexpected error during verification.");
+      console.error("🔐 App 2FA error:", err);
+      setIsSubmitting(false);
+      setLoadingMessage("");
+      setError("Unexpected error during 2FA verification. Please try again.");
     }
   };
 
-  // Auto-submit when 6 digits entered
+  // Auto-submit when all 6 digits are filled (same behaviour as admin 2FA)
   useEffect(() => {
-    if (value.length === 6 && !isLoading) {
-      // mimic form submit (same pattern as admin)
+    const otp = digits.join("");
+    if (otp.length === 6 && !isSubmitting) {
       handleSubmit({ preventDefault() {} } as React.FormEvent);
     }
-  }, [value, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [digits, isSubmitting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AnimatedGradientBackground layout="full">
       <div className="w-full max-w-lg glass-card rounded-3xl shadow-2xl p-10 space-y-6">
-        {/* Header block – matches admin 2FA */}
         <div className="flex flex-col items-center space-y-2 py-4">
           <Logo showBeta={false} />
           <p className="text-lg font-semibold mb-0">Intuitive Analytics.</p>
@@ -116,35 +181,31 @@ const TwoFactorAuth = () => {
           </p>
         </div>
 
-        {/* Loading indicator – same style as admin */}
-        {isLoading && (
+        {isSubmitting && (
           <div className="text-center py-2">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             <p className="mt-2 text-sm text-muted-foreground">
-              Verifying your code...
+              {loadingMessage}
             </p>
           </div>
         )}
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {/* OTP boxes – styled like admin but using InputOTP */}
           <div className="flex justify-between gap-2">
-            <InputOTP
-              maxLength={6}
-              value={value}
-              onChange={(val) => setValue(val)}
-              disabled={isLoading}
-            >
-              <InputOTPGroup>
-                {[0, 1, 2, 3, 4, 5].map((idx) => (
-                  <InputOTPSlot
-                    key={idx}
-                    index={idx}
-                    className="w-10 h-12 md:w-12 md:h-14 text-lg md:text-xl text-center border rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  />
-                ))}
-              </InputOTPGroup>
-            </InputOTP>
+            {digits.map((d, idx) => (
+              <input
+                key={idx}
+                ref={(el) => (inputsRef.current[idx] = el)}
+                type="tel"
+                inputMode="numeric"
+                maxLength={1}
+                className="w-10 h-12 md:w-12 md:h-14 text-center border rounded-md text-lg md:text-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary bg-background"
+                value={d}
+                onChange={(e) => handleChange(idx, e.target.value)}
+                onPaste={handlePaste}
+                onKeyDown={(e) => handleKeyDown(idx, e)}
+              />
+            ))}
           </div>
 
           {error && (
@@ -154,15 +215,14 @@ const TwoFactorAuth = () => {
           )}
 
           <Button
+            type="submit"
             className="w-full h-12 text-base"
             size="lg"
-            type="submit"
-            disabled={isLoading || value.length !== 6}
+            disabled={isSubmitting}
           >
-            {isLoading ? "Verifying..." : "Verify my account"}
+            {isSubmitting ? "Verifying..." : "Verify my account"}
           </Button>
 
-          {/* Helper text – matches admin copy but for app routes */}
           <div className="text-center text-sm text-muted-foreground">
             Having trouble?{" "}
             <a

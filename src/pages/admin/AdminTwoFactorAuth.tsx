@@ -6,6 +6,11 @@ import { AnimatedGradientBackground } from "@/components/AnimatedGradientBackgro
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 
 const API = "https://api.modovisa.com";
 
