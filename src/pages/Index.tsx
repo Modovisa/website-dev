@@ -1081,7 +1081,7 @@ const Index = () => {
       if (typeof window.showGlobalLoadingModal === "function") {
         window.showGlobalLoadingModal("Redirecting to your profile...");
       }
-      navigate("/app/user-profile");
+      navigate("/app/profile");
     } catch (err) {
       console.error(
         "[landing] Pro CTA click error, opening register modal:",
