@@ -1185,7 +1185,7 @@ const Index = () => {
                 in Real Time
               </span>
             </h1>
-            <p className="mx-auto max-w-2xl text-xl text-white/80 md:text-2xl">
+            <p className="mx-auto max-w-2xl text-xl text-white/80 md:text-2xl font-medium">
               Track visitors, analyze behavior, and grow your business with
               beautiful, actionable insights.
             </p>
@@ -1204,7 +1204,7 @@ const Index = () => {
                 <Button
                   size="lg"
                   variant="hero"
-                  className="h-14 px-8 text-lg"
+                  className="h-14 px-8 text-lg bg-primary-foreground/10"
                 >
                   Join for Free
                 </Button>
