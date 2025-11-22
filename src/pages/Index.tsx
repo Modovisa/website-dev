@@ -1185,19 +1185,12 @@ const Index = () => {
                 in Real Time
               </span>
             </h1>
-
-            <p className="mx-auto max-w-2xl text-base md:text-lg">
-              <span
-                className="inline-block rounded-2xl bg-white/80 px-6 py-3 text-slate-900
-                          shadow-lg backdrop-blur-md ring-1 ring-white/40"
-              >
-                Track visitors, analyze behavior, and grow your business with beautiful,
-                actionable insights.
-              </span>
+            <p className="mx-auto max-w-2xl text-xl text-white/80 md:text-2xl">
+              Track visitors, analyze behavior, and grow your business with
+              beautiful, actionable insights.
             </p>
-
             <div className="flex flex-col justify-center gap-4 pt-8 sm:flex-row">
-              {/*  <Link to="/register">
+             {/*  <Link to="/register">
                 <Button
                   size="lg"
                   className="h-14 bg-white px-8 text-lg text-primary hover:bg-white/90"
@@ -1211,11 +1204,7 @@ const Index = () => {
                 <Button
                   size="lg"
                   variant="hero"
-                  className="h-14 px-10 text-lg font-semibold
-                            shadow-[0_18px_40px_rgba(0,0,0,0.35)]
-                            hover:shadow-[0_22px_55px_rgba(0,0,0,0.45)]
-                            hover:-translate-y-[1px] active:translate-y-0
-                            transition-transform duration-150"
+                  className="h-14 px-8 text-lg"
                 >
                   Join for Free
                 </Button>
