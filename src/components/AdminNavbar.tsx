@@ -234,13 +234,13 @@ export default function AdminNavbar({
                 <span>Profile</span>
               </Link>
             </DropdownMenuItem>
-            {/* 🔐 Admin settings route */}
+            {/* 🔐 Admin settings route 
             <DropdownMenuItem asChild>
               <Link to="/mv-admin/profile" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </Link>
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="cursor-pointer" onClick={onLogout}>
               <LogOut className="mr-2 h-4 w-4" />
